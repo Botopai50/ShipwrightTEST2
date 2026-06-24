@@ -363,6 +363,6 @@ jobs:
     - name: Publish GitHub Release
       uses: softprops/action-gh-release@v2
       with:
-        name: "SoH (toon-lighting fork) ${{ github.ref_name }}"
+        name: "SoH (cel-shading fork) ${{ github.ref_name }}"
         generate_release_notes: true
         files: dist/*

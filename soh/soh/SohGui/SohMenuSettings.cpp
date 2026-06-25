@@ -541,6 +541,156 @@ void SohMenu::AddMenuSettings() {
             "texture is discarded), so it is obvious which draws are being relit — handy for confirming "
             "whether large surfaces like water or lava are getting relit."));
 
+    // Light Casting — Wind Waker-style point-light pools cast onto the world (the counterpart to Cel
+    // Shading, which relights objects). Internal CVar keys use "WorldLighting"; the UI says "Light
+    // Casting". Experimental / off by default.
+    auto hideUnlessLightCastEnabled = [](WidgetInfo& info) {
+        info.isHidden = !CVarGetInteger(CVAR_ENHANCEMENT("Graphics.WorldLighting.Enabled"), 0);
+    };
+    path.sidebarName = "Light Casting";
+    path.column = SECTION_COLUMN_1;
+    AddSidebarEntry("Settings", "Light Casting", 3);
+    AddWidget(path, "Enable Light Casting", WIDGET_CVAR_CHECKBOX)
+        .CVar(CVAR_ENHANCEMENT("Graphics.WorldLighting.Enabled"))
+        .RaceDisable(false)
+        .Options(CheckboxOptions().DefaultValue(false).Tooltip(
+            "Casts a pool of light from each point light (torch, fairy, ...) onto the surrounding world "
+            "geometry, Wind Waker-style. Affects only the static world, not actors/objects (which are lit "
+            "by Cel Shading). Experimental work-in-progress."));
+    AddWidget(path, "Options", WIDGET_SEPARATOR_TEXT).PreFunc(hideUnlessLightCastEnabled);
+    AddWidget(path, "Reset All to Defaults", WIDGET_BUTTON)
+        .PreFunc(hideUnlessLightCastEnabled)
+        .Callback([](WidgetInfo& info) {
+            CVarClear(CVAR_ENHANCEMENT("Graphics.WorldLighting.SphereSize"));
+            CVarClear(CVAR_ENHANCEMENT("Graphics.WorldLighting.RotationSpeed"));
+            CVarClear(CVAR_ENHANCEMENT("Graphics.WorldLighting.Intensity"));
+            CVarClear(CVAR_ENHANCEMENT("Graphics.WorldLighting.UseNaviLight"));
+            CVarClear(CVAR_ENHANCEMENT("Graphics.WorldLighting.NaviSphereSize"));
+            CVarClear(CVAR_ENHANCEMENT("Graphics.WorldLighting.NaviIntensity"));
+            CVarClear(CVAR_ENHANCEMENT("Graphics.WorldLighting.NaviRotationSpeed"));
+            CVarClear(CVAR_ENHANCEMENT("Graphics.WorldLighting.SizeFlicker"));
+            CVarClear(CVAR_ENHANCEMENT("Graphics.WorldLighting.ShowVanillaGlow"));
+            CVarClear(CVAR_ENHANCEMENT("Graphics.WorldLighting.FlickerSpeed"));
+            Ship::Context::GetInstance()->GetWindow()->GetGui()->SaveConsoleVariablesNextFrame();
+        })
+        .Options(ButtonOptions().Tooltip("Resets all the Light Casting sliders below to their default values."));
+    AddWidget(path, "Sphere Size", WIDGET_CVAR_SLIDER_FLOAT)
+        .CVar(CVAR_ENHANCEMENT("Graphics.WorldLighting.SphereSize"))
+        .RaceDisable(false)
+        .PreFunc(hideUnlessLightCastEnabled)
+        .Options(FloatSliderOptions()
+                     .Tooltip("Size of each light's cast pool, as a multiplier on the light's radius. "
+                              "Smaller keeps the pool tight around the source; larger spreads it wider.")
+                     .Format("%.2fx")
+                     .Min(0.1f)
+                     .Max(4.0f)
+                     .DefaultValue(1.0f));
+    AddWidget(path, "Rotation Speed", WIDGET_CVAR_SLIDER_FLOAT)
+        .CVar(CVAR_ENHANCEMENT("Graphics.WorldLighting.RotationSpeed"))
+        .RaceDisable(false)
+        .PreFunc(hideUnlessLightCastEnabled)
+        .Options(FloatSliderOptions()
+                     .Tooltip("Speed of the Wind Waker two-axis tumble that animates the pool's faceted "
+                              "edges, as a multiplier on the authentic rate. 1.0 = authentic; 0 = static.")
+                     .Format("%.2fx")
+                     .Min(0.0f)
+                     .Max(3.0f)
+                     .DefaultValue(1.0f));
+    AddWidget(path, "Size Flicker", WIDGET_CVAR_SLIDER_FLOAT)
+        .CVar(CVAR_ENHANCEMENT("Graphics.WorldLighting.SizeFlicker"))
+        .RaceDisable(false)
+        .PreFunc(hideUnlessLightCastEnabled)
+        .Options(FloatSliderOptions()
+                     .Tooltip("Depth of the Wind Waker size pulse — the pool's dominant flicker. The orb "
+                              "gently grows/shrinks on a slow random walk (re-rolled every ~0.2 s, eased). "
+                              "1.0 = authentic (~5%); 0 = steady. (Navi is excluded — she isn't a flame.)")
+                     .Format("%.2f")
+                     .Min(0.0f)
+                     .Max(3.0f)
+                     .DefaultValue(1.0f));
+    AddWidget(path, "Light Intensity", WIDGET_CVAR_SLIDER_FLOAT)
+        .CVar(CVAR_ENHANCEMENT("Graphics.WorldLighting.Intensity"))
+        .RaceDisable(false)
+        .PreFunc(hideUnlessLightCastEnabled)
+        .Options(FloatSliderOptions()
+                     .Tooltip("Brightness of the cast light pools.")
+                     .Min(0.0f)
+                     .Max(2.0f)
+                     .DefaultValue(1.0f)
+                     .IsPercentage());
+    AddWidget(path, "Cast Navi's Light", WIDGET_CVAR_CHECKBOX)
+        .CVar(CVAR_ENHANCEMENT("Graphics.WorldLighting.UseNaviLight"))
+        .RaceDisable(false)
+        .PreFunc(hideUnlessLightCastEnabled)
+        .Options(CheckboxOptions().DefaultValue(false).Tooltip(
+            "Also cast a pool from Link's fairy (Navi). Off by default: Navi darts around quickly, so its "
+            "pool tends to pop in and out. Torches and other lights are unaffected by this toggle."));
+    AddWidget(path, "Navi Sphere Size", WIDGET_CVAR_SLIDER_FLOAT)
+        .CVar(CVAR_ENHANCEMENT("Graphics.WorldLighting.NaviSphereSize"))
+        .RaceDisable(false)
+        .PreFunc([](WidgetInfo& info) {
+            info.isHidden = !CVarGetInteger(CVAR_ENHANCEMENT("Graphics.WorldLighting.Enabled"), 0) ||
+                            !CVarGetInteger(CVAR_ENHANCEMENT("Graphics.WorldLighting.UseNaviLight"), 0);
+        })
+        .Options(FloatSliderOptions()
+                     .Tooltip("Navi's pool size, separate from the main Sphere Size, so you can keep Navi "
+                              "tight without shrinking the torches.")
+                     .Format("%.2fx")
+                     .Min(0.1f)
+                     .Max(4.0f)
+                     .DefaultValue(0.6f));
+    AddWidget(path, "Navi Intensity", WIDGET_CVAR_SLIDER_FLOAT)
+        .CVar(CVAR_ENHANCEMENT("Graphics.WorldLighting.NaviIntensity"))
+        .RaceDisable(false)
+        .PreFunc([](WidgetInfo& info) {
+            info.isHidden = !CVarGetInteger(CVAR_ENHANCEMENT("Graphics.WorldLighting.Enabled"), 0) ||
+                            !CVarGetInteger(CVAR_ENHANCEMENT("Graphics.WorldLighting.UseNaviLight"), 0);
+        })
+        .Options(FloatSliderOptions()
+                     .Tooltip("Navi's pool brightness, separate from the main Light Intensity. Navi's light "
+                              "is white, which reads brighter than a torch's yellow, so it usually wants a "
+                              "lower value.")
+                     .Min(0.0f)
+                     .Max(2.0f)
+                     .DefaultValue(0.6f)
+                     .IsPercentage());
+    AddWidget(path, "Navi Rotation Speed", WIDGET_CVAR_SLIDER_FLOAT)
+        .CVar(CVAR_ENHANCEMENT("Graphics.WorldLighting.NaviRotationSpeed"))
+        .RaceDisable(false)
+        .PreFunc([](WidgetInfo& info) {
+            info.isHidden = !CVarGetInteger(CVAR_ENHANCEMENT("Graphics.WorldLighting.Enabled"), 0) ||
+                            !CVarGetInteger(CVAR_ENHANCEMENT("Graphics.WorldLighting.UseNaviLight"), 0);
+        })
+        .Options(FloatSliderOptions()
+                     .Tooltip("Navi's spin speed, separate from the torches' Rotation Speed.")
+                     .Format("%.2f")
+                     .Min(0.0f)
+                     .Max(3.0f)
+                     .DefaultValue(0.5f));
+    AddWidget(path, "Show Vanilla Torch Glow", WIDGET_CVAR_CHECKBOX)
+        .CVar(CVAR_ENHANCEMENT("Graphics.WorldLighting.ShowVanillaGlow"))
+        .RaceDisable(false)
+        .PreFunc(hideUnlessLightCastEnabled)
+        .Options(CheckboxOptions().DefaultValue(false).Tooltip(
+            "The original game draws a flat, billboarded, flickering glow circle over torches and other "
+            "glow lights. With light casting on these clash with the cast pools, so they are hidden by "
+            "default; enable this to bring them back."));
+    // Flame Flicker — the Wind Waker flame flicker is always on while Light Casting is enabled (it replaces
+    // the game's jagged per-frame torch flicker across the scene lighting, the glow, and the cast pools);
+    // this only tunes its speed.
+    AddWidget(path, "Flame Flicker", WIDGET_SEPARATOR_TEXT).PreFunc(hideUnlessLightCastEnabled);
+    AddWidget(path, "Flicker Speed", WIDGET_CVAR_SLIDER_FLOAT)
+        .CVar(CVAR_ENHANCEMENT("Graphics.WorldLighting.FlickerSpeed"))
+        .RaceDisable(false)
+        .PreFunc(hideUnlessLightCastEnabled)
+        .Options(FloatSliderOptions()
+                     .Tooltip("How often flames pick a new brightness for the Wind Waker scene-light "
+                              "flicker. Higher = faster; lower = a lazier flame.")
+                     .Format("%.2fx")
+                     .Min(0.1f)
+                     .Max(3.0f)
+                     .DefaultValue(1.0f));
+
     // Controls
     path.sidebarName = "Controls";
     path.column = SECTION_COLUMN_1;

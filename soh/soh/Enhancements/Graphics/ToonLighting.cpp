@@ -47,6 +47,40 @@ static constexpr float kDefaultShadowIntensity = 0.6f;
 static constexpr float kDefaultPointLightRange = 1.5f;
 static constexpr float kDefaultTransitionTime = 1.0f;
 
+// Actor-shadow defaults (the "Actor Shadows" page; CVar prefix Graphics.WorldShadows.*). Opacity is the
+// core blend strength; softness scales the soft-edge penumbra; taps is the number of accumulation passes;
+// length maps (inversely) to how far a low-angle key may stretch the shadow (higher = longer). All are
+// game-side policy pushed once per frame (look) or per object (floor plane).
+static constexpr float kDefaultShadowOpacity = 0.5f;
+static constexpr float kDefaultShadowSoftness = 0.4f;
+static constexpr int kDefaultShadowTaps = 4;
+static constexpr float kDefaultShadowLength = 0.3f;
+static constexpr int kDefaultShadowMaxDistance = 1500; // camera-forward distance past which shadows are culled
+
+// Actors the cel system skips entirely: they look wrong relit AND wrong casting a flattened shadow
+// (doors, the Great Deku Tree, water-box surfaces). Data-driven so it's easy to extend after seeing what
+// a scene actually relights — add an ACTOR_* id here (or a category below). The wooden sign (En_Kanban)
+// is intentionally NOT excluded: its shape shadow is exactly what this feature is meant to reproduce.
+static bool ToonActorExcluded(Actor* actor) {
+    if (actor->category == ACTORCAT_DOOR) {
+        return true; // every door variant in one check
+    }
+    switch (actor->id) {
+        case ACTOR_BG_TREEMOUTH:  // Great Deku Tree (very tall)
+        case ACTOR_BG_MIZU_WATER: // water-box surfaces
+        case ACTOR_BG_HAKA_WATER:
+            return true;
+        default:
+            return false;
+    }
+}
+
+// Tracks whether the toon (cel-relight) bracket is currently ON in the display-list stream. The actor-loop
+// bracket (func_800315AC) opens it ON; HandleActorDraw flips it OFF around blacklisted actors and back ON
+// for the next normal actor, deduped so same-state runs emit nothing. Reset each frame to match the
+// bracket. Only meaningful while cel shading is enabled (the only thing that opens the bracket).
+static bool sToonEnabled = true;
+
 // The Fast3D rendering backend, if the active window is the Fast3D window. Null on other windows
 // (e.g. headless), in which case there is nothing to relight and pushing is simply skipped.
 static Fast::GfxRenderingAPI* GetRenderingApi() {
@@ -59,6 +93,16 @@ static Fast::GfxRenderingAPI* GetRenderingApi() {
         return nullptr;
     }
     return interpreter->GetCurrentRenderingAPI();
+}
+
+// The Fast3D interpreter itself (for actor-shadow config, which lives in the interpreter rather than the
+// backend). Null on non-Fast3D/headless windows, where there is nothing to draw.
+static std::shared_ptr<Fast::Interpreter> GetInterpreter() {
+    auto wnd = std::dynamic_pointer_cast<Fast::Fast3dWindow>(Ship::Context::GetInstance()->GetWindow());
+    if (wnd == nullptr) {
+        return nullptr;
+    }
+    return wnd->GetInterpreterWeak().lock();
 }
 
 // The last toon key emitted this pass, as the quantized bytes gSPToonKey carries (s8 dir, u8 color).
@@ -75,6 +119,23 @@ static u8 sLastKeyCol[3];
 static void OnToonFrameUpdate() {
     // Clear before any early-out, so the dedup state resets even on a headless window (no renderer).
     sHaveLastKey = false;
+    // The bracket re-opens toon ON each frame; match it so the first blacklisted actor toggles correctly.
+    sToonEnabled = true;
+
+    // Actor shadow look tuning (global, not per object): core blend strength, soft-edge penumbra, tap
+    // count, and a "length" slider mapped to the minimum grazing angle that bounds how far a low-angle key
+    // may stretch the cast shadow. Lives in the interpreter (it owns the shadow projection), pushed here.
+    if (auto interp = GetInterpreter()) {
+        f32 opacity = CVarGetFloat(CVAR_ENHANCEMENT("Graphics.WorldShadows.Opacity"), kDefaultShadowOpacity);
+        f32 softness = CVarGetFloat(CVAR_ENHANCEMENT("Graphics.WorldShadows.Softness"), kDefaultShadowSoftness);
+        int taps = CVarGetInteger(CVAR_ENHANCEMENT("Graphics.WorldShadows.Taps"), kDefaultShadowTaps);
+        f32 length = CVarGetFloat(CVAR_ENHANCEMENT("Graphics.WorldShadows.Length"), kDefaultShadowLength);
+        // Map the Length slider to the minimum elevation the key is raised to before projecting: a low
+        // Length forces the light steep (short shadows under the actor), a high Length lets a low key cast
+        // long. length 0 => 0.95 (very short/steep), 1 => 0.10 (long).
+        f32 minElevation = 0.95f - (CLAMP(length, 0.0f, 1.0f) * 0.85f);
+        interp->SetToonShadowParams(opacity, minElevation, taps, softness);
+    }
 
     Fast::GfxRenderingAPI* rapi = GetRenderingApi();
     if (rapi == nullptr) {
@@ -427,6 +488,26 @@ static void HandleActorDraw(void* actorPtr) {
         return;
     }
 
+    bool celEnabled = CVarGetInteger(CVAR_ENHANCEMENT("Graphics.ToonLighting.Enabled"), 1);
+    bool shadowsEnabled = CVarGetInteger(CVAR_ENHANCEMENT("Graphics.WorldShadows.Enabled"), 1);
+
+    // Blacklist (doors/trees/water): excluded actors get neither cel relight nor a shadow. When cel shading
+    // is on, flip its bracket OFF around them (deduped via sToonEnabled) so they keep vanilla lighting; the
+    // next normal actor flips it back ON. The bracket only exists while cel shading is on, so skip the flip
+    // otherwise (a shadow alone never relights). Own disp scope so excluded actors return cleanly without an
+    // unbalanced CLOSE_DISPS.
+    bool wantToon = !ToonActorExcluded(actor);
+    if (celEnabled && wantToon != sToonEnabled) {
+        OPEN_DISPS(play->state.gfxCtx);
+        gSPToon(POLY_OPA_DISP++, wantToon);
+        gSPToon(POLY_XLU_DISP++, wantToon);
+        CLOSE_DISPS(play->state.gfxCtx);
+        sToonEnabled = wantToon;
+    }
+    if (!wantToon) {
+        return;
+    }
+
     f32 targetDir[3] = { 0.0f, 1.0f, 0.0f }; // default: lit from above
     f32 targetCol[3] = { 1.0f, 1.0f, 1.0f };
     // How far a point light reaches (× its radius) for selection, and how long the eased travel takes.
@@ -485,6 +566,34 @@ static void HandleActorDraw(void* actorPtr) {
         }
     }
 
+    // Actor shadow: arm this actor's drop shadow onto its actual floor polygon (normal + plane), so it
+    // follows slopes and conforms like the vanilla shadow. The renderer casts it along the key just
+    // snapshotted (gSPToonKey above), so the shadow always agrees with the cel shading. POLY_OPA only, so
+    // translucent effects don't cast. Emitted for every non-excluded actor when on (zero normal when there's
+    // no floor in range) so the per-object boundary is always marked and a stale plane can't leak between
+    // actors.
+    if (shadowsEnabled) {
+        f32 nx = 0.0f, ny = 0.0f, nz = 0.0f, planeD = 0.0f;
+        // Distance cull: only the on-screen actor loop reaches here (the game culls off-screen actors), but
+        // a near actor's shadow costs its whole silhouette redrawn once per soft-edge tap, so skip it once
+        // it's far enough that the shadow is small on screen. projectedPos.z is the actor's depth in front of
+        // the camera. A zero normal disarms the shadow (no capture/projection/draw) while still marking the
+        // per-object boundary.
+        f32 maxDist = (f32)CVarGetInteger(CVAR_ENHANCEMENT("Graphics.WorldShadows.MaxDistance"), kDefaultShadowMaxDistance);
+        CollisionPoly* floorPoly = actor->floorPoly;
+        if (floorPoly != NULL && actor->projectedPos.z < maxDist) {
+            f32 distToFloor = actor->world.pos.y - actor->floorHeight;
+            if ((distToFloor > -50.0f) && (distToFloor < 1500.0f)) {
+                nx = COLPOLY_GET_NORMAL(floorPoly->normal.x);
+                ny = COLPOLY_GET_NORMAL(floorPoly->normal.y);
+                nz = COLPOLY_GET_NORMAL(floorPoly->normal.z);
+                // Plane through the actor's ground point with the floor normal: N.P + planeD = 0.
+                planeD = -((nx * actor->world.pos.x) + (ny * actor->floorHeight) + (nz * actor->world.pos.z));
+            }
+        }
+        gSPToonShadow(POLY_OPA_DISP++, (s8)(nx * 127.0f), (s8)(ny * 127.0f), (s8)(nz * 127.0f), planeD);
+    }
+
     if (CVarGetInteger(CVAR_DEVELOPER_TOOLS("ToonLighting.ShowDebug"), 0)) {
         DrawDebugOverlay(play, actor, pointRange, st.dir);
     }
@@ -499,17 +608,23 @@ static void HandleActorDestroy(void* actorPtr) {
 }
 
 void RegisterToonLighting() {
-    bool enabled = CVarGetInteger(CVAR_ENHANCEMENT("Graphics.ToonLighting.Enabled"), 1);
-    // Only hook while enabled, so a disabled feature adds no per-frame or per-actor work.
-    COND_HOOK(OnGameFrameUpdate, enabled, OnToonFrameUpdate);
-    COND_HOOK(OnActorDraw, enabled, HandleActorDraw);
-    COND_HOOK(OnActorDestroy, enabled, HandleActorDestroy);
+    bool celEnabled = CVarGetInteger(CVAR_ENHANCEMENT("Graphics.ToonLighting.Enabled"), 1);
+    bool shadowsEnabled = CVarGetInteger(CVAR_ENHANCEMENT("Graphics.WorldShadows.Enabled"), 1);
+    // The hooks drive BOTH the cel relight and the actor shadow (the shadow reuses the per-actor key this
+    // module computes), so run them while EITHER feature is on. HandleActorDraw internally gates the relight
+    // bracket on cel shading and the shadow emit on shadows, so each can be on without the other.
+    bool active = celEnabled || shadowsEnabled;
+    COND_HOOK(OnGameFrameUpdate, active, OnToonFrameUpdate);
+    COND_HOOK(OnActorDraw, active, HandleActorDraw);
+    COND_HOOK(OnActorDestroy, active, HandleActorDestroy);
     // Drop the key-dedup state so the first actor after a (re-)enable always emits, before the
     // end-of-frame OnToonFrameUpdate reset has had a chance to run.
     sHaveLastKey = false;
-    if (!enabled) {
+    sToonEnabled = true;
+    if (!active) {
         sToonKeyStates.clear();
     }
 }
 
-static RegisterShipInitFunc initFunc(RegisterToonLighting, { CVAR_ENHANCEMENT("Graphics.ToonLighting.Enabled") });
+static RegisterShipInitFunc initFunc(RegisterToonLighting, { CVAR_ENHANCEMENT("Graphics.ToonLighting.Enabled"),
+                                                             CVAR_ENHANCEMENT("Graphics.WorldShadows.Enabled") });

@@ -1,8 +1,12 @@
 name: generate-builds
-# SOH [fork] Build ONLY when a release tag is pushed — no per-push or per-PR builds. Our tags follow
+# SOH [fork] Build on pushes to the default branch (warms the ccache/deps/vcpkg/macports caches, since
+# those only `save` when github.ref_name == the default branch) and on release tags. Our tags follow
 # <SoH-version>-celshade<X.Y> (e.g. 9.2.3-celshade0.4), so match anything containing "celshade".
+# Release tags branch off wind-waker-style-cel-shading and restore the branch-warmed caches.
 on:
   push:
+    branches:
+      - wind-waker-style-cel-shading
     tags:
       - '*celshade*'
 concurrency:

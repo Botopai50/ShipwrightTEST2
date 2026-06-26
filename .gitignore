@@ -61,6 +61,9 @@ graphs/
 
 # Docs
 !docs/tutorial/
+# Allow images embedded in the Wind Waker-style design docs (the *.png/*.jpg rules above ignore them).
+!wind-waker-style-docs/**/*.png
+!wind-waker-style-docs/**/*.jpg
 
 # Per-user configuration
 .python-version

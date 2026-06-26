@@ -3,19 +3,18 @@
 // Casts a pool of light from each point light source (torch, fairy, bomb flash, ...) onto the static
 // world geometry, the way Wind Waker does: a many-sided polygon of light, tinted to the source colour,
 // that conforms to and is occluded by the surfaces inside the light's reach. Crucially this affects
-// ONLY the world — placed objects/actors keep their own cel shading (see ToonLighting.cpp), which is the
-// inverse scoping of that feature.
+// ONLY the world — placed objects/actors keep their own cel shading (see ToonLighting.cpp), the inverse
+// scoping of that feature.
 //
 // This module owns the OoT-specific policy: which lights exist, where they are in the world, and how the
 // light volume (an icosphere) is sized/rotated. It runs from Play_Draw via the OnPlayDrawWorldLights
 // hook, after the room is drawn and before the actor loop, so the pools land on the world and under the
 // actors.
 //
-// MILESTONE 0 (this file's current state): the renderer's stencil light-volume support does not exist
-// yet, so for now each light simply emits its icosphere as a translucent, depth-tested, colour-tinted
-// volume. This validates the full game-side path — light enumeration, world placement, the generated
-// icosphere geometry + winding, the draw insertion point, and the size/rotation/intensity sliders —
-// before the renderer-side stencil masking (M1/M2) turns these volumes into true clipped light pools.
+// Each pool is drawn with the stencil light-volume technique: two z-fail mask passes mark the world
+// surfaces inside the icosphere, then a self-clearing composite tints those pixels with the light colour
+// (see DrawLightPool). The renderer-side stencil support lives in libultraship (Fast::StencilMode); the
+// WL_STENCIL_* values below must stay in sync with it.
 
 #include <libultraship/bridge.h>
 #include <ship/Context.h>
@@ -23,8 +22,7 @@
 #include "soh/Enhancements/game-interactor/GameInteractor.h"
 #include "soh/ShipInit.hpp"
 #include "soh/cvar_prefixes.h"
-// Declares the FrameInterpolation_Record* functions (with C linkage) that the OPEN_DISPS/CLOSE_DISPS
-// macros call, so their references in this TU match the definitions. Must precede any OPEN_DISPS use.
+// FrameInterpolation_Record* declarations used by the OPEN_DISPS/CLOSE_DISPS macros (include before them).
 #include "soh/frame_interpolation.h"
 
 #include <math.h>
@@ -42,36 +40,33 @@ extern "C" {
 
 // Slider defaults — match the GUI slider DefaultValue()s so a fresh install (CVar unset) renders the
 // same as the slider's default position.
-static constexpr float kDefaultSphereSize = 1.0f;     // × a light's radius (its own slider; typically
+static constexpr float kDefaultSphereSize = 0.5f;     // × a light's radius (its own slider; typically
                                                       //   smaller than the cel-shading point-light range)
 static constexpr float kDefaultRotationSpeed = 1.0f;  // × the Wind Waker two-axis tumble rate (1 = authentic)
 // Wind Waker Bonbori spin rates (rad/s), scaled by the Rotation Speed slider. Two non-harmonic axes (no
 // Z) tumble the low-poly silhouette so it never looks like it's just spinning in place.
 static constexpr float kWWRotYRate = 0.598f; // 0xD0 units/frame @ 30 Hz = 34.28°/s
 static constexpr float kWWRotXRate = 0.736f; // 0x100 units/frame @ 30 Hz = 42.19°/s
-static constexpr float kDefaultIntensity = 1.0f;        // brightness of the cast pool
-static constexpr float kDefaultNaviSphereSize = 0.6f;   // Navi's pool size (× radius), separate from torches
-static constexpr float kDefaultNaviIntensity = 0.6f;     // Navi's pool brightness (white reads brighter than torch yellow)
+static constexpr float kDefaultIntensity = 0.2f;        // brightness of the cast pool
+static constexpr float kDefaultNaviSphereSize = 0.75f;  // Navi's pool size (× radius), separate from torches
+static constexpr float kDefaultNaviIntensity = 0.2f;     // Navi's pool brightness
 static constexpr float kDefaultSizeFlicker = 1.0f;        // depth of the Wind Waker size pulse (1 = authentic ±5%)
-static constexpr float kDefaultNaviRotationSpeed = 0.5f;  // Navi's base spin (her brightness is ~constant)
 static constexpr float kDefaultFlickerSpeed = 1.0f;       // Wind Waker flame flicker rate (new target ~ every 0.25s / speed)
 
 // ---------------------------------------------------------------------------------------------------
 // Wind Waker flame flicker (replaces the game's per-frame white-noise torch flicker)
 // ---------------------------------------------------------------------------------------------------
 //
-// OoT flames re-randomise their light brightness EVERY game-update (Obj_Syokudai: brightness =
-// Rand_ZeroOne()*127 + 128) — 20 Hz white noise, which reads as fast and jagged. Wind Waker instead
-// picks a new random level every handful of frames and tweens between them, giving a slow, organic flame.
+// OoT flames re-randomise their brightness every game-update (Obj_Syokudai: Rand_ZeroOne()*127 + 128) —
+// fast, jagged white noise. Wind Waker instead picks a new level every handful of frames and tweens
+// between them, for a slow, organic flame.
 //
-// We reproduce that and apply it AT THE SOURCE: Lights_PointSetColorAndRadius (the choke point all flame
-// actors funnel through) calls WorldLighting_ApplyFlameFlicker when the toggle is on, so the replacement
-// reaches the real scene lighting, the vanilla glow, AND our cast pools at once.
-//
-// That choke point is also used by non-flame lights (e.g. the mirror-shield beam, lights being switched
-// off), so we only transform lights that are actually flickering: a flame's brightness JUMPS by a large
-// amount each frame, whereas steady / smoothly-changing lights move little — a frame-to-frame delta
-// threshold (with a short sticky hold) separates them cleanly.
+// We apply the replacement AT THE SOURCE: Lights_PointSetColorAndRadius (the choke point all flame actors
+// funnel through) calls WorldLighting_ApplyFlameFlicker when the toggle is on, so it reaches the scene
+// lighting, the vanilla glow, and our cast pools at once. That choke point also carries non-flame lights
+// (mirror-shield beam, lights switching off), so we only transform ones that are actually flickering — a
+// flame's brightness jumps sharply frame-to-frame, which a delta threshold (plus a short sticky hold)
+// detects.
 
 typedef struct {
     f32 cur;        // tweened flicker ratio (output, ~0.6..1.0 of full bright)
@@ -108,8 +103,10 @@ extern "C" void WorldLighting_ApplyFlameFlicker(LightInfo* info, u8* r, u8* g, u
         return; // light off — nothing to flicker
     }
 
-    // Bounded map: flame LightInfos are few and reused; if it somehow grows, drop everything (a one-frame
-    // state reset, imperceptible) rather than thread a per-frame prune through this hot choke point.
+    // Jump detection needs each light's previous sample, so this map holds an entry for every light that
+    // passes through the choke point, not just flames. The set is small and the pointers are reused, so a
+    // size cap suffices: if it ever grows past 256, drop everything (a one-frame reset, imperceptible)
+    // rather than thread a per-frame prune through this hot path.
     if (sFlicker.size() > 256) {
         sFlicker.clear();
     }
@@ -190,6 +187,9 @@ extern "C" void WorldLighting_ApplyFlameFlicker(LightInfo* info, u8* r, u8* g, u
 #define ICO_VERTS (ICO_FACES * 3) // 240
 #define ICO_CHUNK_VERTS 30        // 10 faces per gSPVertex load (≤ 32 vertex cache)
 #define ICO_CHUNKS (ICO_VERTS / ICO_CHUNK_VERTS)
+
+// EmitIcosphere's gSP2Triangles calls hard-code vertex indices 0..29, i.e. exactly 10 triangles per chunk.
+static_assert(ICO_CHUNK_VERTS == 30, "EmitIcosphere emits 30 vertices (10 triangles) per chunk");
 
 static Vtx sIcoVtx[ICO_VERTS];
 static bool sIcoBuilt = false;
@@ -289,6 +289,7 @@ typedef struct {
     f32 angleY, angleX; // Wind Waker two-axis tumble (accumulated radians)
     f32 sizeCur, sizeTarget, sizeTimer;    // WW size flicker: eased random-walk (the dominant pulse)
     f32 alphaCur, alphaTarget, alphaTimer; // WW brightness flicker: subtle eased random-walk
+    f32 spawnRadius;                       // Navi only: eased pool radius, so she fades in/out vs popping
     u32 gen;
 } WorldLightState;
 
@@ -325,6 +326,7 @@ static WorldLightState* WorldLightGetState(LightInfo* info) {
         s.sizeTimer = 0.0f;
         s.alphaCur = s.alphaTarget = 1.0f;
         s.alphaTimer = 0.0f;
+        s.spawnRadius = 0.0f; // start hidden so a freshly-spawned light fades in rather than popping
     }
     s.gen = sStateGen;
     return &s;
@@ -421,8 +423,13 @@ static void DrawWorldLights(void* playPtr) {
     BuildIcosphere();
 
     f32 sizeMult = CVarGetFloat(CVAR_ENHANCEMENT("Graphics.WorldLighting.SphereSize"), kDefaultSphereSize);
-    f32 rotSpeed = CVarGetFloat(CVAR_ENHANCEMENT("Graphics.WorldLighting.RotationSpeed"), kDefaultRotationSpeed);
-    f32 sizeFlicker = CVarGetFloat(CVAR_ENHANCEMENT("Graphics.WorldLighting.SizeFlicker"), kDefaultSizeFlicker);
+    // "Use Wind Waker default movement" pins the tumble + size pulse to the authentic 1x (and the GUI
+    // disables those two sliders); otherwise the sliders drive them.
+    bool wwMovement = CVarGetInteger(CVAR_ENHANCEMENT("Graphics.WorldLighting.WWDefaultMovement"), 1);
+    f32 rotSpeed =
+        wwMovement ? 1.0f : CVarGetFloat(CVAR_ENHANCEMENT("Graphics.WorldLighting.RotationSpeed"), kDefaultRotationSpeed);
+    f32 sizeFlicker =
+        wwMovement ? 1.0f : CVarGetFloat(CVAR_ENHANCEMENT("Graphics.WorldLighting.SizeFlicker"), kDefaultSizeFlicker);
     f32 intensity = CVarGetFloat(CVAR_ENHANCEMENT("Graphics.WorldLighting.Intensity"), kDefaultIntensity);
 
     // Seconds-per-draw from R_UPDATE_RATE (3 = 20 fps normal play) keeps slider rates labelled in
@@ -440,10 +447,10 @@ static void DrawWorldLights(void* playPtr) {
     // Navi's light (Link's fairy) bounces fast, so its pool pops; let players exclude it and size it
     // separately from torches. Identify Navi via the player's navi actor (En_Elf with FAIRY_NAVI params)
     // and match its two LightInfos by address.
-    bool useNavi = CVarGetInteger(CVAR_ENHANCEMENT("Graphics.WorldLighting.UseNaviLight"), 0);
+    bool useNavi = CVarGetInteger(CVAR_ENHANCEMENT("Graphics.WorldLighting.UseNaviLight"), 1);
     f32 naviSize = CVarGetFloat(CVAR_ENHANCEMENT("Graphics.WorldLighting.NaviSphereSize"), kDefaultNaviSphereSize);
-    f32 naviRotSpeed =
-        CVarGetFloat(CVAR_ENHANCEMENT("Graphics.WorldLighting.NaviRotationSpeed"), kDefaultNaviRotationSpeed);
+    // Identify Navi's two lights by address so her pool can be sized/brightened separately. Her colour is
+    // tinted at the source (EnElf_UpdateLights), so the pool's live colour already carries the Navi tint.
     LightInfo* naviGlow = NULL;
     LightInfo* naviNoGlow = NULL;
     {
@@ -464,12 +471,13 @@ static void DrawWorldLights(void* playPtr) {
             if (!isNavi || useNavi) {
                 WorldLightState* s = WorldLightGetState(info);
                 LightPoint* p = &info->params.point;
-                u8 col[3] = { p->color[0], p->color[1], p->color[2] }; // live colour (source flicker smooths it)
+                // Live colour: the flame flicker and the Navi tint are both applied at the source, so the
+                // pool inherits them directly.
+                u8 col[3] = { p->color[0], p->color[1], p->color[2] };
 
-                // Wind Waker two-axis tumble (rate scaled by the slider; Navi has her own multiplier).
-                f32 rmult = isNavi ? naviRotSpeed : rotSpeed;
-                s->angleY += kWWRotYRate * rmult * dt;
-                s->angleX += kWWRotXRate * rmult * dt;
+                // Wind Waker two-axis tumble, scaled by the Rotation Speed slider (same for every light).
+                s->angleY += kWWRotYRate * rotSpeed * dt;
+                s->angleX += kWWRotXRate * rotSpeed * dt;
                 if (s->angleY > (2.0f * M_PI)) {
                     s->angleY -= (2.0f * M_PI);
                 }
@@ -482,7 +490,15 @@ static void DrawWorldLights(void* playPtr) {
                 // organic. Navi isn't a flame, so it keeps a steady size.
                 f32 worldRadius;
                 if (isNavi) {
-                    worldRadius = p->radius * naviSize;
+                    // Navi blinks on/off fast — her glow radius snaps full<->0 as she ducks into Link's
+                    // pocket (she's hidden, not destroyed, so the light keeps coming through at radius 0).
+                    // Ease the radius to/from zero so the pool fades instead of popping.
+                    f32 target = (p->radius > 0) ? (f32)p->radius : 0.0f;
+                    s->spawnRadius = WWEase(s->spawnRadius, target, 0.3f, 10000.0f, dt);
+                    if ((target <= 0.0f) && (s->spawnRadius < 0.5f)) {
+                        s->spawnRadius = 0.0f; // fully out — DrawLightPool skips radius <= 0, so no wasted passes
+                    }
+                    worldRadius = s->spawnRadius * naviSize;
                 } else {
                     s->sizeTimer -= dt;
                     if (s->sizeTimer <= 0.0f) {
@@ -537,9 +553,9 @@ static void DrawWorldLights(void* playPtr) {
 // ---------------------------------------------------------------------------------------------------
 
 void RegisterWorldLighting() {
-    // Off by default — this is an experimental, work-in-progress feature (unlike the on-by-default cel
-    // shading). Only hook while enabled, so a disabled feature adds no per-frame work.
-    bool enabled = CVarGetInteger(CVAR_ENHANCEMENT("Graphics.WorldLighting.Enabled"), 0);
+    // Only hook while enabled, so a disabled feature adds no per-frame work. (On by default, alongside cel
+    // shading — this is a Wind Waker-style fork.)
+    bool enabled = CVarGetInteger(CVAR_ENHANCEMENT("Graphics.WorldLighting.Enabled"), 1);
     COND_HOOK(OnPlayDrawWorldLights, enabled, DrawWorldLights);
 }
 

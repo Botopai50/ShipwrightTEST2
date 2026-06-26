@@ -28,7 +28,7 @@ It also includes a **Wind Waker flame flicker** that replaces OoT's jagged per-f
 lighting, the vanilla glow, and the cast pools together.
 
 The look and timing are matched to the **noclip.website** reproduction of WW; see
-[`lighting-docs/wind-waker-bonbori-light.md`](./lighting-docs/wind-waker-bonbori-light.md) for the
+[`wind-waker-bonbori-light.md`](./wind-waker-bonbori-light.md) for the
 reverse-engineered reference this feature targets.
 
 ## The technique: stencil light volumes

@@ -133,17 +133,17 @@ void SohMenu::AddMenuWindWakerStyle() {
     // default. Internal CVar keys keep their "WorldLighting" names.
     // ===========================================================================================
     auto hideUnlessLightCastEnabled = [](WidgetInfo& info) {
-        info.isHidden = !CVarGetInteger(CVAR_ENHANCEMENT("Graphics.WorldLighting.Enabled"), 1);
+        info.isHidden = !CVarGetInteger(CVAR_ENHANCEMENT("Graphics.WorldLighting.Enabled"), 0);
     };
     // Navi's pool sliders need both Light Casting and Navi Light Casting on.
     auto hideUnlessNaviCast = [](WidgetInfo& info) {
-        info.isHidden = !CVarGetInteger(CVAR_ENHANCEMENT("Graphics.WorldLighting.Enabled"), 1) ||
+        info.isHidden = !CVarGetInteger(CVAR_ENHANCEMENT("Graphics.WorldLighting.Enabled"), 0) ||
                         !CVarGetInteger(CVAR_ENHANCEMENT("Graphics.WorldLighting.UseNaviLight"), 1);
     };
     // Rotation Speed / Size Flicker sit with the cast-pool controls, but hide entirely while "Use Wind Waker
     // default movement" is on (the renderer pins them to the authentic 1x).
     auto hideUnlessCustomMovement = [](WidgetInfo& info) {
-        info.isHidden = !CVarGetInteger(CVAR_ENHANCEMENT("Graphics.WorldLighting.Enabled"), 1) ||
+        info.isHidden = !CVarGetInteger(CVAR_ENHANCEMENT("Graphics.WorldLighting.Enabled"), 0) ||
                         CVarGetInteger(CVAR_ENHANCEMENT("Graphics.WorldLighting.WWDefaultMovement"), 1);
     };
     path.sidebarName = "Lights";
@@ -238,7 +238,7 @@ void SohMenu::AddMenuWindWakerStyle() {
     AddWidget(path, "Enable Light Casting", WIDGET_CVAR_CHECKBOX)
         .CVar(CVAR_ENHANCEMENT("Graphics.WorldLighting.Enabled"))
         .RaceDisable(false)
-        .Options(CheckboxOptions().DefaultValue(true).Tooltip(
+        .Options(CheckboxOptions().DefaultValue(false).Tooltip(
             "Casts a pool of light from each point light (torch, fairy, ...) onto the surrounding world "
             "geometry, Wind Waker-style. Affects only the static world, not actors/objects (lit by Cel "
             "Shading)."));
@@ -291,6 +291,14 @@ void SohMenu::AddMenuWindWakerStyle() {
     addSliderWithReset("Navi Light Intensity", CVAR_ENHANCEMENT("Graphics.WorldLighting.NaviIntensity"), 0.0f,
                        2.0f, 0.2f, nullptr, true, hideUnlessNaviCast,
                        "Navi's pool brightness, separate from the main Light Intensity.");
+    AddWidget(path, "Debug", WIDGET_SEPARATOR_TEXT).PreFunc(hideUnlessLightCastEnabled);
+    AddWidget(path, "Show Light Spheres", WIDGET_CVAR_CHECKBOX)
+        .CVar(CVAR_DEVELOPER_TOOLS("WorldLighting.ShowLightSpheres"))
+        .PreFunc(hideUnlessLightCastEnabled)
+        .Options(CheckboxOptions().Tooltip(
+            "Overlays a translucent faceted shell of each light's icosphere — the volume used for its cast "
+            "pool — tinted by the light, so you can see where the pools are, their size, and their spin. "
+            "(The renderer has no line primitive, so this is a shell rather than a true wireframe.)"));
 }
 
 } // namespace SohGui

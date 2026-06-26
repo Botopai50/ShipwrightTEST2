@@ -425,7 +425,7 @@ void Lights_DrawGlow(PlayState* play) {
     // SOH [Enhancement] Wind Waker light casting can hide the vanilla billboarded glow circles (which
     // otherwise clash with the cast light pools). Only while light casting is enabled, and only when "Hide
     // Vanilla Torch Glow" is on. (Selection/draw live in soh/soh/Enhancements/Graphics/WorldLighting.cpp.)
-    if (CVarGetInteger(CVAR_ENHANCEMENT("Graphics.WorldLighting.Enabled"), 1) &&
+    if (CVarGetInteger(CVAR_ENHANCEMENT("Graphics.WorldLighting.Enabled"), 0) &&
         CVarGetInteger(CVAR_ENHANCEMENT("Graphics.WorldLighting.HideVanillaGlow"), 1)) {
         return;
     }

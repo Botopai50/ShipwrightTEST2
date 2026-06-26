@@ -194,9 +194,11 @@ static_assert(ICO_CHUNK_VERTS == 30, "EmitIcosphere emits 30 vertices (10 triang
 static Vtx sIcoVtx[ICO_VERTS];
 static bool sIcoBuilt = false;
 
-// Write one icosphere vertex: project the (sub)icosahedron position onto the unit sphere, scale to the
-// base radius 100, store as a flat white untextured vertex.
-static void IcoWriteVert(s32 idx, f32 x, f32 y, f32 z) {
+// Write one icosphere vertex: project the (sub)icosahedron position onto the unit sphere, scale to the base
+// radius 100. `shade` is a per-face brightness (flat across each face) baked into the vertex colour; the
+// debug overlay multiplies the light colour by it for a 3D look, while the pools (PRIMITIVE-only combiner)
+// ignore it. Untextured.
+static void IcoWriteVert(s32 idx, f32 x, f32 y, f32 z, u8 shade) {
     f32 len = sqrtf((x * x) + (y * y) + (z * z));
     f32 s = (len > 0.0001f) ? (100.0f / len) : 0.0f;
 
@@ -206,9 +208,9 @@ static void IcoWriteVert(s32 idx, f32 x, f32 y, f32 z) {
     sIcoVtx[idx].v.flag = 0;
     sIcoVtx[idx].v.tc[0] = 0;
     sIcoVtx[idx].v.tc[1] = 0;
-    sIcoVtx[idx].v.cn[0] = 255;
-    sIcoVtx[idx].v.cn[1] = 255;
-    sIcoVtx[idx].v.cn[2] = 255;
+    sIcoVtx[idx].v.cn[0] = shade;
+    sIcoVtx[idx].v.cn[1] = shade;
+    sIcoVtx[idx].v.cn[2] = shade;
     sIcoVtx[idx].v.cn[3] = 255;
 }
 
@@ -231,6 +233,11 @@ static void BuildIcosphere() {
         { 3, 8, 9 },  { 4, 9, 5 },  { 2, 4, 11 },  { 6, 2, 10 }, { 8, 6, 7 },   { 9, 8, 1 },
     };
 
+    // A fixed direction in the sphere's own space: each face's flat brightness is its outward direction dotted
+    // with this, so the shading is baked into the geometry and tumbles WITH the sphere — making the two-axis
+    // rotation readable in the debug overlay. (Roughly unit; exactness doesn't matter, it's just a gradient.)
+    const f32 shadeDir[3] = { 0.40f, 0.72f, 0.57f };
+
     s32 w = 0;
     for (s32 f = 0; f < 20; f++) {
         const f32* a = base[faces[f][0]];
@@ -248,8 +255,16 @@ static void BuildIcosphere() {
             { ab, bc, ca },
         };
         for (s32 s = 0; s < 4; s++) {
+            // Per-face brightness from the face centroid's outward direction (flat: all 3 corners share it).
+            f32 cx = sub[s][0][0] + sub[s][1][0] + sub[s][2][0];
+            f32 cy = sub[s][0][1] + sub[s][1][1] + sub[s][2][1];
+            f32 cz = sub[s][0][2] + sub[s][1][2] + sub[s][2][2];
+            f32 clen = sqrtf((cx * cx) + (cy * cy) + (cz * cz));
+            f32 dot =
+                (clen > 0.0001f) ? ((cx * shadeDir[0] + cy * shadeDir[1] + cz * shadeDir[2]) / clen) : 0.0f;
+            u8 shade = (u8)((0.5f + (0.25f * (dot + 1.0f))) * 255.0f); // [0.5, 1.0] across the sphere
             for (s32 v = 0; v < 3; v++) {
-                IcoWriteVert(w++, sub[s][v][0], sub[s][v][1], sub[s][v][2]);
+                IcoWriteVert(w++, sub[s][v][0], sub[s][v][1], sub[s][v][2], shade);
             }
         }
     }
@@ -405,6 +420,26 @@ static void DrawLightPool(PlayState* play, LightNode* node, LightPoint* p, f32 w
     WorldLightCompositePass(play, col, alpha);
 }
 
+// Debug overlay (dev tools): draw the light's icosphere as a ~50% translucent, depth-test-free ball tinted
+// by the light colour and shaded per face (a brightness gradient baked into the geometry, so the two-axis
+// tumble reads as 3D), making the volumes used for the pools visible (position/size/rotation/count). Back
+// faces are culled for a solid look. Must run right after DrawLightPool for the same light — it reuses the
+// modelview matrix that loaded.
+static void DrawDebugSphere(PlayState* play, const u8 col[3]) {
+    OPEN_DISPS(play->state.gfxCtx);
+    gSPStencil(POLY_OPA_DISP++, WL_STENCIL_OFF); // not masked by the pool stencil
+    gDPPipeSync(POLY_OPA_DISP++);
+    gSPClearGeometryMode(POLY_OPA_DISP++, G_LIGHTING | G_ZBUFFER | G_CULL_FRONT);
+    gSPSetGeometryMode(POLY_OPA_DISP++, G_SHADE | G_SHADING_SMOOTH | G_CULL_BACK); // shade facets, solid front
+    // colour = light colour * baked per-face shade; alpha = constant (~50%).
+    gDPSetCombineLERP(POLY_OPA_DISP++, PRIMITIVE, 0, SHADE, 0, 0, 0, 0, PRIMITIVE, PRIMITIVE, 0, SHADE, 0, 0, 0, 0,
+                      PRIMITIVE);
+    gDPSetRenderMode(POLY_OPA_DISP++, G_RM_AA_XLU_SURF, G_RM_AA_XLU_SURF2); // no z-test, so every sphere shows
+    gDPSetPrimColor(POLY_OPA_DISP++, 0, 0, col[0], col[1], col[2], 128);
+    CLOSE_DISPS(play->state.gfxCtx);
+    EmitIcosphere(play->state.gfxCtx);
+}
+
 // Map an intensity slider value (0..2) to a composite blend alpha (0..255).
 static u8 WorldLightAlpha(f32 intensity) {
     f32 a = intensity * 0.5f;
@@ -431,6 +466,7 @@ static void DrawWorldLights(void* playPtr) {
     f32 sizeFlicker =
         wwMovement ? 1.0f : CVarGetFloat(CVAR_ENHANCEMENT("Graphics.WorldLighting.SizeFlicker"), kDefaultSizeFlicker);
     f32 intensity = CVarGetFloat(CVAR_ENHANCEMENT("Graphics.WorldLighting.Intensity"), kDefaultIntensity);
+    bool showSpheres = CVarGetInteger(CVAR_DEVELOPER_TOOLS("WorldLighting.ShowLightSpheres"), 0);
 
     // Seconds-per-draw from R_UPDATE_RATE (3 = 20 fps normal play) keeps slider rates labelled in
     // per-second units regardless of update rate; frame interpolation replays the draw without re-running
@@ -526,6 +562,9 @@ static void DrawWorldLights(void* playPtr) {
                 }
 
                 DrawLightPool(play, node, &info->params.point, worldRadius, s->angleY, s->angleX, col, thisAlpha);
+                if (showSpheres && (worldRadius > 0.0f)) {
+                    DrawDebugSphere(play, col); // reuses DrawLightPool's loaded matrix
+                }
             }
         }
         node = node->next;
@@ -553,9 +592,9 @@ static void DrawWorldLights(void* playPtr) {
 // ---------------------------------------------------------------------------------------------------
 
 void RegisterWorldLighting() {
-    // Only hook while enabled, so a disabled feature adds no per-frame work. (On by default, alongside cel
-    // shading — this is a Wind Waker-style fork.)
-    bool enabled = CVarGetInteger(CVAR_ENHANCEMENT("Graphics.WorldLighting.Enabled"), 1);
+    // Only hook while enabled, so a disabled feature adds no per-frame work. Off by default — most players
+    // want the cel shading; light casting is opt-in.
+    bool enabled = CVarGetInteger(CVAR_ENHANCEMENT("Graphics.WorldLighting.Enabled"), 0);
     COND_HOOK(OnPlayDrawWorldLights, enabled, DrawWorldLights);
 }
 

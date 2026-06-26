@@ -1,9 +1,10 @@
 name: generate-builds
-# SOH [fork] Build ONLY when a release tag (v*) is pushed — no per-push or per-PR builds.
+# SOH [fork] Build ONLY when a release tag is pushed — no per-push or per-PR builds. Our tags follow
+# <SoH-version>-celshade<X.Y> (e.g. 9.2.3-celshade0.4), so match anything containing "celshade".
 on:
   push:
     tags:
-      - 'v*'
+      - '*celshade*'
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
@@ -330,10 +331,10 @@ jobs:
         key: ${{ steps.restore-cache-vcpkg.outputs.cache-primary-key }}
         path: vcpkg
 
-  # Fork-only: publish a GitHub Release when a v* tag is pushed.
+  # Fork-only: publish a GitHub Release when a *celshade* tag is pushed.
   release:
     needs: [build-macos, build-linux, build-windows]
-    if: startsWith(github.ref, 'refs/tags/v')
+    if: contains(github.ref, 'celshade')
     runs-on: ubuntu-22.04
     permissions:
       contents: write

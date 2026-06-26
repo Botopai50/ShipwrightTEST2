@@ -123,9 +123,10 @@ static void OnToonFrameUpdate() {
     // The bracket re-opens toon ON each frame; match it so the first blacklisted actor toggles correctly.
     sToonEnabled = true;
 
-    // Actor shadow look tuning (global, not per object): core blend strength, soft-edge penumbra, tap
-    // count, and a "length" slider mapped to the minimum grazing angle that bounds how far a low-angle key
-    // may stretch the cast shadow. Lives in the interpreter (it owns the shadow projection), pushed here.
+    // Actor shadow look tuning (global, not per object): core blend strength, the slab depth/rise that bound
+    // the conforming ground band, and a "length" slider mapped to the minimum grazing angle that bounds how
+    // far a low-angle key may stretch the cast shadow. Lives in the interpreter (it owns the shadow
+    // projection), pushed here.
     if (auto interp = GetInterpreter()) {
         f32 opacity = CVarGetFloat(CVAR_ENHANCEMENT("Graphics.WorldShadows.Opacity"), kDefaultShadowOpacity);
         f32 length = CVarGetFloat(CVAR_ENHANCEMENT("Graphics.WorldShadows.Length"), kDefaultShadowLength);
@@ -571,12 +572,11 @@ static void HandleActorDraw(void* actorPtr) {
         }
     }
 
-    // Actor shadow: arm this actor's drop shadow onto its actual floor polygon (normal + plane), so it
-    // follows slopes and conforms like the vanilla shadow. The renderer casts it along the key just
-    // snapshotted (gSPToonKey above), so the shadow always agrees with the cel shading. POLY_OPA only, so
-    // translucent effects don't cast. Emitted for every non-excluded actor when on (zero normal when there's
-    // no floor in range) so the per-object boundary is always marked and a stale plane can't leak between
-    // actors.
+    // Actor shadow: arm this actor's drop shadow. The renderer builds a stencil volume from the actor's
+    // captured silhouette and casts it along the key just snapshotted (gSPToonKey above) onto the real ground,
+    // so it conforms to slopes and always agrees with the cel shading. POLY_OPA only, so translucent effects
+    // don't cast. Emitted for every non-excluded actor when on (zero normal disarms it) so the per-object
+    // boundary is always marked and the previous actor's capture can't leak into this one.
     if (shadowsEnabled) {
         // The shadow shows when the actor is on/near the ground, within the render-distance cull, and NOT on a
         // wall — climbing a ladder/vine or climbing/hanging off a ledge, where it's flat against a vertical

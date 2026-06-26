@@ -55,6 +55,8 @@ static constexpr float kDefaultShadowOpacity = 0.5f;
 static constexpr float kDefaultShadowSoftness = 0.4f;
 static constexpr int kDefaultShadowTaps = 4;
 static constexpr float kDefaultShadowLength = 0.3f;
+static constexpr float kDefaultShadowSlabDepth = 40.0f; // stencil-volume depth below the feet (ground band)
+static constexpr float kDefaultShadowSlabRise = 10.0f;  // stencil-volume height above the feet (uphill ground)
 static constexpr int kDefaultShadowMaxDistance = 1500; // camera-forward distance past which shadows are culled
 
 // Actors the cel system skips entirely: they look wrong relit AND wrong casting a flattened shadow
@@ -127,14 +129,20 @@ static void OnToonFrameUpdate() {
     // may stretch the cast shadow. Lives in the interpreter (it owns the shadow projection), pushed here.
     if (auto interp = GetInterpreter()) {
         f32 opacity = CVarGetFloat(CVAR_ENHANCEMENT("Graphics.WorldShadows.Opacity"), kDefaultShadowOpacity);
-        f32 softness = CVarGetFloat(CVAR_ENHANCEMENT("Graphics.WorldShadows.Softness"), kDefaultShadowSoftness);
-        int taps = CVarGetInteger(CVAR_ENHANCEMENT("Graphics.WorldShadows.Taps"), kDefaultShadowTaps);
         f32 length = CVarGetFloat(CVAR_ENHANCEMENT("Graphics.WorldShadows.Length"), kDefaultShadowLength);
-        // Map the Length slider to the minimum elevation the key is raised to before projecting: a low
-        // Length forces the light steep (short shadows under the actor), a high Length lets a low key cast
-        // long. length 0 => 0.95 (very short/steep), 1 => 0.10 (long).
+        f32 slabDepth = CVarGetFloat(CVAR_ENHANCEMENT("Graphics.WorldShadows.SlabDepth"), kDefaultShadowSlabDepth);
+        f32 slabRise = CVarGetFloat(CVAR_ENHANCEMENT("Graphics.WorldShadows.SlabRise"), kDefaultShadowSlabRise);
+        bool showVolume = CVarGetInteger(CVAR_DEVELOPER_TOOLS("WorldShadows.ShowVolume"), 0);
+        // Map the Length slider to how steeply the key light is forced before projecting: low Length = steep
+        // (short shadow tucked under the actor), high Length = lets a low key cast a long lean. 0 => 0.95, 1 => 0.10.
         f32 minElevation = 0.95f - (CLAMP(length, 0.0f, 1.0f) * 0.85f);
-        interp->SetToonShadowParams(opacity, minElevation, taps, softness);
+        // Slab Depth/Rise: how far below/above the feet the stencil volume reaches (the band of ground it conforms to).
+        interp->SetToonShadowParams(opacity, minElevation, slabDepth, slabRise, showVolume);
+        // Debug: the GUI "Dump Shadow Info" button sets this CVar; arm a one-frame renderer dump and clear it.
+        if (CVarGetInteger(CVAR_DEVELOPER_TOOLS("WorldShadows.DebugDump"), 0)) {
+            interp->RequestShadowDump();
+            CVarClear(CVAR_DEVELOPER_TOOLS("WorldShadows.DebugDump"));
+        }
     }
 
     Fast::GfxRenderingAPI* rapi = GetRenderingApi();
@@ -587,7 +595,8 @@ static void HandleActorDraw(void* actorPtr) {
                 nx = COLPOLY_GET_NORMAL(floorPoly->normal.x);
                 ny = COLPOLY_GET_NORMAL(floorPoly->normal.y);
                 nz = COLPOLY_GET_NORMAL(floorPoly->normal.z);
-                // Plane through the actor's ground point with the floor normal: N.P + planeD = 0.
+                // Plane through the actor's ground point with the floor normal: N.P + planeD = 0. (The renderer
+                // additionally lowers this plane to the rendered feet when floorHeight is well above them.)
                 planeD = -((nx * actor->world.pos.x) + (ny * actor->floorHeight) + (nz * actor->world.pos.z));
             }
         }
@@ -607,6 +616,21 @@ static void HandleActorDestroy(void* actorPtr) {
     sToonKeyStates.erase((Actor*)actorPtr);
 }
 
+// Runs at the pre-actor draw point (after the room is drawn, before the actor loop — the same hook the light
+// pools use). Tells the renderer to draw the frame's accumulated actor-shadow volumes now, so they land ONLY
+// on the environment (actors aren't in the depth buffer yet → no self-shadow, no shadowing other actors). The
+// volumes are this frame's captures from the previous frame's actor loop, so the shadow lags one frame —
+// imperceptible for a ground shadow.
+static void EmitShadowVolumeFlush(void* playPtr) {
+    PlayState* play = (PlayState*)playPtr;
+    if (play == NULL) {
+        return;
+    }
+    OPEN_DISPS(play->state.gfxCtx);
+    gSPToonShadowFlush(POLY_OPA_DISP++);
+    CLOSE_DISPS(play->state.gfxCtx);
+}
+
 void RegisterToonLighting() {
     bool celEnabled = CVarGetInteger(CVAR_ENHANCEMENT("Graphics.ToonLighting.Enabled"), 1);
     bool shadowsEnabled = CVarGetInteger(CVAR_ENHANCEMENT("Graphics.WorldShadows.Enabled"), 1);
@@ -617,6 +641,8 @@ void RegisterToonLighting() {
     COND_HOOK(OnGameFrameUpdate, active, OnToonFrameUpdate);
     COND_HOOK(OnActorDraw, active, HandleActorDraw);
     COND_HOOK(OnActorDestroy, active, HandleActorDestroy);
+    // Render the accumulated shadow volumes pre-actor so they only fall on the environment.
+    COND_HOOK(OnPlayDrawWorldLights, shadowsEnabled, EmitShadowVolumeFlush);
     // Drop the key-dedup state so the first actor after a (re-)enable always emits, before the
     // end-of-frame OnToonFrameUpdate reset has had a chance to run.
     sHaveLastKey = false;

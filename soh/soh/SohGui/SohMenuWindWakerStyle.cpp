@@ -336,6 +336,8 @@ void SohMenu::AddMenuWindWakerStyle() {
             CVarClear(CVAR_ENHANCEMENT("Graphics.WorldShadows.Softness"));
             CVarClear(CVAR_ENHANCEMENT("Graphics.WorldShadows.Taps"));
             CVarClear(CVAR_ENHANCEMENT("Graphics.WorldShadows.Length"));
+            CVarClear(CVAR_ENHANCEMENT("Graphics.WorldShadows.SlabDepth"));
+            CVarClear(CVAR_ENHANCEMENT("Graphics.WorldShadows.SlabRise"));
             CVarClear(CVAR_ENHANCEMENT("Graphics.WorldShadows.MaxDistance"));
             Ship::Context::GetInstance()->GetWindow()->GetGui()->SaveConsoleVariablesNextFrame();
         })
@@ -387,6 +389,33 @@ void SohMenu::AddMenuWindWakerStyle() {
                      .Min(0.0f)
                      .Max(1.0f)
                      .DefaultValue(0.3f));
+    AddWidget(path, "Slab Depth", WIDGET_CVAR_SLIDER_FLOAT)
+        .CVar(CVAR_ENHANCEMENT("Graphics.WorldShadows.SlabDepth"))
+        .RaceDisable(false)
+        .PreFunc(hideUnlessShadowsEnabled)
+        .Options(FloatSliderOptions()
+                     .Tooltip("How far below the feet the shadow conforms to the ground. The shadow is a thin "
+                              "stencil 'slab' at the feet that wraps onto whatever ground is inside it. Higher = "
+                              "follows ground that dips further (steeper inclines), but past a ledge the shadow "
+                              "creeps further down the drop. Lower = clings tight to the feet and won't spill "
+                              "over cliff edges, but may clip on steep slopes.")
+                     .Format("%.0f")
+                     .Min(5.0f)
+                     .Max(200.0f)
+                     .DefaultValue(40.0f));
+    AddWidget(path, "Slab Rise", WIDGET_CVAR_SLIDER_FLOAT)
+        .CVar(CVAR_ENHANCEMENT("Graphics.WorldShadows.SlabRise"))
+        .RaceDisable(false)
+        .PreFunc(hideUnlessShadowsEnabled)
+        .Options(FloatSliderOptions()
+                     .Tooltip("How far ABOVE the feet the shadow can climb onto rising ground. Raise this so the "
+                              "shadow still appears where an incline rises higher than the actor's feet (without "
+                              "it, the shadow vanishes on up-slopes). Too high starts to catch the actor's own "
+                              "lower legs, so keep it just above the ground rise you need.")
+                     .Format("%.0f")
+                     .Min(0.0f)
+                     .Max(120.0f)
+                     .DefaultValue(10.0f));
     AddWidget(path, "Render Distance: %d", WIDGET_CVAR_SLIDER_INT)
         .CVar(CVAR_ENHANCEMENT("Graphics.WorldShadows.MaxDistance"))
         .RaceDisable(false)
@@ -401,6 +430,25 @@ void SohMenu::AddMenuWindWakerStyle() {
                      .DefaultValue(1500)
                      .ShowButtons(true)
                      .Format("%d"));
+    AddWidget(path, "Debug", WIDGET_SEPARATOR_TEXT).PreFunc(hideUnlessShadowsEnabled);
+    AddWidget(path, "Dump Shadow Info to Log", WIDGET_BUTTON)
+        .PreFunc(hideUnlessShadowsEnabled)
+        .Callback([](WidgetInfo& info) {
+            // Arm a one-frame dump in the renderer (read back next frame in ToonLighting's OnToonFrameUpdate):
+            // logs each shadow's floor plane + captured/projected geometry AABBs to the console/log. Stand in
+            // the glitchy spot, click this, then check the log to see where the shadow geometry actually lands.
+            CVarSetInteger(CVAR_DEVELOPER_TOOLS("WorldShadows.DebugDump"), 1);
+            Ship::Context::GetInstance()->GetWindow()->GetGui()->SaveConsoleVariablesNextFrame();
+        })
+        .Options(ButtonOptions().Tooltip(
+            "While standing in a spot where the shadow looks wrong, click this to log this frame's shadow data "
+            "(floor plane + where the silhouette lands) to the console, for diagnosing the glitch."));
+    AddWidget(path, "Show Shadow Volume", WIDGET_CVAR_CHECKBOX)
+        .CVar(CVAR_DEVELOPER_TOOLS("WorldShadows.ShowVolume"))
+        .PreFunc(hideUnlessShadowsEnabled)
+        .Options(CheckboxOptions().Tooltip(
+            "Draws the actual 3D shadow volume translucently so you can see its shape: black top/bottom caps, "
+            "blue side walls. The ground inside this volume is what gets shadowed."));
 }
 
 } // namespace SohGui

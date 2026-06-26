@@ -299,6 +299,118 @@ void SohMenu::AddMenuWindWakerStyle() {
             "Overlays a translucent faceted shell of each light's icosphere — the volume used for its cast "
             "pool — tinted by the light, so you can see where the pools are, their size, and their spin. "
             "(The renderer has no line primitive, so this is a shell rather than a true wireframe.)"));
+
+    // ===========================================================================================
+    // Actor Shadows — Wind Waker-style shape shadows: each actor casts its own silhouette onto the ground
+    // (following slopes), from the same key light Cel Shading uses, with a soft edge. Replaces the vanilla
+    // blob/feet shadows. Internal CVar keys use "WorldShadows"; the UI says "Actor Shadows".
+    // ===========================================================================================
+    auto hideUnlessShadowsEnabled = [](WidgetInfo& info) {
+        info.isHidden = !CVarGetInteger(CVAR_ENHANCEMENT("Graphics.WorldShadows.Enabled"), 0);
+    };
+    path.sidebarName = "Actor Shadows";
+    path.column = SECTION_COLUMN_1;
+    AddSidebarEntry("Wind Waker Style", "Actor Shadows", 3);
+    AddWidget(path, "Enable Actor Shadows", WIDGET_CVAR_CHECKBOX)
+        .CVar(CVAR_ENHANCEMENT("Graphics.WorldShadows.Enabled"))
+        .RaceDisable(false)
+        .Options(CheckboxOptions().DefaultValue(false).Tooltip(
+            "Replaces the vanilla actor shadows with a shape-based drop shadow for each actor (Link, NPCs, "
+            "enemies, items, ...): its own silhouette cast from the single key light Cel Shading picks, wrapped "
+            "onto the real ground so it follows slopes and bumps. Off by default (vanilla shadows). Uses the "
+            "Cel Shading key selection, but works whether or not Cel Shading itself is on."));
+    AddWidget(path, "Suppress Vanilla Shadows", WIDGET_CVAR_CHECKBOX)
+        .CVar(CVAR_ENHANCEMENT("Graphics.WorldShadows.SuppressVanillaShadows"))
+        .RaceDisable(false)
+        .PreFunc(hideUnlessShadowsEnabled)
+        .Options(CheckboxOptions().DefaultValue(true).Tooltip(
+            "Hide the original game's actor shadows (Link's feet, the NPC/enemy circles, the horse shadow, "
+            "the sign and snake-statue texture shadows) so only the new shape shadows show. Turn off to draw "
+            "both."));
+    AddWidget(path, "Options", WIDGET_SEPARATOR_TEXT).PreFunc(hideUnlessShadowsEnabled);
+    AddWidget(path, "Reset All to Defaults", WIDGET_BUTTON)
+        .PreFunc(hideUnlessShadowsEnabled)
+        .Callback([](WidgetInfo& info) {
+            CVarClear(CVAR_ENHANCEMENT("Graphics.WorldShadows.SuppressVanillaShadows"));
+            CVarClear(CVAR_ENHANCEMENT("Graphics.WorldShadows.Opacity"));
+            CVarClear(CVAR_ENHANCEMENT("Graphics.WorldShadows.Length"));
+            CVarClear(CVAR_ENHANCEMENT("Graphics.WorldShadows.SlabDepth"));
+            CVarClear(CVAR_ENHANCEMENT("Graphics.WorldShadows.SlabRise"));
+            CVarClear(CVAR_ENHANCEMENT("Graphics.WorldShadows.MaxDistance"));
+            Ship::Context::GetInstance()->GetWindow()->GetGui()->SaveConsoleVariablesNextFrame();
+        })
+        .Options(ButtonOptions().Tooltip("Resets all the Actor Shadows sliders below to their default values."));
+    AddWidget(path, "Opacity", WIDGET_CVAR_SLIDER_FLOAT)
+        .CVar(CVAR_ENHANCEMENT("Graphics.WorldShadows.Opacity"))
+        .RaceDisable(false)
+        .PreFunc(hideUnlessShadowsEnabled)
+        .Options(FloatSliderOptions()
+                     .Tooltip("How dark the shadow's core is. 0 = invisible; higher = darker.")
+                     .Min(0.0f)
+                     .Max(1.0f)
+                     .DefaultValue(0.2f)
+                     .IsPercentage());
+    AddWidget(path, "Length", WIDGET_CVAR_SLIDER_FLOAT)
+        .CVar(CVAR_ENHANCEMENT("Graphics.WorldShadows.Length"))
+        .RaceDisable(false)
+        .PreFunc(hideUnlessShadowsEnabled)
+        .Options(FloatSliderOptions()
+                     .Tooltip("How long the shadow may get. The key light is raised toward straight-overhead "
+                              "before projecting, so a low light still casts a short shadow tucked under the "
+                              "actor (like the vanilla shadow). Lower = always short and steep; higher = lets "
+                              "a low light stretch the shadow out further.")
+                     .Format("%.2f")
+                     .Min(0.0f)
+                     .Max(1.0f)
+                     .DefaultValue(0.2f));
+    AddWidget(path, "Slab Depth", WIDGET_CVAR_SLIDER_FLOAT)
+        .CVar(CVAR_ENHANCEMENT("Graphics.WorldShadows.SlabDepth"))
+        .RaceDisable(false)
+        .PreFunc(hideUnlessShadowsEnabled)
+        .Options(FloatSliderOptions()
+                     .Tooltip("How far below the feet the shadow conforms to the ground. The shadow is a thin "
+                              "stencil 'slab' at the feet that wraps onto whatever ground is inside it. Higher = "
+                              "follows ground that dips further (steeper inclines), but past a ledge the shadow "
+                              "creeps further down the drop. Lower = clings tight to the feet and won't spill "
+                              "over cliff edges, but may clip on steep slopes.")
+                     .Format("%.0f")
+                     .Min(5.0f)
+                     .Max(200.0f)
+                     .DefaultValue(8.0f));
+    AddWidget(path, "Slab Rise", WIDGET_CVAR_SLIDER_FLOAT)
+        .CVar(CVAR_ENHANCEMENT("Graphics.WorldShadows.SlabRise"))
+        .RaceDisable(false)
+        .PreFunc(hideUnlessShadowsEnabled)
+        .Options(FloatSliderOptions()
+                     .Tooltip("How far ABOVE the feet the shadow can climb onto rising ground. Raise this so the "
+                              "shadow still appears where an incline rises higher than the actor's feet (without "
+                              "it, the shadow vanishes on up-slopes). Too high starts to catch the actor's own "
+                              "lower legs, so keep it just above the ground rise you need.")
+                     .Format("%.0f")
+                     .Min(0.0f)
+                     .Max(120.0f)
+                     .DefaultValue(8.0f));
+    AddWidget(path, "Render Distance: %d", WIDGET_CVAR_SLIDER_INT)
+        .CVar(CVAR_ENHANCEMENT("Graphics.WorldShadows.MaxDistance"))
+        .RaceDisable(false)
+        .PreFunc(hideUnlessShadowsEnabled)
+        .Options(IntSliderOptions()
+                     .Tooltip("Performance: actors farther than this from the camera get no shape shadow (each "
+                              "shadow redraws the actor's whole silhouette once per tap, so distant ones cost "
+                              "more than they're worth). Lower to gain frames in crowded scenes; raise for "
+                              "shadows that stay visible into the distance.")
+                     .Min(300)
+                     .Max(5000)
+                     .DefaultValue(800)
+                     .ShowButtons(true)
+                     .Format("%d"));
+    AddWidget(path, "Debug", WIDGET_SEPARATOR_TEXT).PreFunc(hideUnlessShadowsEnabled);
+    AddWidget(path, "Show Shadow Volume", WIDGET_CVAR_CHECKBOX)
+        .CVar(CVAR_DEVELOPER_TOOLS("WorldShadows.ShowVolume"))
+        .PreFunc(hideUnlessShadowsEnabled)
+        .Options(CheckboxOptions().Tooltip(
+            "Draws the actual 3D shadow volume translucently so you can see its shape: black top/bottom caps, "
+            "blue side walls. The ground inside this volume is what gets shadowed."));
 }
 
 } // namespace SohGui

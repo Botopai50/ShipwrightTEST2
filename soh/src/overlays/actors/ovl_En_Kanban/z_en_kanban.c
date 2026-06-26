@@ -844,7 +844,7 @@ void EnKanban_Draw(Actor* thisx, PlayState* play) {
     }
     // SOH [Enhancement] Actor shadows cast the sign's own shape shadow from the chosen key light, so skip
     // this bespoke (fixed-direction) shadow when vanilla-shadow suppression is on.
-    if (!(CVarGetInteger(CVAR_ENHANCEMENT("Graphics.WorldShadows.Enabled"), 1) &&
+    if (!(CVarGetInteger(CVAR_ENHANCEMENT("Graphics.WorldShadows.Enabled"), 0) &&
           CVarGetInteger(CVAR_ENHANCEMENT("Graphics.WorldShadows.SuppressVanillaShadows"), 1)) &&
         (this->actor.projectedPos.z <= 400.0f) && (this->actor.projectedPos.z > 0.0f) &&
         (this->actor.floorHeight > -3000.0f)) {

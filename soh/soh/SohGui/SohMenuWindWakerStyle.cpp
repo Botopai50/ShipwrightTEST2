@@ -306,7 +306,7 @@ void SohMenu::AddMenuWindWakerStyle() {
     // blob/feet shadows. Internal CVar keys use "WorldShadows"; the UI says "Actor Shadows".
     // ===========================================================================================
     auto hideUnlessShadowsEnabled = [](WidgetInfo& info) {
-        info.isHidden = !CVarGetInteger(CVAR_ENHANCEMENT("Graphics.WorldShadows.Enabled"), 1);
+        info.isHidden = !CVarGetInteger(CVAR_ENHANCEMENT("Graphics.WorldShadows.Enabled"), 0);
     };
     path.sidebarName = "Actor Shadows";
     path.column = SECTION_COLUMN_1;
@@ -314,11 +314,11 @@ void SohMenu::AddMenuWindWakerStyle() {
     AddWidget(path, "Enable Actor Shadows", WIDGET_CVAR_CHECKBOX)
         .CVar(CVAR_ENHANCEMENT("Graphics.WorldShadows.Enabled"))
         .RaceDisable(false)
-        .Options(CheckboxOptions().DefaultValue(true).Tooltip(
-            "Casts a shape-based drop shadow for each actor (Link, NPCs, enemies, items, ...) — its own "
-            "silhouette projected onto the ground from the single key light chosen by Cel Shading, with a "
-            "soft edge. Follows floor slopes; like the vanilla shadow it projects flat past a hard cliff "
-            "edge. Uses the Cel Shading key selection, but works whether or not Cel Shading itself is on."));
+        .Options(CheckboxOptions().DefaultValue(false).Tooltip(
+            "Replaces the vanilla actor shadows with a shape-based drop shadow for each actor (Link, NPCs, "
+            "enemies, items, ...): its own silhouette cast from the single key light Cel Shading picks, wrapped "
+            "onto the real ground so it follows slopes and bumps. Off by default (vanilla shadows). Uses the "
+            "Cel Shading key selection, but works whether or not Cel Shading itself is on."));
     AddWidget(path, "Suppress Vanilla Shadows", WIDGET_CVAR_CHECKBOX)
         .CVar(CVAR_ENHANCEMENT("Graphics.WorldShadows.SuppressVanillaShadows"))
         .RaceDisable(false)
@@ -333,8 +333,6 @@ void SohMenu::AddMenuWindWakerStyle() {
         .Callback([](WidgetInfo& info) {
             CVarClear(CVAR_ENHANCEMENT("Graphics.WorldShadows.SuppressVanillaShadows"));
             CVarClear(CVAR_ENHANCEMENT("Graphics.WorldShadows.Opacity"));
-            CVarClear(CVAR_ENHANCEMENT("Graphics.WorldShadows.Softness"));
-            CVarClear(CVAR_ENHANCEMENT("Graphics.WorldShadows.Taps"));
             CVarClear(CVAR_ENHANCEMENT("Graphics.WorldShadows.Length"));
             CVarClear(CVAR_ENHANCEMENT("Graphics.WorldShadows.SlabDepth"));
             CVarClear(CVAR_ENHANCEMENT("Graphics.WorldShadows.SlabRise"));
@@ -350,32 +348,8 @@ void SohMenu::AddMenuWindWakerStyle() {
                      .Tooltip("How dark the shadow's core is. 0 = invisible; higher = darker.")
                      .Min(0.0f)
                      .Max(1.0f)
-                     .DefaultValue(0.5f)
+                     .DefaultValue(0.2f)
                      .IsPercentage());
-    AddWidget(path, "Softness", WIDGET_CVAR_SLIDER_FLOAT)
-        .CVar(CVAR_ENHANCEMENT("Graphics.WorldShadows.Softness"))
-        .RaceDisable(false)
-        .PreFunc(hideUnlessShadowsEnabled)
-        .Options(FloatSliderOptions()
-                     .Tooltip("Width of the soft edge (penumbra). 0 = a hard, crisp silhouette; higher = a "
-                              "wider, fuzzier feather. Built from the Tap Count passes below.")
-                     .Format("%.2f")
-                     .Min(0.0f)
-                     .Max(1.0f)
-                     .DefaultValue(0.4f));
-    AddWidget(path, "Tap Count: %d", WIDGET_CVAR_SLIDER_INT)
-        .CVar(CVAR_ENHANCEMENT("Graphics.WorldShadows.Taps"))
-        .RaceDisable(false)
-        .PreFunc(hideUnlessShadowsEnabled)
-        .Options(IntSliderOptions()
-                     .Tooltip("How many offset passes build the soft edge. More = a smoother gradient but a "
-                              "little more GPU work; 1 = a single hard-edged shadow (the Softness control "
-                              "has no effect at 1).")
-                     .Min(1)
-                     .Max(8)
-                     .DefaultValue(4)
-                     .ShowButtons(true)
-                     .Format("%d"));
     AddWidget(path, "Length", WIDGET_CVAR_SLIDER_FLOAT)
         .CVar(CVAR_ENHANCEMENT("Graphics.WorldShadows.Length"))
         .RaceDisable(false)
@@ -388,7 +362,7 @@ void SohMenu::AddMenuWindWakerStyle() {
                      .Format("%.2f")
                      .Min(0.0f)
                      .Max(1.0f)
-                     .DefaultValue(0.3f));
+                     .DefaultValue(0.2f));
     AddWidget(path, "Slab Depth", WIDGET_CVAR_SLIDER_FLOAT)
         .CVar(CVAR_ENHANCEMENT("Graphics.WorldShadows.SlabDepth"))
         .RaceDisable(false)
@@ -402,7 +376,7 @@ void SohMenu::AddMenuWindWakerStyle() {
                      .Format("%.0f")
                      .Min(5.0f)
                      .Max(200.0f)
-                     .DefaultValue(40.0f));
+                     .DefaultValue(8.0f));
     AddWidget(path, "Slab Rise", WIDGET_CVAR_SLIDER_FLOAT)
         .CVar(CVAR_ENHANCEMENT("Graphics.WorldShadows.SlabRise"))
         .RaceDisable(false)
@@ -415,7 +389,7 @@ void SohMenu::AddMenuWindWakerStyle() {
                      .Format("%.0f")
                      .Min(0.0f)
                      .Max(120.0f)
-                     .DefaultValue(10.0f));
+                     .DefaultValue(8.0f));
     AddWidget(path, "Render Distance: %d", WIDGET_CVAR_SLIDER_INT)
         .CVar(CVAR_ENHANCEMENT("Graphics.WorldShadows.MaxDistance"))
         .RaceDisable(false)
@@ -427,22 +401,10 @@ void SohMenu::AddMenuWindWakerStyle() {
                               "shadows that stay visible into the distance.")
                      .Min(300)
                      .Max(5000)
-                     .DefaultValue(1500)
+                     .DefaultValue(1400)
                      .ShowButtons(true)
                      .Format("%d"));
     AddWidget(path, "Debug", WIDGET_SEPARATOR_TEXT).PreFunc(hideUnlessShadowsEnabled);
-    AddWidget(path, "Dump Shadow Info to Log", WIDGET_BUTTON)
-        .PreFunc(hideUnlessShadowsEnabled)
-        .Callback([](WidgetInfo& info) {
-            // Arm a one-frame dump in the renderer (read back next frame in ToonLighting's OnToonFrameUpdate):
-            // logs each shadow's floor plane + captured/projected geometry AABBs to the console/log. Stand in
-            // the glitchy spot, click this, then check the log to see where the shadow geometry actually lands.
-            CVarSetInteger(CVAR_DEVELOPER_TOOLS("WorldShadows.DebugDump"), 1);
-            Ship::Context::GetInstance()->GetWindow()->GetGui()->SaveConsoleVariablesNextFrame();
-        })
-        .Options(ButtonOptions().Tooltip(
-            "While standing in a spot where the shadow looks wrong, click this to log this frame's shadow data "
-            "(floor plane + where the silhouette lands) to the console, for diagnosing the glitch."));
     AddWidget(path, "Show Shadow Volume", WIDGET_CVAR_CHECKBOX)
         .CVar(CVAR_DEVELOPER_TOOLS("WorldShadows.ShowVolume"))
         .PreFunc(hideUnlessShadowsEnabled)

@@ -104,7 +104,7 @@ void ActorShape_Init(ActorShape* shape, f32 yOffset, ActorShadowFunc shadowDraw,
 // AND set to suppress, early-return the vanilla draws that funnel through these helpers. Tied to the shadow
 // feature's own CVars (not cel shading), so the two can be toggled independently.
 static s32 ActorShadow_Suppressed(void) {
-    return CVarGetInteger(CVAR_ENHANCEMENT("Graphics.WorldShadows.Enabled"), 1) &&
+    return CVarGetInteger(CVAR_ENHANCEMENT("Graphics.WorldShadows.Enabled"), 0) &&
            CVarGetInteger(CVAR_ENHANCEMENT("Graphics.WorldShadows.SuppressVanillaShadows"), 1);
 }
 
@@ -2783,7 +2783,7 @@ void Actor_Draw(PlayState* play, Actor* actor) {
     // gates the relight and the shadow independently. Guarded so the hook is never invoked per-actor when
     // both are off.
     if (CVarGetInteger(CVAR_ENHANCEMENT("Graphics.ToonLighting.Enabled"), 1) ||
-        CVarGetInteger(CVAR_ENHANCEMENT("Graphics.WorldShadows.Enabled"), 1)) {
+        CVarGetInteger(CVAR_ENHANCEMENT("Graphics.WorldShadows.Enabled"), 0)) {
         GameInteractor_ExecuteOnActorDraw(actor);
     }
 

@@ -566,7 +566,7 @@ void BgJyaCobra_DrawShadow(BgJyaCobra* this, PlayState* play) {
 
     // SOH [Enhancement] Actor shadows cast this statue's shape shadow from the chosen key light, so skip
     // the bespoke fixed-direction shadow when vanilla-shadow suppression is on.
-    if (CVarGetInteger(CVAR_ENHANCEMENT("Graphics.WorldShadows.Enabled"), 1) &&
+    if (CVarGetInteger(CVAR_ENHANCEMENT("Graphics.WorldShadows.Enabled"), 0) &&
         CVarGetInteger(CVAR_ENHANCEMENT("Graphics.WorldShadows.SuppressVanillaShadows"), 1)) {
         return;
     }

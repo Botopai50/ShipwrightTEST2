@@ -48,16 +48,15 @@ static constexpr float kDefaultPointLightRange = 1.5f;
 static constexpr float kDefaultTransitionTime = 1.0f;
 
 // Actor-shadow defaults (the "Actor Shadows" page; CVar prefix Graphics.WorldShadows.*). Opacity is the
-// core blend strength; softness scales the soft-edge penumbra; taps is the number of accumulation passes;
-// length maps (inversely) to how far a low-angle key may stretch the shadow (higher = longer). All are
-// game-side policy pushed once per frame (look) or per object (floor plane).
-static constexpr float kDefaultShadowOpacity = 0.5f;
-static constexpr float kDefaultShadowSoftness = 0.4f;
-static constexpr int kDefaultShadowTaps = 4;
-static constexpr float kDefaultShadowLength = 0.3f;
-static constexpr float kDefaultShadowSlabDepth = 40.0f; // stencil-volume depth below the feet (ground band)
-static constexpr float kDefaultShadowSlabRise = 10.0f;  // stencil-volume height above the feet (uphill ground)
-static constexpr int kDefaultShadowMaxDistance = 1500; // camera-forward distance past which shadows are culled
+// core blend strength; length maps (inversely) to how far a low-angle key may stretch the shadow (higher =
+// longer); slab depth/rise bound the ground band below/above the feet. All are game-side policy pushed once
+// per frame (look) or per object. Keep these in sync with the GUI slider DefaultValue()s.
+static constexpr float kDefaultShadowOpacity = 0.2f;
+static constexpr float kDefaultShadowLength = 0.2f;
+static constexpr float kDefaultShadowSlabDepth = 8.0f; // stencil-volume depth below the feet (ground band)
+static constexpr float kDefaultShadowSlabRise = 8.0f;  // stencil-volume height above the feet (uphill ground)
+static constexpr int kDefaultShadowMaxDistance = 1400; // camera-forward distance past which shadows are culled
+static constexpr float kShadowFadeTime = 0.15f; // seconds to ease the shadow size in/out (anti-pop, like Navi)
 
 // Actors the cel system skips entirely: they look wrong relit AND wrong casting a flattened shadow
 // (doors, the Great Deku Tree, water-box surfaces). Data-driven so it's easy to extend after seeing what
@@ -138,11 +137,6 @@ static void OnToonFrameUpdate() {
         f32 minElevation = 0.95f - (CLAMP(length, 0.0f, 1.0f) * 0.85f);
         // Slab Depth/Rise: how far below/above the feet the stencil volume reaches (the band of ground it conforms to).
         interp->SetToonShadowParams(opacity, minElevation, slabDepth, slabRise, showVolume);
-        // Debug: the GUI "Dump Shadow Info" button sets this CVar; arm a one-frame renderer dump and clear it.
-        if (CVarGetInteger(CVAR_DEVELOPER_TOOLS("WorldShadows.DebugDump"), 0)) {
-            interp->RequestShadowDump();
-            CVarClear(CVAR_DEVELOPER_TOOLS("WorldShadows.DebugDump"));
-        }
     }
 
     Fast::GfxRenderingAPI* rapi = GetRenderingApi();
@@ -173,6 +167,8 @@ typedef struct {
     f32 dir[3];
     f32 col[3];
     f32 colVel[3];
+    f32 shadowScale;    // actor-shadow size, eased 0..1 so it grows in / shrinks out instead of popping
+    f32 shadowScaleVel; // SmoothDamp velocity for shadowScale
 } ToonKeyState;
 
 static std::unordered_map<Actor*, ToonKeyState> sToonKeyStates;
@@ -497,7 +493,7 @@ static void HandleActorDraw(void* actorPtr) {
     }
 
     bool celEnabled = CVarGetInteger(CVAR_ENHANCEMENT("Graphics.ToonLighting.Enabled"), 1);
-    bool shadowsEnabled = CVarGetInteger(CVAR_ENHANCEMENT("Graphics.WorldShadows.Enabled"), 1);
+    bool shadowsEnabled = CVarGetInteger(CVAR_ENHANCEMENT("Graphics.WorldShadows.Enabled"), 0);
 
     // Blacklist (doors/trees/water): excluded actors get neither cel relight nor a shadow. When cel shading
     // is on, flip its bracket OFF around them (deduped via sToonEnabled) so they keep vanilla lighting; the
@@ -537,6 +533,7 @@ static void HandleActorDraw(void* actorPtr) {
         st.colVel[0] = st.colVel[1] = st.colVel[2] = 0.0f;
         st.dir[0] = targetDir[0], st.dir[1] = targetDir[1], st.dir[2] = targetDir[2];
         st.col[0] = targetCol[0], st.col[1] = targetCol[1], st.col[2] = targetCol[2];
+        st.shadowScale = 0.0f, st.shadowScaleVel = 0.0f; // grows in on first appearance
     } else {
         // Seconds per draw, derived from R_UPDATE_RATE (3 = 20 fps in normal play, 1 = 60 fps during
         // special transitions) so the eased travel lasts the labelled seconds at any update rate. Frame
@@ -581,26 +578,32 @@ static void HandleActorDraw(void* actorPtr) {
     // no floor in range) so the per-object boundary is always marked and a stale plane can't leak between
     // actors.
     if (shadowsEnabled) {
-        f32 nx = 0.0f, ny = 0.0f, nz = 0.0f, planeD = 0.0f;
-        // Distance cull: only the on-screen actor loop reaches here (the game culls off-screen actors), but
-        // a near actor's shadow costs its whole silhouette redrawn once per soft-edge tap, so skip it once
-        // it's far enough that the shadow is small on screen. projectedPos.z is the actor's depth in front of
-        // the camera. A zero normal disarms the shadow (no capture/projection/draw) while still marking the
-        // per-object boundary.
+        // The shadow shows when the actor is on/near the ground, within the render-distance cull, and NOT on a
+        // wall — climbing a ladder/vine or climbing/hanging off a ledge, where it's flat against a vertical
+        // surface and the ground shadow's slab would cut into the wall and leave broken lines. Rather than pop
+        // on/off, the SIZE eases 0..1 (like Navi's light) so it grows in / shrinks to nothing. The eased scale
+        // rides in planeD; the renderer scales the footprint by it (it ignores the floor plane otherwise), and
+        // any nonzero normal simply arms the pass. A zero normal fully disarms it (no capture/projection/draw).
         f32 maxDist = (f32)CVarGetInteger(CVAR_ENHANCEMENT("Graphics.WorldShadows.MaxDistance"), kDefaultShadowMaxDistance);
-        CollisionPoly* floorPoly = actor->floorPoly;
-        if (floorPoly != NULL && actor->projectedPos.z < maxDist) {
-            f32 distToFloor = actor->world.pos.y - actor->floorHeight;
-            if ((distToFloor > -50.0f) && (distToFloor < 1500.0f)) {
-                nx = COLPOLY_GET_NORMAL(floorPoly->normal.x);
-                ny = COLPOLY_GET_NORMAL(floorPoly->normal.y);
-                nz = COLPOLY_GET_NORMAL(floorPoly->normal.z);
-                // Plane through the actor's ground point with the floor normal: N.P + planeD = 0. (The renderer
-                // additionally lowers this plane to the rendered feet when floorHeight is well above them.)
-                planeD = -((nx * actor->world.pos.x) + (ny * actor->floorHeight) + (nz * actor->world.pos.z));
-            }
+        bool onWall = false;
+        if (actor->id == ACTOR_PLAYER) {
+            Player* player = (Player*)actor;
+            onWall = (player->stateFlags1 & (PLAYER_STATE1_HANGING_OFF_LEDGE | PLAYER_STATE1_CLIMBING_LEDGE |
+                                             PLAYER_STATE1_CLIMBING_LADDER)) != 0;
         }
-        gSPToonShadow(POLY_OPA_DISP++, (s8)(nx * 127.0f), (s8)(ny * 127.0f), (s8)(nz * 127.0f), planeD);
+        bool hasFloor = false;
+        if (actor->floorPoly != NULL && actor->projectedPos.z < maxDist) {
+            f32 distToFloor = actor->world.pos.y - actor->floorHeight;
+            hasFloor = (distToFloor > -50.0f) && (distToFloor < 1500.0f);
+        }
+        f32 fadeDt = (R_UPDATE_RATE > 0 ? R_UPDATE_RATE : 3) / 60.0f;
+        st.shadowScale = ToonSmoothDamp(st.shadowScale, (hasFloor && !onWall) ? 1.0f : 0.0f, &st.shadowScaleVel,
+                                        kShadowFadeTime, fadeDt);
+        if (st.shadowScale > 0.01f) {
+            gSPToonShadow(POLY_OPA_DISP++, 0, (s8)127, 0, st.shadowScale); // arm; planeD = eased size scale
+        } else {
+            gSPToonShadow(POLY_OPA_DISP++, 0, 0, 0, 0.0f); // fully off
+        }
     }
 
     if (CVarGetInteger(CVAR_DEVELOPER_TOOLS("ToonLighting.ShowDebug"), 0)) {
@@ -633,7 +636,7 @@ static void EmitShadowVolumeFlush(void* playPtr) {
 
 void RegisterToonLighting() {
     bool celEnabled = CVarGetInteger(CVAR_ENHANCEMENT("Graphics.ToonLighting.Enabled"), 1);
-    bool shadowsEnabled = CVarGetInteger(CVAR_ENHANCEMENT("Graphics.WorldShadows.Enabled"), 1);
+    bool shadowsEnabled = CVarGetInteger(CVAR_ENHANCEMENT("Graphics.WorldShadows.Enabled"), 0);
     // The hooks drive BOTH the cel relight and the actor shadow (the shadow reuses the per-actor key this
     // module computes), so run them while EITHER feature is on. HandleActorDraw internally gates the relight
     // bracket on cel shading and the shadow emit on shadows, so each can be on without the other.

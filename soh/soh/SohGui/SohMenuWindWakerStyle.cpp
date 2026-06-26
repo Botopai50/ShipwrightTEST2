@@ -401,7 +401,7 @@ void SohMenu::AddMenuWindWakerStyle() {
                               "shadows that stay visible into the distance.")
                      .Min(300)
                      .Max(5000)
-                     .DefaultValue(1400)
+                     .DefaultValue(800)
                      .ShowButtons(true)
                      .Format("%d"));
     AddWidget(path, "Debug", WIDGET_SEPARATOR_TEXT).PreFunc(hideUnlessShadowsEnabled);

@@ -55,7 +55,7 @@ static constexpr float kDefaultShadowOpacity = 0.2f;
 static constexpr float kDefaultShadowLength = 0.2f;
 static constexpr float kDefaultShadowSlabDepth = 8.0f; // stencil-volume depth below the feet (ground band)
 static constexpr float kDefaultShadowSlabRise = 8.0f;  // stencil-volume height above the feet (uphill ground)
-static constexpr int kDefaultShadowMaxDistance = 1400; // camera-forward distance past which shadows are culled
+static constexpr int kDefaultShadowMaxDistance = 800; // camera-forward distance past which shadows are culled
 static constexpr float kShadowFadeTime = 0.15f; // seconds to ease the shadow size in/out (anti-pop, like Navi)
 
 // Actors the cel system skips entirely: they look wrong relit AND wrong casting a flattened shadow

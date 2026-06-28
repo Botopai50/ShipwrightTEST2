@@ -2,7 +2,7 @@
 
 A developer/agent orientation for the **light-casting** feature on the `wind-waker-style-cel-shading`
 branch. Read this instead of the diffs to get caught up. References are by **file + symbol** (not line
-numbers, which drift).
+numbers, which drift). Start with [`README.md`](./README.md) for how this fits the other two features.
 
 This is the companion to [`wind-waker-style-cel-shading.md`](./wind-waker-style-cel-shading.md):
 **cel shading lights the _objects_** (Link, NPCs, items) via a forward per-object relight; **light
@@ -200,18 +200,8 @@ All "per-frame" values below are converted from WW's **30 Hz** to our **20 Hz** 
 
 ## Build & test (macOS)
 
-```sh
-# renderer changes (gbi.h / interpreter / backends): rebuild both
-make -C build-cmake libultraship -j10
-make -C build-cmake soh -j10
-# game-side-only changes (WorldLighting.cpp / z_*.c / GUI): just
-make -C build-cmake soh -j10
-```
-
-No `GenerateSohOtr` — there are **no shader changes**. After adding a *new* source file (none expected
-now), re-run the CMake configure so the `GLOB` picks it up.
-
-Run from an interactive Terminal (`build-cmake/soh/soh-macos`). Enable **Settings → Light Casting**, go
+Build per [`README.md`](./README.md#build--test-macos) — **no `GenerateSohOtr`** (no shader changes;
+fixed-function stencil + the existing flat-color combiner). Enable **Settings → Light Casting**, go
 to a torch/fairy/bomb flash; the pool should be a faceted polygon conforming to the floor/wall, slowly
 tumbling and pulsing, occluded by (and not tinting) actors, with the vanilla glow circle hidden. Good
 checks: a lit torch (size pulse + tumble), two nearby torches (overlap), Lake Hylia/dungeon torches.

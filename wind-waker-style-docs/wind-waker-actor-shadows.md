@@ -1,7 +1,8 @@
 # Wind Waker-style Actor Shadows
 
-A developer/agent orientation for the **actor-shadow** feature on the `light-casting` branch. Read this
-instead of the diffs to get caught up. References are by **file + symbol** (not line numbers, which drift).
+A developer/agent orientation for the **actor-shadow** feature on the `wind-waker-style-cel-shading`
+branch. Read this instead of the diffs to get caught up. References are by **file + symbol** (not line
+numbers, which drift). Start with [`README.md`](./README.md) for how this fits the other two features.
 
 This is the third feature in the Wind Waker line, after
 [`wind-waker-style-cel-shading.md`](./wind-waker-style-cel-shading.md) (relights the _objects_) and
@@ -204,14 +205,8 @@ Slider defaults live in the GUI **and** as `kDefault*` in `ToonLighting.cpp` —
 
 ## Build & test (macOS)
 
-```sh
-make -C build-cmake libultraship -j10   # renderer (gbi/interpreter/backends)
-make -C build-cmake soh -j10            # game/port/GUI
-# no GenerateSohOtr — no shader changes
-```
-
-Run from an interactive Terminal (`build-cmake/soh/soh-macos`; launching detached crashes in
-`CAMetalLayer nextDrawable`). Enable **Settings → Actor Shadows**. Checks:
+Build per [`README.md`](./README.md#build--test-macos) (renderer + soh; **no `GenerateSohOtr`** — no
+shader changes). Enable **Settings → Actor Shadows**. Checks:
 - Link casts a **shape** shadow with a **soft** edge and an even core (no dark limb seams → per-tap mask).
 - Orbit the fairy / change time of day → the shadow direction swings with the key.
 - Stand on a slope → the shadow follows the floor polygon; hang off a ledge → no smear onto Link (it
@@ -222,22 +217,13 @@ Run from an interactive Terminal (`build-cmake/soh/soh-macos`; launching detache
 
 ## Status & next
 
-Committed to the **`shadow2`** branch in BOTH repos (soh + the libultraship submodule). The user's verdict
-is "close to really good, but some weird glitches here and there" — the feature is functional and the major
-feedback is addressed; what remains is polishing intermittent visual glitches that weren't yet diagnosed.
-
-- **Done:** the full capture → project → multi-tap pipeline across all 3 backends; reuse of the cel key,
-  the blacklist, vanilla suppression, the GUI; decoupled from cel shading. Builds clean (libultraship +
-  soh, all backends).
-- **Iteration 1 — cohesion + length (done):** shadows popped between light sources while the cel shading
-  tweened, and got too long under low lights. Both = low-angle length hypersensitivity. Fixed with the
-  **elevation remap** (§technique step 2): the key is raised toward overhead before projecting (azimuth
-  kept in lockstep with the shading), bounding length and smoothing the easing. Length default → 0.3. The
-  user confirmed shorter shadows look much better and the cliff floating is "not really a problem" now.
-- **Iteration 2 — culling + selection (done):** added the **render-distance cull** (`MaxDistance`, GUI
-  "Render Distance") so far actors skip the whole capture/projection/draw; fixed a **double shadow** on
-  deku babas (`En_Dekubaba`/`En_Karebaba`) by suppressing their bespoke circle. See "Which actors cast a
-  shadow" for the full selection rules and the bespoke actors intentionally left alone.
+Functional and merged into `wind-waker-style-cel-shading` (both repos). The full capture → project →
+multi-tap pipeline works across all 3 backends, reusing the cel key, the blacklist, vanilla suppression,
+and the GUI; decoupled from cel shading; builds clean. Two rounds of tuning are already in:
+**(1)** the **elevation remap** (§technique step 2) — raises a low key toward overhead before projecting
+to bound shadow length and stop it popping as the cel key eases (Length default 0.3); **(2)** the
+**render-distance cull** (`MaxDistance`) plus deku-baba double-shadow fix (see "Which actors cast a
+shadow"). What remains is polishing intermittent visual glitches.
 
 ### Known glitches / where we left off (TODO — next session)
 - **Intermittent visual glitches** reported by the user, **not yet diagnosed** — investigate next. No

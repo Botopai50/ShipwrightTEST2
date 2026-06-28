@@ -2,7 +2,7 @@
 
 A developer/agent orientation for the cel-shading feature on the `wind-waker-style-cel-shading`
 branch. Read this instead of the diffs to get caught up. References are by **file + symbol** (not line
-numbers, which drift).
+numbers, which drift). Start with [`README.md`](./README.md) for how this fits the other two features.
 
 > **Naming note:** the user-facing GUI says **"Cel Shading"**, but every internal identifier — code,
 > CVars, GBI commands — uses **`Toon`/`ToonLighting`**. They are the same feature. The CVar keys
@@ -158,17 +158,8 @@ no `SHADER_ID_SHIFT` constant), D3D11 toon CB `b3→b2`, the OpenGL shader is sp
 
 ## Build & test (macOS)
 
-```sh
-cmake -H. -Bbuild-cmake -G "Unix Makefiles" -DCMAKE_BUILD_TYPE=Debug \
-  -DCMAKE_PREFIX_PATH="$(brew --prefix)" \
-  -DCMAKE_OSX_SYSROOT="$(xcrun --sdk macosx --show-sdk-path)" \
-  -DCMAKE_CXX_FLAGS=-DFMT_CONSTEVAL=constexpr
-make -C build-cmake libultraship -j10   # renderer
-make -C build-cmake soh -j10            # game/port
-make -C build-cmake GenerateSohOtr      # ONLY if shaders changed
-```
-
-Run it from an interactive Terminal session (`build-cmake/soh/soh-macos`); launching detached crashes
-in `CAMetalLayer nextDrawable` (no on-screen drawable — a pre-existing environment issue, not the code).
-Good visual checks: the toon look on actors with the sliders, the Light Source Viewer, and **Lake Hylia
-water at high FPS** (should be clean without #1121 — the proof the stable rebase shed the regressions).
+Build per [`README.md`](./README.md#build--test-macos). Cel shading is the **one feature that touches
+shaders**, so after editing any `default.shader.*` you **must** run `make GenerateSohOtr` (pure C++/GUI
+changes don't). Good visual checks: the toon look on actors with the sliders, the Light Source Viewer,
+and **Lake Hylia water at high FPS** (should be clean without #1121 — the proof the stable rebase shed
+the develop-era regressions).

@@ -57,6 +57,36 @@ vanilla shadow: `ovl_En_Wallmas` (the drop **telegraph** — gameplay-critical),
 suppress another, gate its bespoke shadow draw behind the same two CVars (grep `gCircleShadowDL` /
 `ShadowDL` under `soh/src/overlays/actors/`).
 
+## Shadow & light receivers (walkable floor actors)
+
+A handful of surfaces the player walks on are spawned as **actors**, not baked into the room mesh — the
+Castle-Town drawbridge (`Bg_Spot00_Hanebasi`), the Gerudo Valley bridge (`Bg_Spot09_Obj`), and some dungeon
+platforms (`Bg_Mori_Bigst`, `Bg_Haka_Meganebg`, `Bg_Menkuri_Kaiten`, the Shadow-Temple `Bg_Haka_Gate` trap
+floor/statue). Because actors draw *after* the shadow/light flushes, those floors caught neither shadows nor
+light pools — the effect stopped at the floor's edge.
+
+**Fix — a receiver pre-pass.** `func_800315AC` (the actor draw loop) now draws a small **whitelist** of these
+floor actors *first*, before the light-pool and shadow flushes, so their geometry is in the depth buffer and
+both world effects fall on them. They are then **skipped** in the main actor loop so each still draws once.
+This is purely a draw-order change — the flushes are unchanged.
+
+- **Whitelist:** `ToonShadowReceiver` in `ToonLighting.cpp`, exposed to the C game code as
+  `ToonLighting_IsShadowReceiver` (declared in the new `ToonLighting.h`). Curated by actor id; the reused
+  `Bg_Haka_Gate` overlay is additionally gated by its params low byte (only the walkable FLOOR/STATUE variants,
+  not the gate/skull). Receivers are also added to `ToonShadowExcluded` so a floor never casts its **own**
+  silhouette (which would self-shadow now that it sits in the depth buffer).
+- **Draw path:** the per-actor loop body was factored into `Actor_DrawListEntry` (byte-for-byte vanilla) so the
+  pre-pass and the main loop share one cull/lens/draw path.
+- **Light pools too:** the `OnPlayDrawWorldLights` flush was moved from `Play_Draw` (pre-actor) into
+  `func_800315AC`, right after the pre-pass — so torch/fairy pools also land on these floors. Safe because the
+  pools clear `G_LIGHTING` (the open cel bracket can't shade them). Side effect: pools now flush slightly later
+  in the frame (after skybox/rain/screen-fill); identical in normal play, only differs during rain/fades.
+- **Gating:** the pre-pass runs while Actor Shadows + the **Walkable Actors** toggle are on, so light-on-floors
+  currently rides on the shadow feature being enabled.
+
+Adding a floor is one `case` in `ToonShadowReceiver`. Watch moving platforms: the capture lags one frame, so a
+fast-rotating/rising receiver shows the shadow trailing during motion.
+
 ## The technique: planar silhouette projection + multi-tap soft edge
 
 Per object, the renderer captures the actor's drawn **world-space triangles**, then at the object boundary
@@ -170,6 +200,7 @@ Internal prefix `WorldShadows`; the GUI shows "Actor Shadows".
 | `Taps` | 4 | Accumulation taps (1–8); 1 = hard shadow. |
 | `Length` | 0.3 | Shadow length → `minElevation = 0.95 - Length*0.85` (lower = light forced steeper = shorter). |
 | `MaxDistance` | 1500 | Camera-forward distance (`actor->projectedPos.z`) past which an actor's shadow is culled. |
+| `ReceiverActors` | 1 | Draw the walkable-floor whitelist before the flushes so shadows + light pools land on them (GUI: "Shadows on Walkable Actors"). |
 
 Slider defaults live in the GUI **and** as `kDefault*` in `ToonLighting.cpp` — keep in sync.
 

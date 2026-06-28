@@ -47,9 +47,14 @@ tinted additively. Per light, three passes:
    faces avoid near-plane clipping when the camera is inside the volume; the stencil mask alone confines
    the fill to the right pixels.
 
-Emitted into **`POLY_OPA`** *after the room is drawn but before the actor loop*, so at draw time the
-depth buffer holds **world-only** depth — pools clip to the world, are occluded by (and never tint)
+Emitted into **`POLY_OPA`** *after the room is drawn but before the bulk of the actor loop*, so at draw time
+the depth buffer holds **world-only** depth — pools clip to the world, are occluded by (and never tint)
 opaque actors, and our passes write no depth so actor depth-testing is unaffected.
+
+> **Note (receiver pre-pass):** the `OnPlayDrawWorldLights` flush now fires from inside the actor loop
+> (`func_800315AC`), just after the actor-shadow **walkable-floor receiver pre-pass** rather than from
+> `Play_Draw`. This lets pools also fall on the few floors that are actors (drawbridge, trap floor, …) while
+> still preceding every other actor. See `wind-waker-actor-shadows.md` → "Shadow & light receivers."
 
 ---
 
@@ -67,8 +72,9 @@ opaque actors, and our passes write no depth so actor depth-testing is unaffecte
    `soh/src/code/z_lights.c` (CVar-gated): `WorldLighting_ApplyFlameFlicker` replaces the white-noise
    brightness with a slow random-walk **for lights it detects as flickering** (large per-frame jump),
    leaving steady/smooth lights (e.g. the mirror-shield beam) alone.
-2. **Cast pools (during Play_Draw).** After `Scene_Draw`/`Room_Draw` and before the actor loop,
-   `z_play.c` fires the `OnPlayDrawWorldLights` GameInteractor hook (CVar-gated). `DrawWorldLights`
+2. **Cast pools (during the actor loop).** From `func_800315AC`, after the room + actor-shadow receiver
+   pre-pass and before the rest of the actors, the `OnPlayDrawWorldLights` GameInteractor hook fires
+   (CVar-gated). `DrawWorldLights`
    (`WorldLighting.cpp`) walks `play->lightCtx.listHead` and, per point light, emits the 3-pass stencil
    volume into `POLY_OPA`, tinted by the light's live color, sized/spun by the WW model.
 3. **Stencil state crosses to the renderer.** Each pass emits `gSPStencil(mode)`; the interpreter's
@@ -97,8 +103,9 @@ opaque actors, and our passes write no depth so actor depth-testing is unaffecte
   - `DrawWorldLights` — the per-frame light walk; advances tumble + size/alpha flicker; selects Navi.
   - `RegisterWorldLighting` + `RegisterShipInitFunc initFunc(...)` — `COND_HOOK`s `OnPlayDrawWorldLights`
     only while `Enabled` (default 0).
-- **`soh/src/code/z_play.c`** — `// SOH [Enhancement]` callout after `Room_Draw` (≈ the
-  `roomCtx.prevRoom` block) firing `GameInteractor_ExecuteOnPlayDrawWorldLights(play)`, CVar-gated.
+- **`soh/src/code/z_actor.c`** — `func_800315AC` fires `GameInteractor_ExecuteOnPlayDrawWorldLights(play)`
+  just after the actor-shadow receiver pre-pass (moved here from `z_play.c` so pools also reach the walkable
+  floor actors; see `wind-waker-actor-shadows.md`). The old `z_play.c` call site now only carries a breadcrumb.
 - **`soh/src/code/z_lights.c`** — two `// SOH [Enhancement]` edits:
   - `Lights_PointSetColorAndRadius` — the flame-flicker interception (calls `WorldLighting_ApplyFlameFlicker`).
   - `Lights_DrawGlow` — early-returns to **hide the vanilla billboarded glow circles** while light

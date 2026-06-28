@@ -16,6 +16,7 @@
 #include "soh/Enhancements/game-interactor/GameInteractor.h"
 #include "soh/ShipInit.hpp"
 #include "soh/cvar_prefixes.h"
+#include "soh/ActorDB.h" // SOH [Enhancement] actor-name lookup for the cel-shading blacklist
 // Declares the FrameInterpolation_Record* functions (with C linkage) that the OPEN_DISPS/CLOSE_DISPS
 // macros call, so their references in this TU match the definitions. Must precede any OPEN_DISPS use.
 #include "soh/frame_interpolation.h"
@@ -28,6 +29,9 @@ extern "C" {
 #include "macros.h"
 #include "functions.h"
 #include "variables.h"
+// For identifying Navi (Link's fairy) so players can opt her out of cel key selection: the EnElf struct +
+// FairyType (FAIRY_NAVI). Same approach the light-casting feature uses.
+#include "overlays/actors/ovl_En_Elf/z_en_elf.h"
 extern PlayState* gPlayState;
 }
 
@@ -67,14 +71,27 @@ static bool ToonActorExcluded(Actor* actor) {
         return true; // every door variant in one check
     }
     switch (actor->id) {
-        case ACTOR_BG_TREEMOUTH:   // Great Deku Tree (very tall)
-        case ACTOR_BG_MIZU_WATER:  // water-box surfaces
+        case ACTOR_BG_TREEMOUTH:  // Great Deku Tree (very tall)
+        case ACTOR_BG_MIZU_WATER: // water-box surfaces
         case ACTOR_BG_HAKA_WATER:
-        case ACTOR_BG_SPOT09_OBJ:  // Gerudo Valley bridge/scenery — reads as environment, not a relit actor
+        case ACTOR_EN_WOOD02:     // trees / bushes / leaf scenery
             return true;
         default:
-            return false;
+            break;
     }
+    // All Bg_Spot* overworld scenery (bridges, fences, gates, rocks, well/oasis water, ...) reads as part of the
+    // environment, not a relit actor. Matched by name prefix so every Bg_Spot variant is covered without listing
+    // ~30 scattered actor IDs. RetrieveEntry is bounds-safe and returns an empty name for unknown ids.
+    if (ActorDB::Instance != nullptr && ActorDB::Instance->RetrieveEntry(actor->id).name.rfind("Bg_Spot", 0) == 0) {
+        return true;
+    }
+    return false;
+}
+
+// Actors that keep cel relight but should NOT cast a drop shadow (unlike ToonActorExcluded, which drops both).
+// Small cuttable grass (En_Kusa) is everywhere and tiny, so a blob under every tuft reads wrong and is wasteful.
+static bool ToonShadowExcluded(Actor* actor) {
+    return actor->id == ACTOR_EN_KUSA;
 }
 
 // Tracks whether the toon (cel-relight) bracket is currently ON in the display-list stream. The actor-loop
@@ -254,13 +271,28 @@ static void ToonSlerp(f32 from[3], f32 to[3], f32 t, f32 out[3]) {
 // alone decides — so flickering torches are perfectly stable and the nearer of two always wins. A
 // light is "in range" out to its radius × pointRange (raise pointRange to extend reach).
 static bool ToonClosestPointLight(PlayState* play, Actor* actor, f32 pointRange, f32 dirOut[3], f32 colOut[3]) {
+    // When the player opts Navi out, identify her two emitted lights by address so the selection skips them.
+    // Navi blinks on/off and orbits Link, so otherwise she constantly steals the key light. Same identification
+    // the light-casting feature uses (player->naviActor, an En_Elf with FAIRY_NAVI params).
+    LightInfo* naviGlow = NULL;
+    LightInfo* naviNoGlow = NULL;
+    if (!CVarGetInteger(CVAR_ENHANCEMENT("Graphics.ToonLighting.UseNaviLight"), 1)) {
+        Player* player = GET_PLAYER(play);
+        if ((player != NULL) && (player->naviActor != NULL) && (player->naviActor->id == ACTOR_EN_ELF) &&
+            (player->naviActor->params == FAIRY_NAVI)) {
+            EnElf* navi = (EnElf*)player->naviActor;
+            naviGlow = &navi->lightInfoGlow;
+            naviNoGlow = &navi->lightInfoNoGlow;
+        }
+    }
+
     LightNode* node = play->lightCtx.listHead;
     f32 bestDistSq = -1.0f;
 
     while (node != NULL) {
         LightInfo* info = node->info;
 
-        if ((info != NULL) && (info->type != LIGHT_DIRECTIONAL)) {
+        if ((info != NULL) && (info->type != LIGHT_DIRECTIONAL) && (info != naviGlow) && (info != naviNoGlow)) {
             f32 dx = info->params.point.x - actor->world.pos.x;
             f32 dy = info->params.point.y - actor->world.pos.y;
             f32 dz = info->params.point.z - actor->world.pos.z;
@@ -593,7 +625,7 @@ static void HandleActorDraw(void* actorPtr) {
                                              PLAYER_STATE1_CLIMBING_LADDER)) != 0;
         }
         bool hasFloor = false;
-        if (actor->projectedPos.z < maxDist) {
+        if (!ToonShadowExcluded(actor) && actor->projectedPos.z < maxDist) {
             // Floor reference is only a gate + a "near the ground" sanity check (the renderer builds the volume
             // from the captured feet, not this plane). Most actors expose actor->floorPoly from their bg check;
             // a few (e.g. the Courtyard Guards, En_Heishi1) never run one, so floorPoly stays null and the shadow

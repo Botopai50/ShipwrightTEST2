@@ -57,6 +57,24 @@ key light┤
 Light Casting ──────────────────────► tint world pools (stencil volume)   [independent]
 ```
 
+**5. Shared light sources.** Because all three read the engine's point-light list (`play->lightCtx`),
+adding a light there feeds every feature at once. The **held Deku stick light** does exactly that: when
+Link holds a *lit* Deku stick, `DekuStickLight.cpp` registers a point light at the burning tip
+(`meleeWeaponInfo[0].tip`) so the flame — which emits no light in vanilla — becomes a real source. It is
+torch-equivalent by construction (radius matched to `obj_syokudai`; the same per-frame white-noise
+brightness so the flame-flicker hook smooths it identically; obeys the cel `PointLightRange` for free). It
+casts a pool with its own size — `WorldLighting.cpp` identifies the stick light by address (via
+`DekuStickLight_GetActiveLightInfo()`) and applies `DekuStickSphereSize` (default 0.5) instead of the
+global `SphereSize`. Its **color is asset-driven,
+not hardcoded**: it looks up an optional texture (`textures/wind-waker/deku_stick_light_color`) absent
+from vanilla archives and averages it; with nothing there it falls back to OoT's canonical fire color
+`{255,200,0}`. A texture pack can add/alt-swap that one asset to recolor the light. CVars:
+`gEnhancements.Graphics.WorldLighting.{DekuStickLight, DekuStickSphereSize}` (toggle default **on**); GUI
+under **Wind Waker Style → Lights → "Deku Stick"** (its own right-column section): the toggle is always
+visible (it controls all three effects — cel/shadows apply even with Light Casting off), while "Deku Stick
+Cast Size" (a pool-only control) hides when Light Casting is off. Driven from the `OnPlayerUpdate` hook, with an `OnSceneInit` reset (the new scene
+rebuilds `lightCtx`). *(No renderer/shader changes — pure game-side point-light registration.)*
+
 ---
 
 ## Per-feature technique in one paragraph each

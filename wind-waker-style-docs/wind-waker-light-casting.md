@@ -152,6 +152,8 @@ Internal prefix is `WorldLighting`; the GUI shows "Light Casting".
 | `NaviRotationSpeed` | 0.5 | Navi tumble rate (× WW rate). Shown when Navi is on. |
 | `ShowVanillaGlow` | 0 | Off hides the vanilla billboarded torch glow circles (they clash with the pools). |
 | `FlickerSpeed` | 1.0 | Rate of the WW flame flicker (× authentic). |
+| `DekuStickLight` | **1** | Register a point light at a lit held Deku stick's burning tip, so it lights objects (cel), casts shadows, and (with casting on) casts a pool — like a torch. Works even when casting is off (feeds cel/shadows). See README → "Shared light sources" and `DekuStickLight.cpp`. |
+| `DekuStickSphereSize` | 0.5 | The Deku stick pool's size (× radius), separate from `SphereSize`. `DrawWorldLights` identifies the stick light by address (`DekuStickLight_GetActiveLightInfo()`) and substitutes this for the global size. |
 
 Slider defaults live in the GUI `Options` AND as `kDefault*` constants in `WorldLighting.cpp` — keep
 them in sync. (Orphaned keys from removed controls — `FlickerSmoothing`, `WindWakerFlicker`,

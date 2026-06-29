@@ -88,6 +88,14 @@ static bool ToonActorExcluded(Actor* actor) {
     return false;
 }
 
+// Actors whose model geometry extends well BELOW the floor (a signpost's post is buried in the ground). The
+// shadow slab is built at the lowest captured vertex, so for these the slab would sit underground and never
+// reach the visible floor. Flagging them tells the renderer to lift the slab's feet up to the floor Y (passed
+// as the clamp), putting the shadow back on the ground. Extend with other deep-rooted props as they turn up.
+static bool ToonShadowDeepRooted(Actor* actor) {
+    return actor->id == ACTOR_EN_KANBAN; // wooden signposts
+}
+
 // Walkable "floor" actors: scenery the player stands on that the game spawns as actors rather than baking
 // into the room mesh (the castle-town drawbridge, the Gerudo Valley bridge, some dungeon platforms). Because
 // they are actors they are normally drawn AFTER the shadow-volume flush and so receive no shadow. The actor
@@ -668,13 +676,13 @@ static void HandleActorDraw(void* actorPtr) {
                                              PLAYER_STATE1_CLIMBING_LADDER)) != 0;
         }
         bool hasFloor = false;
+        f32 floorHeight = actor->floorHeight;
         if (!ToonShadowExcluded(actor) && actor->projectedPos.z < maxDist) {
-            // Floor reference is only a gate + a "near the ground" sanity check (the renderer builds the volume
-            // from the captured feet, not this plane). Most actors expose actor->floorPoly from their bg check;
-            // a few (e.g. the Courtyard Guards, En_Heishi1) never run one, so floorPoly stays null and the shadow
-            // would never arm. Fall back to a downward raycast for those — the same approach their bespoke shadow
-            // used.
-            f32 floorHeight = actor->floorHeight;
+            // Floor reference is the gate + a "near the ground" sanity check, and the feet-clamp Y for
+            // deep-rooted actors (the renderer otherwise builds the volume from the captured feet, not this
+            // plane). Most actors expose actor->floorPoly from their bg check; a few (e.g. the Courtyard Guards,
+            // En_Heishi1) never run one, so floorPoly stays null and the shadow would never arm. Fall back to a
+            // downward raycast for those — the same approach their bespoke shadow used.
             bool haveFloor = (actor->floorPoly != NULL);
             if (!haveFloor) {
                 Vec3f rayFrom = { actor->world.pos.x, actor->world.pos.y + 1.0f, actor->world.pos.z };
@@ -691,7 +699,12 @@ static void HandleActorDraw(void* actorPtr) {
         st.shadowScale = ToonSmoothDamp(st.shadowScale, (hasFloor && !onWall) ? 1.0f : 0.0f, &st.shadowScaleVel,
                                         kShadowFadeTime, fadeDt);
         if (st.shadowScale > 0.01f) {
-            gSPToonShadow(POLY_OPA_DISP++, 0, (s8)127, 0, st.shadowScale); // arm; planeD = eased size scale
+            // Deep-rooted models (signposts) bury their geometry below the floor, which would sink the shadow
+            // slab underground; pass the floor Y so the renderer lifts the slab's feet up to it. Everyone else
+            // passes TOON_SHADOW_NO_CLAMP and keeps the captured feet.
+            f32 clampY = floorHeight < -32767.0f ? -32767.0f : (floorHeight > 32767.0f ? 32767.0f : floorHeight);
+            s16 feetClamp = ToonShadowDeepRooted(actor) ? (s16)clampY : (s16)TOON_SHADOW_NO_CLAMP;
+            gSPToonShadowArm(POLY_OPA_DISP++, feetClamp, st.shadowScale); // planeD = eased size scale
         } else {
             gSPToonShadow(POLY_OPA_DISP++, 0, 0, 0, 0.0f); // fully off
         }

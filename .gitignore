@@ -463,3 +463,6 @@ soh/properties.h
 /clang-format
 /clang-format.exe
 *.o2r
+
+# Third-party repos (research only, not part of the build)
+/third-party/

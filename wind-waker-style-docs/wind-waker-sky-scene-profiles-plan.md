@@ -6,10 +6,15 @@ Phase 1 lives in `WWSkyEnv.cpp/.h` (the shared weather sampler) + consumers in W
 (palette pulled toward scene fog by cloudiness, storm dim), WWClouds.cpp (coverage floor-raised by
 cloudiness, drift ×(1+storm), tint toward fog) and WWNightSky.cpp (star target ×(1-cloudiness)).
 Post-test refinements, also done: LIGHTNING_MODE_LAST counts as full storm and cloudiness is eased
-asymmetrically in the sampler (~1s in, ~10s out) so the sky can't turn blue before the last bolt;
-and the clouds gained their own time-of-day colour schedule (`sCloudPalette` in WWClouds.cpp — the
-vrKumoCol stand-in: sunset orange, night silhouettes), which is exactly the kind of global default a
-Phase-2 scene profile should override.
+asymmetrically in the sampler (~1s in, ~10s out) so the sky can't turn blue before the last bolt.
+The whole sky then moved onto **Wind Waker's real sea-stage palette** (extracted from stage.dzs
+Pale/Virt + the decomp's l_time_attribute schedule; tables + evaluator in WWSkyEnv.cpp): the gradient
+uses WW's measured three-zone vrbox profile (usoUmi below the horizon, kasumi haze ramping out by
++6.6°, sky above — profile fixed like WW's mesh, Haze slider removed), the clouds use the scheduled
+vrKumoCol/vrKumoCenterCol, and weather blends clear -> WW's rain palette (colpat 1) by cloudiness
+instead of fog-greying. These global tables are exactly what Phase-2 per-scene profiles override; the
+extraction recipe lives in the scratchpad scripts extract_ww_sky_palette.py / dump_vrsky.py (rewrite
+as a checked-in tool when building Phase 3's preset library).
 
 **To resume: implement Phase 2 below.** The capture hook goes in the outdoor branch of
 `Environment_Update` (z_kankyo.c, the `sp8C`/`sp88` double-lerp — see "How OoT's env/weather system

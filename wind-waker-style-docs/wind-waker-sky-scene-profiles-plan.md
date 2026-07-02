@@ -1,12 +1,20 @@
 # Plan: per-scene, weather-aware Wind Waker sky
 
-Status: **Phase 1 IMPLEMENTED (pending in-game confirmation); Phases 2-3 not started.**
+Status: **Phase 1 DONE & confirmed in-game. Phases 2-3 NOT STARTED — this doc is the pickup point.**
 
 Phase 1 lives in `WWSkyEnv.cpp/.h` (the shared weather sampler) + consumers in WWSkyGradient.cpp
 (palette pulled toward scene fog by cloudiness, storm dim), WWClouds.cpp (coverage floor-raised by
 cloudiness, drift ×(1+storm), tint toward fog) and WWNightSky.cpp (star target ×(1-cloudiness)).
-Quick in-game test: play the Song of Storms outdoors — sky should grey over ~5s, clouds thicken and
-speed up, band greys, and (at night) stars fade; all reverting after the storm passes.
+Post-test refinements, also done: LIGHTNING_MODE_LAST counts as full storm and cloudiness is eased
+asymmetrically in the sampler (~1s in, ~10s out) so the sky can't turn blue before the last bolt;
+and the clouds gained their own time-of-day colour schedule (`sCloudPalette` in WWClouds.cpp — the
+vrKumoCol stand-in: sunset orange, night silhouettes), which is exactly the kind of global default a
+Phase-2 scene profile should override.
+
+**To resume: implement Phase 2 below.** The capture hook goes in the outdoor branch of
+`Environment_Update` (z_kankyo.c, the `sp8C`/`sp88` double-lerp — see "How OoT's env/weather system
+works"); profiles load on `OnSceneInit`; schema must stay namespaced per the Future direction
+section.
 
 ## Current state (verified in code)
 

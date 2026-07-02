@@ -16,6 +16,14 @@ Supporting reference: [`wind-waker-bonbori-light.md`](./wind-waker-bonbori-light
 breakdown of WW's real torch-light pool (from the noclip.website reproduction) that Light Casting's
 flicker/tumble model is matched against. Read it only if you need to re-derive those constants.
 
+**The Sky** (newer, fourth feature family, behind the "Use Sky" toggle): a WW-style gradient sky dome,
+drifting vrkumo clouds + horizon cloud band, twinkling starfield — all weather-reactive. Docs:
+[`wind-waker-clouds-investigation.md`](./wind-waker-clouds-investigation.md) (clouds architecture, debugging
+history, and the texture override contract), [`wind-waker-sky-scene-profiles-plan.md`](./wind-waker-sky-scene-profiles-plan.md)
+(weather signals + the per-scene profile plan), and
+[`cloud-texture-replacement-guide.md`](./cloud-texture-replacement-guide.md) (**artist-facing**: how to
+replace the five cloud textures, with previews).
+
 ---
 
 ## How the three features fit together

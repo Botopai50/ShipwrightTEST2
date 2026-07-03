@@ -8,11 +8,18 @@ cloudiness, drift ×(1+storm), tint toward fog) and WWNightSky.cpp (star target 
 Post-test refinements, also done: LIGHTNING_MODE_LAST counts as full storm and cloudiness is eased
 asymmetrically in the sampler (~1s in, ~10s out) so the sky can't turn blue before the last bolt.
 The whole sky then moved onto **Wind Waker's real sea-stage palette** (extracted from stage.dzs
-Pale/Virt + the decomp's l_time_attribute schedule; tables + evaluator in WWSkyEnv.cpp): the gradient
-uses WW's measured three-zone vrbox profile (usoUmi below the horizon, kasumi haze ramping out by
-+6.6°, sky above — profile fixed like WW's mesh, Haze slider removed), the clouds use the scheduled
-vrKumoCol/vrKumoCenterCol, and weather blends clear -> WW's rain palette (colpat 1) by cloudiness
-instead of fog-greying. These global tables are exactly what Phase-2 per-scene profiles override; the
+Pale/Virt; tables + evaluator in WWSkyEnv.cpp): the gradient uses WW's measured three-zone vrbox
+profile (usoUmi below the horizon, kasumi haze ramping out by +6.6°, sky above — profile fixed like
+WW's mesh, Haze slider removed), the clouds use the scheduled vrKumoCol/vrKumoCenterCol, and weather
+blends clear -> WW's rain palette (colpat 1) by cloudiness instead of fog-greying.
+
+**Time of day is driven by the sun's elevation, not a clock schedule** (`WWSkyEnv_SunHeight` =
+`cos(dayTime - 0x8000)`: +1 noon, 0 horizon at 06:00/18:00, -1 midnight; `SunSlots` picks palette
+slots along the sun's descent, AM/PM chosen by dayTime's top bit). An earlier clock schedule phased
+onto OoT's lighting table (`D_8011FC1C`) dusked ~2h before the sun geometry actually set; keying off
+the sun instead keeps the warm dusk peaking exactly as the sun touches the horizon, the way WW's vrbox
+tracks its own sun. The star fade (`StarAmountForSun`) shares the same sun height. Note per-scene
+Phase-2 profiles override the palette *colours*, not this sun-based timing. These global tables are exactly what Phase-2 per-scene profiles override; the
 extraction recipe lives in the scratchpad scripts extract_ww_sky_palette.py / dump_vrsky.py (rewrite
 as a checked-in tool when building Phase 3's preset library).
 

@@ -54,8 +54,10 @@ so clean silhouettes matter more than fine internal detail.
 1. **Transparency is the cloud shape.** Keep the visible part near-white — the game colours the
    clouds for time of day and weather (orange sunsets, dark nights, grey storms). If you paint them
    pink, they'll be pink at midnight too.
-2. Sizes must be **powers of two** (64, 128, 256, 512), max 512 in either direction. Bigger =
-   sharper in game.
+2. Sizes must be **powers of two** (64, 128, 256, 512), max 512 in either direction — except the
+   two horizon strips (`cloud_mae`/`cloud_naka`), which are capped at **256 wide** (the band wraps
+   the strip several times around the horizon, and wider strips overflow the renderer's texture
+   coordinate range). Bigger = sharper in game.
 3. The two horizon strips must **tile seamlessly left-to-right**; the **bottom edge sits on the
    horizon line**.
 4. Soft, fuzzy edges look best — hard edges read as cutouts once stretched across the sky.

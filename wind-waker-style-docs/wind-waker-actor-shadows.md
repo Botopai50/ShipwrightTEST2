@@ -28,15 +28,27 @@ the actor's feet, so the shadow conforms to nearby ground without leaking down c
    positions (`GfxSpVertex` stores `wx/wy/wz`, `GfxSpTri1` appends to `mShadowVerts`). Capture is
    gated on `G_LIGHTING` — unlit geometry (glow effects, most transparents) doesn't cast.
 2. **Build** (`Interpreter::FlushToonShadow`, at each object boundary). Feet level = the lowest
-   captured vertex. Each captured triangle is projected along the key direction onto the feet level,
-   then extruded into its own closed prism from `feet + SlabRise` down to `feet − SlabDepth`, with
-   outward winding per face. Per-triangle prisms are robust on OoT's unwelded "triangle soup"
-   meshes (a silhouette-edge optimization needs shared edges these meshes don't have); the z-fail
-   counts of overlapping prisms compose into the union — the footprint. The key's elevation is
-   remapped first (`Length` slider → `minElevation`) so a low light still casts a short shadow
-   tucked under the actor. The footprint also scales toward its centroid by an eased 0..1 size the
-   game passes, so shadows grow in and shrink out instead of popping. Volumes accumulate in
-   `mShadowVolumeAccum` — nothing draws yet.
+   captured vertex. The captured triangles are projected along the key direction onto the feet
+   level, rasterized **conservatively** into a `kShadowGridSize`² occupancy grid over the footprint
+   bounds (a cell is marked when its centre lies within half a cell-diagonal of a triangle — the
+   margin closes float cracks between adjacent triangles), and the volume is rebuilt as one box per
+   run of occupied cells, extruded from `feet + SlabRise` down to `feet − SlabDepth`. Abutting
+   boxes share exactly-coincident, oppositely-wound walls, so their z-fail counts cancel and the
+   union is seamless with stencil overlap 1.
+
+   The grid is what makes the stencil math safe: with one closed prism per projected triangle
+   (the naive alternative), every prism overlapping a ground pixel z-fail-increments the same
+   8-bit stencil — and at low camera pitch the view ray's underground segment crosses hundreds of
+   prism walls — so anything denser than a vanilla N64 mesh (~2k triangles is already far past it)
+   saturates the counter and the shadow shows angle-dependent holes. The grid's worst case is
+   ~2·`kShadowGridSize` crossings on a grazing ray, comfortably under 255.
+
+   The key's elevation is remapped first (`Length` slider → `minElevation`) so a low light still
+   casts a short shadow tucked under the actor. The footprint also scales toward its centroid by an
+   eased 0..1 size the game passes, so shadows grow in and shrink out instead of popping. Volumes
+   accumulate in `mShadowVolumeAccum` — nothing draws yet. A per-frame accumulator budget guards
+   the pathological case: once exceeded, later objects skip their shadow (the newest is dropped;
+   everything already built keeps rendering).
 3. **Render** (`Interpreter::RenderShadowVolumes`, once per frame). All accumulated volumes are
    transformed to clip space once and drawn as one batched z-fail stencil pass pair (back faces
    increment, front faces decrement — the same `StencilMode::VolumeIncr/VolumeDecr` light casting
@@ -180,6 +192,10 @@ No shader/asset changes — no `soh.o2r` regen.
   `mRdp->toon_shadow` while it replays the volumes through the draw path.
 - **The per-frame stencil clear is required** — the z-fail masks assume stencil starts at 0, and
   the composite only self-clears pixels it actually draws.
+- **Keep the clamping stencil ops** (`GL_INCR`, Metal `IncrementClamp`, D3D11 `INCR_SAT`). Wrap ops
+  look tempting for dense overlap, but clamp-at-0 is what absorbs stray rim pixels where a front
+  face rasterizes a pixel its back face missed — with wrap those underflow to 255 and sparkle. The
+  grid path keeps overlap counts small so clamping never saturates.
 - **Feet level comes from the captured geometry** (lowest vertex), not the collision floor — the
   collision floor is unreliable for this (`floorHeight` can belong to a different surface than the
   visible feet). The deep-rooted clamp only ever lifts it.

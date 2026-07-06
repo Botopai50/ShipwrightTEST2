@@ -744,10 +744,6 @@ void RegisterToonLighting() {
     COND_HOOK(OnGameFrameUpdate, active, OnToonFrameUpdate);
     COND_HOOK(OnActorDraw, active, HandleActorDraw);
     COND_HOOK(OnActorDestroy, active, HandleActorDestroy);
-    // The accumulated shadow volumes are flushed from inside the actor draw loop (func_800315AC) now, not a
-    // hook: it sits after the room and the walkable-floor receiver pre-pass but before the rest of the actors,
-    // so shadows fall on the environment + receivers and never on the casting actors. See gSPToonShadowFlush
-    // there, gated on the same WorldShadows.Enabled CVar.
     // Drop the key-dedup state so the first actor after a (re-)enable always emits, before the
     // end-of-frame OnToonFrameUpdate reset has had a chance to run.
     sHaveLastKey = false;

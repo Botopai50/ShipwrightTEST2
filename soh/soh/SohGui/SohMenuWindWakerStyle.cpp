@@ -9,8 +9,8 @@ extern std::shared_ptr<SohMenu> mSohMenu;
 using namespace UIWidgets;
 
 // "Wind Waker Style" — the home for the Wind Waker-flavoured rendering features. The internal CVar keys
-// keep their original "ToonLighting" / "WorldLighting" names so existing settings/saves are unaffected;
-// only the navigation moved here from Settings.
+// keep their original "ToonLighting" / "WorldLighting" names (predating the GUI labels) so existing
+// settings/saves are unaffected by label changes.
 void SohMenu::AddMenuWindWakerStyle() {
     AddMenuEntry("Wind Waker Style", CVAR_SETTING("Menu.WindWakerStyleSidebarSection"));
 
@@ -251,9 +251,8 @@ void SohMenu::AddMenuWindWakerStyle() {
             }
         });
     };
-    // Light Casting fills the LEFT column now (Misc moved to the right). Grouped per light source — each
-    // group is [enable] + its cast size/intensity, divided by a separator; the global pool-movement controls
-    // sit at the end.
+    // Light Casting fills the left column, grouped per light source — each group is [enable] + its cast
+    // size/intensity, divided by a separator; the global pool-movement controls sit at the end.
     path.column = SECTION_COLUMN_1;
     AddWidget(path, "Light Casting", WIDGET_SEPARATOR_TEXT);
     AddWidget(path, "Enable Light Casting", WIDGET_CVAR_CHECKBOX)
@@ -468,7 +467,7 @@ void SohMenu::AddMenuWindWakerStyle() {
         .PreFunc(hideUnlessShadowsEnabled)
         .Options(IntSliderOptions()
                      .Tooltip("Performance: actors farther than this from the camera get no shape shadow (each "
-                              "shadow redraws the actor's whole silhouette once per tap, so distant ones cost "
+                              "shadow rebuilds and redraws the actor's whole silhouette, so distant ones cost "
                               "more than they're worth). Lower to gain frames in crowded scenes; raise for "
                               "shadows that stay visible into the distance.")
                      .Min(300)

@@ -3065,10 +3065,9 @@ s32 Ship_CalcShouldDrawAndUpdate(PlayState* play, Actor* actor, Vec3f* projected
 }
 // #endregion
 
-// SOH [Enhancement] Factored out of func_800315AC's actor-draw loop so the actor-shadow receiver pre-pass and
-// the main loop share one draw path (projection + sfx + extended culling + lens deferral + draw). Behaviour is
-// byte-for-byte the vanilla loop body; the only change is that it now runs from two call sites. `listIndex` is
-// the actor category (the loop's `i`), reported to the debug NoOp string and HREG(66) exactly as before.
+// SOH [Enhancement] The body of func_800315AC's actor-draw loop (projection + sfx + extended culling + lens
+// deferral + draw), shared by the actor-shadow receiver pre-pass and the main loop so both draw actors the
+// same way. `listIndex` is the actor category (the loop's `i`), reported to the debug NoOp string and HREG(66).
 static void Actor_DrawListEntry(PlayState* play, Actor* actor, s32 listIndex, Actor** invisibleActors,
                                 s32* invisibleActorCounter) {
     OPEN_DISPS(play->state.gfxCtx);
@@ -3177,10 +3176,10 @@ void func_800315AC(PlayState* play, ActorContext* actorCtx) {
         }
     }
 
-    // SOH [Enhancement] WW light casting: cast the point-light pools here (moved from Play_Draw). Running it
-    // after the receiver pre-pass lets torch/fairy pools fall on the walkable-floor actors too, not just the
-    // room — and still before the rest of the actors below, so pools stay under them. No-op unless the feature
-    // is enabled (COND_HOOK). The pools clear G_LIGHTING, so the open toon bracket above does not shade them.
+    // SOH [Enhancement] WW light casting: cast the point-light pools. Running after the receiver pre-pass lets
+    // torch/fairy pools fall on the walkable-floor actors too, not just the room — and still before the rest of
+    // the actors below, so pools stay under them. No-op unless the feature is enabled (COND_HOOK). The pools
+    // clear G_LIGHTING, so the open toon bracket above does not shade them.
     GameInteractor_ExecuteOnPlayDrawWorldLights(play);
 
     if (shadowsEnabled) {

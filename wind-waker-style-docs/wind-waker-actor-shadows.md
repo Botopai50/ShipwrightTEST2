@@ -29,10 +29,11 @@ the actor's feet, so the shadow conforms to nearby ground without leaking down c
    gated on `G_LIGHTING` — unlit geometry (glow effects, most transparents) doesn't cast.
 2. **Build** (`Interpreter::FlushToonShadow`, at each object boundary). Feet level = the lowest
    captured vertex. The captured triangles are projected along the key direction onto the feet
-   level, rasterized **conservatively** into a `kShadowGridSize`² occupancy grid over the footprint
-   bounds (a cell is marked when its centre lies within half a cell-diagonal of a triangle — the
-   margin closes float cracks between adjacent triangles), and the volume is rebuilt as one box per
-   run of occupied cells, extruded from `feet + SlabRise` down to `feet − SlabDepth`. Abutting
+   level and rasterized **conservatively** at twice the output resolution
+   (`kShadowRasterSize` = 2 × `kShadowGridSize` = 256; a sub-cell is marked when its centre lies
+   within half a sub-cell-diagonal of a triangle — the margin closes float cracks between adjacent
+   triangles). Each output cell's 2×2 sub-cells give it a 0–4 coverage count. The volume is one box
+   per run of occupied cells, extruded from `feet + SlabRise` down to `feet − SlabDepth`. Abutting
    boxes share exactly-coincident, oppositely-wound walls, so their z-fail counts cancel and the
    union is seamless with stencil overlap 1.
 
@@ -40,8 +41,10 @@ the actor's feet, so the shadow conforms to nearby ground without leaking down c
    (the naive alternative), every prism overlapping a ground pixel z-fail-increments the same
    8-bit stencil — and at low camera pitch the view ray's underground segment crosses hundreds of
    prism walls — so anything denser than a vanilla N64 mesh (~2k triangles is already far past it)
-   saturates the counter and the shadow shows angle-dependent holes. The grid's worst case is
-   ~2·`kShadowGridSize` crossings on a grazing ray, comfortably under 255.
+   saturates the counter and the shadow shows angle-dependent holes. The grid boxes emit walls only
+   along each band region's outline (interior walls between abutting boxes are skipped — what
+   remains is the closed boundary surface of the union), so stencil increments scale with the
+   silhouette's boundary crossings: a handful, at any resolution and any camera angle.
 
    The key's elevation is remapped first (`Length` slider → `minElevation`) so a low light still
    casts a short shadow tucked under the actor. The footprint also scales toward its centroid by an
@@ -49,12 +52,21 @@ the actor's feet, so the shadow conforms to nearby ground without leaking down c
    accumulate in `mShadowVolumeAccum` — nothing draws yet. A per-frame accumulator budget guards
    the pathological case: once exceeded, later objects skip their shadow (the newest is dropped;
    everything already built keeps rendering).
-3. **Render** (`Interpreter::RenderShadowVolumes`, once per frame). All accumulated volumes are
-   transformed to clip space once and drawn as one batched z-fail stencil pass pair (back faces
-   increment, front faces decrement — the same `StencilMode::VolumeIncr/VolumeDecr` light casting
-   uses), then a single fullscreen composite quad blends flat black × `Opacity` where stencil is
-   nonzero, self-clearing as it goes. Hard edge by design: softening would re-mark every volume at
-   offsets, a full extra volume render per sample.
+3. **Anti-aliased edge (opacity bands).** With `EdgeSoftness` above 0, the coverage counts split
+   the footprint into disjoint bands: fully-covered cells form the core, and the partially-covered
+   cells — exactly the silhouette's staircase — render lighter. Softness 1 uses one lighter step
+   (partial → ½); softness 2 grades finer (2–3 sub-cells → ⅔, 1 sub-cell → ⅓) and adds a one-cell
+   halo outside the footprint at ⅓. Each band becomes its own box volumes; because the bands come
+   from the bitmap, this costs a few hundred extra boxes and one or two extra composite quads —
+   nothing is rendered twice (unlike the abandoned multi-tap approach, which re-rendered the full
+   volume per sample and blotched where taps overlapped).
+
+4. **Render** (`Interpreter::RenderShadowVolumes`, once per frame). Per band: the band's volumes
+   are transformed to clip space once and drawn as one batched z-fail stencil pass pair (back
+   faces increment, front faces decrement — the same `StencilMode::VolumeIncr/VolumeDecr` light
+   casting uses), then a fullscreen composite quad blends flat black × the band's alpha where
+   stencil is nonzero, self-clearing as it goes. Band alphas step down from `Opacity`: softness 1
+   → core, ½; softness 2 → core, ⅔, ⅓.
 
 The render is triggered by a `gSPToonShadowFlush` sentinel emitted in the actor draw loop
 (`func_800315AC`) after the room and the receiver pre-pass but before the actors — so at that point
@@ -172,6 +184,7 @@ No shader/asset changes — no `soh.o2r` regen.
 | `SuppressVanillaShadows` | 1 | Hide the vanilla feet/circle/horse/sign/cobra shadows. |
 | `ReceiverActors` | 1 | The walkable-floor receiver pre-pass ("Shadows on Walkable Actors"). |
 | `Opacity` | 0.2 | Shadow darkness. |
+| `EdgeSoftness` | 1 | Penumbra rings around the silhouette (0 = hard edge, max 2). New key on purpose — the removed multi-tap `Softness` float must not leak stale values into it. |
 | `Length` | 0.2 | → `minElevation = 0.95 − Length·0.85`; higher lets a low light stretch the shadow. |
 | `SlabDepth` | 8 | How far below the feet the slab reaches (downhill ground, cliff spill). |
 | `SlabRise` | 8 | How far above the feet the slab reaches (uphill ground; too high catches the actor's legs). |

@@ -184,11 +184,11 @@ No shader/asset changes — no `soh.o2r` regen.
 | `SuppressVanillaShadows` | 1 | Hide the vanilla feet/circle/horse/sign/cobra shadows. |
 | `ReceiverActors` | 1 | The walkable-floor receiver pre-pass ("Shadows on Walkable Actors"). |
 | `Opacity` | 0.2 | Shadow darkness. |
-| `EdgeSoftness` | 1 | Penumbra rings around the silhouette (0 = hard edge, max 2). New key on purpose — the removed multi-tap `Softness` float must not leak stale values into it. |
+| `EdgeSoftness` | 0 | Penumbra rings around the silhouette (0 = hard edge, max 2). New key on purpose — the removed multi-tap `Softness` float must not leak stale values into it. |
 | `Length` | 0.2 | → `minElevation = 0.95 − Length·0.85`; higher lets a low light stretch the shadow. |
 | `SlabDepth` | 8 | How far below the feet the slab reaches (downhill ground, cliff spill). |
 | `SlabRise` | 8 | How far above the feet the slab reaches (uphill ground; too high catches the actor's legs). |
-| `MaxDistance` | 900 | Camera-forward distance past which an actor's shadow is culled. |
+| `MaxDistance` | 400 | Camera-forward distance past which an actor's shadow is culled. |
 | `gDeveloperTools.WorldShadows.ShowVolume` | 0 | Draw the volumes translucently (black caps, blue walls). |
 
 ## Invariants & gotchas

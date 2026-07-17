@@ -124,7 +124,7 @@ factored into `Actor_DrawListEntry` so the pre-pass and the main loop share one 
   `ToonLighting_IsShadowReceiver` (`ToonLighting.h`). `Bg_Haka_Gate` is additionally gated by its
   params low byte (only the walkable floor/statue variants).
 - Receivers are also in `ToonShadowExcluded`, so a floor never casts its own silhouette.
-- Gated by `Enabled` + `ReceiverActors` ("Shadows on Walkable Actors").
+- Always on with the feature (the old `ReceiverActors` toggle is gone — its CVar is ignored).
 - Watch moving platforms: the capture lags one frame, so a fast-moving receiver shows the shadow
   trailing during motion (`Bg_Menkuri_Kaiten` is the test case).
 
@@ -183,13 +183,12 @@ No shader/asset changes — no `soh.o2r` regen.
 |---|---|---|
 | `Enabled` | **0** | Master toggle (also un-gates the shared `OnActorDraw` hook). |
 | `SuppressVanillaShadows` | 1 | Hide the vanilla feet/circle/horse/sign/cobra shadows. |
-| `ReceiverActors` | 1 | The walkable-floor receiver pre-pass ("Shadows on Walkable Actors"). |
 | `Opacity` | 0.2 | Shadow darkness. |
 | `EdgeSoftness` | 0 | Penumbra rings around the silhouette (0 = hard edge, max 2). New key on purpose — the removed multi-tap `Softness` float must not leak stale values into it. |
 | `Length` | 0.2 | → `minElevation = 0.95 − Length·0.85`; higher lets a low light stretch the shadow. |
 | `SlabDepth` | 8 | How far below the feet the slab reaches (downhill ground, cliff spill). |
 | `SlabRise` | 8 | How far above the feet the slab reaches (uphill ground; too high catches the actor's legs). |
-| `MaxDistance` | 400 | Camera-forward distance past which an actor's shadow is culled. |
+| `MaxDistance` | 550 | Camera-forward distance past which an actor's shadow is culled. |
 | `gDeveloperTools.WorldShadows.ShowVolume` | 0 | Draw the volumes translucently (black caps, blue walls). |
 
 ## Invariants & gotchas

@@ -62,10 +62,11 @@ the actor's feet, so the shadow conforms to nearby ground without leaking down c
    volume per sample and blotched where taps overlapped).
 
 4. **Render** (`Interpreter::RenderShadowVolumes`, once per frame). Per band: the band's volumes
-   are transformed to clip space once and drawn as one batched z-fail stencil pass pair (back
-   faces increment, front faces decrement — the same `StencilMode::VolumeIncr/VolumeDecr` light
-   casting uses), then a fullscreen composite quad blends flat black × the band's alpha where
-   stencil is nonzero, self-clearing as it goes. Band alphas step down from `Opacity`: softness 1
+   are transformed to clip space once and drawn as ONE batched two-sided z-fail stencil pass
+   (`StencilMode::VolumeIncrDecr` — the GPU's facing picks wrap-increment or wrap-decrement per
+   triangle, so no cull passes and each face is submitted once; wrap ops plus the composite's
+   nonzero test make primitive order and facing polarity irrelevant), then a fullscreen composite
+   quad blends flat black × the band's alpha where stencil is nonzero, self-clearing as it goes. Band alphas step down from `Opacity`: softness 1
    → core, ½; softness 2 → core, ⅔, ⅓.
 
 The render is triggered by a `gSPToonShadowFlush` sentinel emitted in the actor draw loop
@@ -167,8 +168,8 @@ factored into `Actor_DrawListEntry` so the pre-pass and the main loop share one 
   (batched render), the bracket-edge flush in `gfx_set_toon_handler_custom`.
 - `include/fast/interpreter.h` — `LoadedVertex.wx/wy/wz`, `RSP.toon_shadow_*`, `RDP.toon_shadow`,
   `mShadowVerts` / `mShadowVolumeAccum` / `mShadowXform`, `SetToonShadowParams`.
-- Stencil: reuses light casting's `StencilMode::VolumeIncr/VolumeDecr/Composite` across all three
-  backends, plus the per-frame stencil clear in `gfx_opengl.cpp` / `gfx_direct3d11.cpp`
+- Stencil: `StencilMode::VolumeIncrDecr` (two-sided single pass, all three backends) plus light
+  casting's `Composite`; plus the per-frame stencil clear in `gfx_opengl.cpp` / `gfx_direct3d11.cpp`
   `ClearFramebuffer` (Metal clears via `LoadActionClear`).
 
 No shader/asset changes — no `soh.o2r` regen.

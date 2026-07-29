@@ -9,6 +9,10 @@ on:
       - wind-waker-style-cel-shading
     tags:
       - '*celshade*'
+  # SOH [fork] Manual runs from the Actions tab, on any branch or tag. The cache `save` steps and
+  # the `release` job stay gated on ref_name/ref, so a manual run off a non-default branch behaves
+  # exactly like a push to it.
+  workflow_dispatch:
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true

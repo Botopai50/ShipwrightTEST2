@@ -1,5 +1,8 @@
 name: clang-format
-on: [pull_request]
+on:
+  pull_request:
+  # SOH [fork] Allow running the format check by hand from the Actions tab.
+  workflow_dispatch:
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true

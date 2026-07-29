@@ -73,7 +73,8 @@ static struct {
     bool cel = true;
     int shadowMode = SHADOW_MODE_VANILLA;
     bool shadows = false;   // shadowMode == SHADOW_MODE_ACTOR (stencil volumes)
-    bool shadowMap = false; // shadowMode == SHADOW_MODE_SHADOW_MAP (cascaded depth maps)
+    bool shadowMap = false;          // shadowMode == SHADOW_MODE_SHADOW_MAP (cascaded depth maps)
+    bool shadowMapSupported = false; // the running backend implements the depth pass (D3D11 only)
     bool suppressVanilla = true;
     bool useNaviLight = true;
     bool showDebug = false;
@@ -81,6 +82,8 @@ static struct {
     f32 transitionTime = kDefaultTransitionTime;
     f32 maxDist = (f32)kDefaultShadowMaxDistance;
 } sParams;
+
+static Fast::GfxRenderingAPI* GetRenderingApi(); // defined with the other Fast3D accessors below
 
 static void RefreshFrameParams() {
     sParams.cel = CVarGetInteger(CVAR_ENHANCEMENT("Graphics.ToonLighting.Enabled"), 1) != 0;
@@ -91,6 +94,14 @@ static void RefreshFrameParams() {
     sParams.shadowMode = (mode >= SHADOW_MODE_VANILLA && mode <= SHADOW_MODE_SHADOW_MAP) ? mode : SHADOW_MODE_VANILLA;
     sParams.shadows = sParams.shadowMode == SHADOW_MODE_ACTOR;
     sParams.shadowMap = sParams.shadowMode == SHADOW_MODE_SHADOW_MAP;
+    // Only worth asking when the mode is actually selected; otherwise leave it false so the per-actor
+    // getters short-circuit on the cheap check.
+    if (sParams.shadowMap) {
+        Fast::GfxRenderingAPI* rapi = GetRenderingApi();
+        sParams.shadowMapSupported = rapi != nullptr && rapi->SupportsShadowMap();
+    } else {
+        sParams.shadowMapSupported = false;
+    }
     sParams.suppressVanilla =
         CVarGetInteger(CVAR_ENHANCEMENT("Graphics.WorldShadows.SuppressVanillaShadows"), 1) != 0;
     sParams.useNaviLight = CVarGetInteger(CVAR_ENHANCEMENT("Graphics.ToonLighting.UseNaviLight"), 1) != 0;
@@ -124,16 +135,14 @@ extern "C" int ToonLighting_CelEnabled(void) {
 extern "C" int ToonLighting_ShadowsEnabled(void) {
     return sParams.shadows;
 }
-// Whether the running backend can actually draw shadow maps. The cascaded depth pass is Direct3D 11 only
-// (see the rendering-API entry points); OpenGL and Metal have no implementation, and on those the mode has
-// to degrade to vanilla rather than suppressing the vanilla shadows and drawing nothing in their place.
-// This is a plain query rather than a compile-time #ifdef because one binary can pick its backend at runtime.
-static bool ShadowMapBackendReady() {
-    return false; // wired to the backend capability query when the depth pass lands
-}
-
+// Whether the running backend can actually draw shadow maps -- answered from the once-per-frame snapshot,
+// never queried live: reaching the backend means a dynamic_pointer_cast plus a weak_ptr lock, and this is
+// read from the per-actor path. The cascaded depth pass is Direct3D 11 only; OpenGL and Metal have no
+// implementation, and there the mode must degrade to vanilla rather than suppressing the vanilla shadows
+// and drawing nothing in their place. It is a runtime query rather than an #ifdef because one binary can
+// pick its backend at launch.
 extern "C" int ToonLighting_ShadowMapEnabled(void) {
-    return sParams.shadowMap && ShadowMapBackendReady();
+    return sParams.shadowMap && sParams.shadowMapSupported;
 }
 extern "C" int ToonLighting_ShadowMode(void) {
     return sParams.shadowMode;
@@ -286,6 +295,13 @@ static bool sHaveLastKey = false;
 static s8 sLastKeyDir[3];
 static u8 sLastKeyCol[3];
 
+// SOH [Enhancement] Cascaded shadow maps: one key direction for the whole frame, since a single set of
+// cascades cannot follow a per-actor light. Recorded (unquantized) as actor keys are emitted; outdoors
+// these are all the sun, so the frame's last key is representative rather than arbitrary. Points from the
+// surface toward the light, matching the toon convention -- the shadow projection negates it.
+// Read on the following frame, which lines up with the caster list also being one frame behind.
+static f32 sFrameKeyDir[3] = { 0.0f, 1.0f, 0.0f };
+
 static void ToonClearKeyStates(); // defined with the key-state map below
 
 // Runs once per frame (game-frame-update hook, after the frame's draw). Pushes the frame-global ramp
@@ -344,6 +360,25 @@ static void OnToonFrameUpdate() {
         f32 minElevation = 0.95f - (CLAMP(length, 0.0f, 1.0f) * 0.85f);
         // Slab Depth/Rise: how far below/above the feet the stencil volume reaches (the band of ground it conforms to).
         interp->SetToonShadowParams(opacity, minElevation, slabDepth, slabRise, edgeSoftness, showVolume);
+
+        // Cascaded shadow maps. `enabled` already folds in the backend capability, so the interpreter can
+        // trust it and does not repeat the check. The key light direction is the same one the cel shading
+        // picks, negated: the toon uniform points from the surface toward the light, while a shadow
+        // projection needs the direction the light travels.
+        const bool shadowMapOn = ToonLighting_ShadowMapEnabled() != 0;
+        f32 splits[4] = { CVarGetFloat(CVAR_ENHANCEMENT("Graphics.ShadowMap.Split0"), SHADOW_MAP_DEFAULT_SPLIT_0),
+                          CVarGetFloat(CVAR_ENHANCEMENT("Graphics.ShadowMap.Split1"), SHADOW_MAP_DEFAULT_SPLIT_1),
+                          CVarGetFloat(CVAR_ENHANCEMENT("Graphics.ShadowMap.Split2"), SHADOW_MAP_DEFAULT_SPLIT_2),
+                          CVarGetFloat(CVAR_ENHANCEMENT("Graphics.ShadowMap.Split3"), SHADOW_MAP_DEFAULT_SPLIT_3) };
+        f32 lightDir[3] = { -sFrameKeyDir[0], -sFrameKeyDir[1], -sFrameKeyDir[2] };
+        interp->SetShadowMapParams(
+            shadowMapOn,
+            CVarGetInteger(CVAR_ENHANCEMENT("Graphics.ShadowMap.CascadeCount"), SHADOW_MAP_MAX_CASCADES),
+            CVarGetInteger(CVAR_ENHANCEMENT("Graphics.ShadowMap.Resolution"), SHADOW_MAP_DEFAULT_RESOLUTION), splits,
+            lightDir, CVarGetFloat(CVAR_ENHANCEMENT("Graphics.ShadowMap.BlendFraction"),
+                                   SHADOW_MAP_DEFAULT_BLEND_FRACTION),
+            CVarGetFloat(CVAR_ENHANCEMENT("Graphics.ShadowMap.NormalOffset"), SHADOW_MAP_DEFAULT_NORMAL_OFFSET),
+            CVarGetFloat(CVAR_ENHANCEMENT("Graphics.ShadowMap.Strength"), SHADOW_MAP_DEFAULT_STRENGTH));
     }
 
     Fast::GfxRenderingAPI* rapi = GetRenderingApi();
@@ -790,6 +825,10 @@ static void HandleActorDraw(void* actorPtr) {
     }
 
     {
+        // Frame-global key for the shadow cascades (see sFrameKeyDir): taken before quantizing, so the
+        // cascade matrices are not built from an 8-bit direction.
+        sFrameKeyDir[0] = st.dir[0], sFrameKeyDir[1] = st.dir[1], sFrameKeyDir[2] = st.dir[2];
+
         s8 dx = (s8)(st.dir[0] * 127.0f);
         s8 dy = (s8)(st.dir[1] * 127.0f);
         s8 dz = (s8)(st.dir[2] * 127.0f);

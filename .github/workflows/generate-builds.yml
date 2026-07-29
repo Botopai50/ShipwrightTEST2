@@ -2,16 +2,13 @@ name: generate-builds
 # SOH [fork] Build on pushes to the default branch (warms the ccache/deps/vcpkg/macports caches, since
 # those only `save` when github.ref_name == the default branch) and on release tags. Our tags follow
 # <SoH-version>-celshade<X.Y> (e.g. 9.2.3-celshade0.4), so match anything containing "celshade".
-# Release tags branch off wind-waker-style-cel-shading and restore the branch-warmed caches.
+# Release tags branch off the default branch and restore the branch-warmed caches.
 on:
+  # SOH [fork] Listen to every push, then let `generate-soh-otr` decide (see its `if:`). GitHub has
+  # no "default branch" token for push filters, so naming the branch here means renaming the default
+  # silently stops all builds. The job-level guard reads the default branch at run time instead.
   push:
-    branches:
-      - wind-waker-style-cel-shading
-    tags:
-      - '*celshade*'
-  # SOH [fork] Manual runs from the Actions tab, on any branch or tag. The cache `save` steps and
-  # the `release` job stay gated on ref_name/ref, so a manual run off a non-default branch behaves
-  # exactly like a push to it.
+  # SOH [fork] Manual runs from the Actions tab, on any branch or tag.
   workflow_dispatch:
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -19,6 +16,14 @@ concurrency:
 jobs:
 
   generate-soh-otr:
+    # SOH [fork] Build the default branch (whatever it is currently named -- this warms the
+    # ccache/deps/vcpkg/macports caches, which only `save` on the default branch), release tags, and
+    # anything started by hand. Pushes to other branches skip instantly at zero cost. Every other job
+    # `needs:` this one, so they skip with it.
+    if: >-
+      github.event_name == 'workflow_dispatch'
+      || github.ref_name == github.event.repository.default_branch
+      || contains(github.ref, 'celshade')
     runs-on: ubuntu-22.04
     steps:
     - name: Git Checkout

@@ -71,7 +71,9 @@ static constexpr float kShadowFadeTime = 0.15f; // seconds to ease the shadow si
 // and console changes take effect within a frame.
 static struct {
     bool cel = true;
-    bool shadows = false;
+    int shadowMode = SHADOW_MODE_VANILLA;
+    bool shadows = false;   // shadowMode == SHADOW_MODE_ACTOR (stencil volumes)
+    bool shadowMap = false; // shadowMode == SHADOW_MODE_SHADOW_MAP (cascaded depth maps)
     bool suppressVanilla = true;
     bool useNaviLight = true;
     bool showDebug = false;
@@ -82,7 +84,13 @@ static struct {
 
 static void RefreshFrameParams() {
     sParams.cel = CVarGetInteger(CVAR_ENHANCEMENT("Graphics.ToonLighting.Enabled"), 1) != 0;
-    sParams.shadows = CVarGetInteger(CVAR_ENHANCEMENT("Graphics.WorldShadows.Enabled"), 0) != 0;
+    // One selector drives all three systems, so they can never both draw. Values outside the enum (a
+    // hand-edited config, or a future mode read by an older build) fall back to vanilla rather than
+    // leaving every system off.
+    const int mode = CVarGetInteger(CVAR_ENHANCEMENT("Graphics.WorldShadows.Mode"), SHADOW_MODE_VANILLA);
+    sParams.shadowMode = (mode >= SHADOW_MODE_VANILLA && mode <= SHADOW_MODE_SHADOW_MAP) ? mode : SHADOW_MODE_VANILLA;
+    sParams.shadows = sParams.shadowMode == SHADOW_MODE_ACTOR;
+    sParams.shadowMap = sParams.shadowMode == SHADOW_MODE_SHADOW_MAP;
     sParams.suppressVanilla =
         CVarGetInteger(CVAR_ENHANCEMENT("Graphics.WorldShadows.SuppressVanillaShadows"), 1) != 0;
     sParams.useNaviLight = CVarGetInteger(CVAR_ENHANCEMENT("Graphics.ToonLighting.UseNaviLight"), 1) != 0;
@@ -108,7 +116,7 @@ static LightInfo* sNaviNoGlow = NULL;
 // C-callable getters (see ToonLighting.h): the decompiled draw code asks these instead of doing its own
 // per-actor CVar lookups, and they keep the bracket/hook decisions consistent within a frame.
 extern "C" int ToonLighting_FeaturesActive(void) {
-    return sParams.cel || sParams.shadows;
+    return sParams.cel || sParams.shadows || sParams.shadowMap;
 }
 extern "C" int ToonLighting_CelEnabled(void) {
     return sParams.cel;
@@ -116,8 +124,24 @@ extern "C" int ToonLighting_CelEnabled(void) {
 extern "C" int ToonLighting_ShadowsEnabled(void) {
     return sParams.shadows;
 }
+// Whether the running backend can actually draw shadow maps. The cascaded depth pass is Direct3D 11 only
+// (see the rendering-API entry points); OpenGL and Metal have no implementation, and on those the mode has
+// to degrade to vanilla rather than suppressing the vanilla shadows and drawing nothing in their place.
+// This is a plain query rather than a compile-time #ifdef because one binary can pick its backend at runtime.
+static bool ShadowMapBackendReady() {
+    return false; // wired to the backend capability query when the depth pass lands
+}
+
+extern "C" int ToonLighting_ShadowMapEnabled(void) {
+    return sParams.shadowMap && ShadowMapBackendReady();
+}
+extern "C" int ToonLighting_ShadowMode(void) {
+    return sParams.shadowMode;
+}
 extern "C" int ToonLighting_SuppressVanillaShadows(void) {
-    return sParams.shadows && sParams.suppressVanilla;
+    // Only a mode that actually draws may hide the vanilla shadows -- otherwise picking Shadow Map on a
+    // backend without one would leave the scene with no shadows at all.
+    return (sParams.shadows || ToonLighting_ShadowMapEnabled()) && sParams.suppressVanilla;
 }
 
 // Actors the cel system skips entirely: they look wrong relit AND wrong casting a flattened shadow
@@ -915,7 +939,23 @@ extern "C" void ToonLighting_LensBracketEnd(GraphicsContext* gfxCtx) {
 // (imperceptible for a ground shadow). The receiver whitelist it consults is ToonShadowReceiver above, exposed
 // to C via ToonLighting_IsShadowReceiver.
 
+// Carry a pre-mode-selector config forward: the feature used to be a plain on/off under
+// Graphics.WorldShadows.Enabled, which is now one value of Graphics.WorldShadows.Mode. Runs once per
+// launch and only when the old key is still present, so it cannot fight a later menu change (which
+// writes Mode and never resurrects Enabled).
+static void MigrateLegacyShadowToggle() {
+    const char* kLegacyEnabled = CVAR_ENHANCEMENT("Graphics.WorldShadows.Enabled");
+    if (CVarGetInteger(kLegacyEnabled, -1) < 0) {
+        return; // never set, or already migrated
+    }
+    if (CVarGetInteger(kLegacyEnabled, 0) != 0) {
+        CVarSetInteger(CVAR_ENHANCEMENT("Graphics.WorldShadows.Mode"), SHADOW_MODE_ACTOR);
+    }
+    CVarClear(kLegacyEnabled);
+}
+
 void RegisterToonLighting() {
+    MigrateLegacyShadowToggle();
     // Registered unconditionally: the per-frame CVar snapshot (RefreshFrameParams) gates all the work,
     // which is what lets a console `set` of either Enabled CVar take effect without this re-running —
     // the game-code guard (ToonLighting_FeaturesActive) keeps the hook dispatch itself out of the
@@ -934,4 +974,4 @@ void RegisterToonLighting() {
 }
 
 static RegisterShipInitFunc initFunc(RegisterToonLighting, { CVAR_ENHANCEMENT("Graphics.ToonLighting.Enabled"),
-                                                             CVAR_ENHANCEMENT("Graphics.WorldShadows.Enabled") });
+                                                             CVAR_ENHANCEMENT("Graphics.WorldShadows.Mode") });

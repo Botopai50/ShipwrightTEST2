@@ -18,13 +18,23 @@ struct GraphicsContext;
 // flush so shadows land on them like the static scene, and they never cast a shadow of their own.
 int ToonLighting_IsShadowReceiver(struct Actor* actor);
 
+// Shadow system selector (CVar Graphics.WorldShadows.Mode). The three modes are mutually exclusive:
+// exactly one shadow system draws at a time. Values are persisted in the config, so only append.
+typedef enum {
+    SHADOW_MODE_VANILLA = 0,   // the original game's blob/feet/circle shadows, untouched
+    SHADOW_MODE_ACTOR = 1,     // Wind Waker-style stencil-volume silhouettes (FlushToonShadow)
+    SHADOW_MODE_SHADOW_MAP = 2 // cascaded depth-map shadows (D3D11 only; falls back to vanilla elsewhere)
+} ShadowMode;
+
 // Cached once-per-frame feature switches (refreshed from the CVars at the top of each game frame).
 // The draw code asks these instead of reading CVars per actor: a CVarGet* is a string-keyed hash
 // lookup, far too expensive to repeat for every drawn actor every frame.
-int ToonLighting_FeaturesActive(void);         // cel relight OR actor shadows on (gates the draw hook)
+int ToonLighting_FeaturesActive(void);         // cel relight OR a non-vanilla shadow mode (gates the draw hook)
 int ToonLighting_CelEnabled(void);             // cel relight on (gates the toon bracket)
-int ToonLighting_ShadowsEnabled(void);         // actor shadows on (gates the shadow flush/disarm)
-int ToonLighting_SuppressVanillaShadows(void); // shadows on AND set to hide the vanilla blob shadows
+int ToonLighting_ShadowsEnabled(void);         // actor-shadow mode on (gates the shadow flush/disarm)
+int ToonLighting_ShadowMapEnabled(void);       // shadow-map mode on (gates the depth-pass capture)
+int ToonLighting_ShadowMode(void);             // raw ShadowMode value
+int ToonLighting_SuppressVanillaShadows(void); // a non-vanilla mode is on AND set to hide the vanilla shadows
 
 // Wrap Actor_DrawLensActors with these: lens actors draw through Actor_Draw after the main toon
 // bracket closed, so the bracket must re-open around them (and the shadow capture must be disarmed

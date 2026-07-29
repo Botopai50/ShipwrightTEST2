@@ -2,11 +2,19 @@
 #include "SohGui.hpp"
 #include "soh/OTRGlobals.h"
 #include "UIWidgets.hpp"
+#include "soh/Enhancements/Graphics/ToonLighting.h"
 
 namespace SohGui {
 
 extern std::shared_ptr<SohMenu> mSohMenu;
 using namespace UIWidgets;
+
+// Keyed by ShadowMode (see ToonLighting.h) -- the three shadow systems are mutually exclusive.
+static const std::map<int32_t, const char*> shadowModeLabels = {
+    { SHADOW_MODE_VANILLA, "Vanilla" },
+    { SHADOW_MODE_ACTOR, "Actor Shadows" },
+    { SHADOW_MODE_SHADOW_MAP, "Shadow Map" },
+};
 
 // "Wind Waker Style" — the home for the Wind Waker-flavoured rendering features. The internal CVar keys
 // keep their original "ToonLighting" / "WorldLighting" names (predating the GUI labels) so existing
@@ -366,32 +374,47 @@ void SohMenu::AddMenuWindWakerStyle() {
     // (following slopes), from the same key light Cel Shading uses, with a soft edge. Replaces the vanilla
     // blob/feet shadows. Internal CVar keys use "WorldShadows"; the UI says "Actor Shadows".
     // ===========================================================================================
+    // The tuning sliders below shape the stencil-volume silhouettes, so they only apply to Actor Shadows --
+    // not to Vanilla (nothing to tune) and not to Shadow Map (its own cascade settings).
     auto hideUnlessShadowsEnabled = [](WidgetInfo& info) {
-        info.isHidden = !CVarGetInteger(CVAR_ENHANCEMENT("Graphics.WorldShadows.Enabled"), 0);
+        info.isHidden = CVarGetInteger(CVAR_ENHANCEMENT("Graphics.WorldShadows.Mode"), SHADOW_MODE_VANILLA) !=
+                        SHADOW_MODE_ACTOR;
+    };
+    auto hideUnlessAnyShadowSystem = [](WidgetInfo& info) {
+        info.isHidden = CVarGetInteger(CVAR_ENHANCEMENT("Graphics.WorldShadows.Mode"), SHADOW_MODE_VANILLA) ==
+                        SHADOW_MODE_VANILLA;
     };
     path.sidebarName = "Actor Shadows";
     path.column = SECTION_COLUMN_1;
     AddSidebarEntry("Wind Waker Style", "Actor Shadows", 3);
-    AddWidget(path, "Enable Actor Shadows", WIDGET_CVAR_CHECKBOX)
-        .CVar(CVAR_ENHANCEMENT("Graphics.WorldShadows.Enabled"))
+    AddWidget(path, "Shadow System", WIDGET_CVAR_COMBOBOX)
+        .CVar(CVAR_ENHANCEMENT("Graphics.WorldShadows.Mode"))
         .RaceDisable(false)
-        .Options(CheckboxOptions().DefaultValue(false).Tooltip(
-            "Replaces the vanilla actor shadows with a shape-based drop shadow for each actor (Link, NPCs, "
-            "enemies, items, ...): its own silhouette cast from the single key light Cel Shading picks, wrapped "
-            "onto the real ground so it follows slopes and bumps. Off by default (vanilla shadows). Uses the "
-            "Cel Shading key selection, but works whether or not Cel Shading itself is on."));
+        .Options(ComboboxOptions()
+                     .DefaultIndex(SHADOW_MODE_VANILLA)
+                     .ComboMap(shadowModeLabels)
+                     .Tooltip("Which shadow system draws. Only one is active at a time.\n\n"
+                              "Vanilla: the original game's shadows (Link's feet, the NPC/enemy circles, the "
+                              "horse shadow, the sign and snake-statue texture shadows).\n\n"
+                              "Actor Shadows: a shape-based drop shadow per actor -- its own silhouette cast "
+                              "from the single key light Cel Shading picks, wrapped onto the real ground so it "
+                              "follows slopes and bumps. Uses the Cel Shading key selection, but works whether "
+                              "or not Cel Shading itself is on.\n\n"
+                              "Shadow Map: cascaded depth-map shadows, so the world shadows itself and actors "
+                              "cast onto it. Direct3D 11 only -- other backends fall back to Vanilla."));
     AddWidget(path, "Suppress Vanilla Shadows", WIDGET_CVAR_CHECKBOX)
         .CVar(CVAR_ENHANCEMENT("Graphics.WorldShadows.SuppressVanillaShadows"))
         .RaceDisable(false)
-        .PreFunc(hideUnlessShadowsEnabled)
+        .PreFunc(hideUnlessAnyShadowSystem)
         .Options(CheckboxOptions().DefaultValue(true).Tooltip(
             "Hide the original game's actor shadows (Link's feet, the NPC/enemy circles, the horse shadow, "
-            "the sign and snake-statue texture shadows) so only the new shape shadows show. Turn off to draw "
-            "both."));
+            "the sign and snake-statue texture shadows) so only the selected system's shadows show. Turn off "
+            "to draw both."));
     AddWidget(path, "Options", WIDGET_SEPARATOR_TEXT).PreFunc(hideUnlessShadowsEnabled);
     AddWidget(path, "Reset All to Defaults", WIDGET_BUTTON)
         .PreFunc(hideUnlessShadowsEnabled)
         .Callback([](WidgetInfo& info) {
+            CVarClear(CVAR_ENHANCEMENT("Graphics.WorldShadows.Mode"));
             CVarClear(CVAR_ENHANCEMENT("Graphics.WorldShadows.SuppressVanillaShadows"));
             CVarClear(CVAR_ENHANCEMENT("Graphics.WorldShadows.Opacity"));
             CVarClear(CVAR_ENHANCEMENT("Graphics.WorldShadows.EdgeSoftness"));

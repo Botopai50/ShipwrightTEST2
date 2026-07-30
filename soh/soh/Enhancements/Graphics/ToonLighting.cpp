@@ -263,6 +263,11 @@ static bool ToonShadowExcluded(Actor* actor) {
         case ACTOR_EN_SKJ:       // Skull Kid
         case ACTOR_EN_DNT_NOMAL: // Deku Scrub mound dwellers
         case ACTOR_EN_KZ:        // King Zora
+        // Water surfaces. These sit in ToonActorExcluded for their own reasons, and that list no longer
+        // implies "does not cast" — so they have to be named here or a water box, which is a single flat
+        // plane spanning a whole room, would drop the entire volume beneath it into shadow.
+        case ACTOR_BG_MIZU_WATER:
+        case ACTOR_BG_HAKA_WATER:
             return true;
         default:
             return ToonShadowReceiver(actor);
@@ -834,7 +839,17 @@ static void HandleActorDraw(void* actorPtr) {
         // emit and render with the renderer's neutral fallback key instead of the real one.
         sHaveLastKey = false;
     }
-    if (!wantToon) {
+    // Being excluded from the cel relight does not mean the thing does not block light: a tree is on that
+    // list because its canopy should keep vanilla shading, and a tree is also the single most obvious
+    // shadow caster in the game. Shadow-map mode therefore carries these actors through to the arming
+    // block below instead of returning here.
+    //
+    // The stencil volumes still stop: that technique casts the silhouette along the actor's OWN key light,
+    // and an actor excluded from the relight never gets one. Shadow maps have no such dependency -- their
+    // light direction is frame-global (see ToonEnvKey in the pusher).
+    const bool relightExcluded = !wantToon;
+    const bool castWithoutRelight = relightExcluded && shadowsEnabled && ToonLighting_ShadowMapEnabled() != 0;
+    if (relightExcluded && !castWithoutRelight) {
         // Excluded actors must still mark the per-object shadow boundary. With cel shading on, the
         // bracket edge above flushes+disarms the capture; with cel OFF there is no edge, and without
         // this disarm the PREVIOUS actor's silhouette would keep accumulating this actor's lit
@@ -893,7 +908,9 @@ static void HandleActorDraw(void* actorPtr) {
         // key together so they stay in lockstep.
         bool keyChanged = !sHaveLastKey || dx != sLastKeyDir[0] || dy != sLastKeyDir[1] || dz != sLastKeyDir[2] ||
                           r != sLastKeyCol[0] || g != sLastKeyCol[1] || b != sLastKeyCol[2];
-        if (keyChanged) {
+        // Never for a cast-only actor: its toon bracket is OFF, and emitting a key inside an off bracket
+        // would leave the renderer holding this actor's key for whatever relit object comes next.
+        if (keyChanged && !castWithoutRelight) {
             gSPToonKey(POLY_OPA_DISP++, dx, dy, dz, r, g, b);
             gSPToonKey(POLY_XLU_DISP++, dx, dy, dz, r, g, b);
             sLastKeyDir[0] = dx, sLastKeyDir[1] = dy, sLastKeyDir[2] = dz;

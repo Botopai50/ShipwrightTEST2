@@ -10,6 +10,7 @@
 
 #include <libultraship/bridge/gfxbridge.h>
 #include "soh/OTRGlobals.h"
+#include "soh/Enhancements/Graphics/ToonLighting.h"
 #include "soh/ResourceManagerHelpers.h"
 
 void func_80095AB4(PlayState* play, Room* room, u32 flags);
@@ -631,9 +632,27 @@ s32 func_800973FC(PlayState* play, RoomContext* roomCtx) {
 
 void Room_Draw(PlayState* play, Room* room, u32 flags) {
     if (room->segment != NULL) {
+        // SOH [Enhancement] Cascaded shadow maps: bracket the room mesh as world casters, which is what
+        // lets the scene shadow itself (walls onto floors, terrain onto terrain). Only the room is marked --
+        // not the skybox, not effects -- because those would cast enormous, meaningless shadows.
+        // Unlike the actor marker, this does not stop the geometry from RECEIVING shadow: the room has to do
+        // both. Cheap when the mode is off, since the whole bracket is skipped.
+        s32 shadowMapWorldCasters = ToonLighting_ShadowMapEnabled();
+        if (shadowMapWorldCasters) {
+            OPEN_DISPS(play->state.gfxCtx);
+            gSPShadowMapWorldCasterBegin(POLY_OPA_DISP++);
+            CLOSE_DISPS(play->state.gfxCtx);
+        }
+
         gSegments[3] = VIRTUAL_TO_PHYSICAL(room->segment);
         assert(room->meshHeader->base.type < ARRAY_COUNTU(sRoomDrawHandlers));
         sRoomDrawHandlers[room->meshHeader->base.type](play, room, flags);
+
+        if (shadowMapWorldCasters) {
+            OPEN_DISPS(play->state.gfxCtx);
+            gSPShadowMapWorldCasterEnd(POLY_OPA_DISP++);
+            CLOSE_DISPS(play->state.gfxCtx);
+        }
     }
 }
 

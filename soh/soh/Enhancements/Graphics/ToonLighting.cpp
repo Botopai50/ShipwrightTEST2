@@ -75,6 +75,9 @@ static struct {
     bool shadows = false;   // shadowMode == SHADOW_MODE_ACTOR (stencil volumes)
     bool shadowMap = false;          // shadowMode == SHADOW_MODE_SHADOW_MAP (cascaded depth maps)
     bool shadowMapSupported = false; // the running backend implements the depth pass (D3D11 only)
+    // Radial distance from the camera past which an actor is not worth capturing as a shadow caster: the
+    // furthest active cascade, since beyond that there is no depth map left to record it in.
+    f32 shadowMapReach = SHADOW_MAP_DEFAULT_SPLIT_3;
     bool suppressVanilla = true;
     bool useNaviLight = true;
     bool showDebug = false;
@@ -101,6 +104,18 @@ static void RefreshFrameParams() {
     if (sParams.shadowMap) {
         Fast::GfxRenderingAPI* rapi = GetRenderingApi();
         sParams.shadowMapSupported = rapi != nullptr && rapi->SupportsShadowMap();
+        // Caster reach = the last active cascade's far split (see shadowMapReach).
+        static const char* kSplitCVars[SHADOW_MAP_MAX_CASCADES] = {
+            CVAR_ENHANCEMENT("Graphics.ShadowMap.Split0"), CVAR_ENHANCEMENT("Graphics.ShadowMap.Split1"),
+            CVAR_ENHANCEMENT("Graphics.ShadowMap.Split2"), CVAR_ENHANCEMENT("Graphics.ShadowMap.Split3")
+        };
+        static const f32 kSplitDefaults[SHADOW_MAP_MAX_CASCADES] = { SHADOW_MAP_DEFAULT_SPLIT_0,
+                                                                     SHADOW_MAP_DEFAULT_SPLIT_1,
+                                                                     SHADOW_MAP_DEFAULT_SPLIT_2,
+                                                                     SHADOW_MAP_DEFAULT_SPLIT_3 };
+        s32 count = CVarGetInteger(CVAR_ENHANCEMENT("Graphics.ShadowMap.CascadeCount"), SHADOW_MAP_MAX_CASCADES);
+        count = count < 1 ? 1 : (count > SHADOW_MAP_MAX_CASCADES ? SHADOW_MAP_MAX_CASCADES : count);
+        sParams.shadowMapReach = CVarGetFloat(kSplitCVars[count - 1], kSplitDefaults[count - 1]);
     } else {
         sParams.shadowMapSupported = false;
     }
@@ -884,7 +899,25 @@ static void HandleActorDraw(void* actorPtr) {
         // The lower bound matters with the extended-culling enhancements: they draw actors BEHIND the
         // camera (negative projected z), which would otherwise pay full capture + volume cost for a
         // shadow that is never visible.
-        if (!ToonShadowExcluded(actor) && actor->projectedPos.z < maxDist && actor->projectedPos.z > -100.0f) {
+        // Shadow maps need a different reach test than the stencil volumes do.
+        //
+        // projectedPos.z is view-space depth, so it changes for every actor the moment the camera turns.
+        // For the stencil volumes that was fine -- those are composited in screen space, so a caster out of
+        // view had no visible shadow anyway. A depth map is the opposite: something beside or behind the
+        // camera casts into the view perfectly well, and culling it by view depth made its shadow blink out
+        // as soon as the camera moved. The "behind the camera" bound (-100) did the same thing.
+        //
+        // Radial distance from the camera is rotation-invariant, which is the property this needs, and the
+        // reach is the furthest cascade -- past that there is no map left to record the caster in.
+        bool withinShadowReach;
+        if (ToonLighting_ShadowMapEnabled()) {
+            const f32 px = actor->projectedPos.x, py = actor->projectedPos.y, pz = actor->projectedPos.z;
+            const f32 radial = sqrtf((px * px) + (py * py) + (pz * pz));
+            withinShadowReach = radial < sParams.shadowMapReach;
+        } else {
+            withinShadowReach = actor->projectedPos.z < maxDist && actor->projectedPos.z > -100.0f;
+        }
+        if (!ToonShadowExcluded(actor) && withinShadowReach) {
             // Floor reference is the gate + a "near the ground" sanity check, and the feet-clamp Y for
             // deep-rooted actors (the renderer otherwise builds the volume from the captured feet, not this
             // plane). Most actors expose actor->floorPoly from their bg check; a few (e.g. the Courtyard Guards,

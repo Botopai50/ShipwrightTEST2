@@ -84,6 +84,8 @@ static struct {
 } sParams;
 
 static Fast::GfxRenderingAPI* GetRenderingApi(); // defined with the other Fast3D accessors below
+// Key light from the environment directionals (sun or moon, whichever is brighter); defined below.
+static void ToonEnvKey(PlayState* play, f32 dirOut[3], f32 colOut[3]);
 
 static void RefreshFrameParams() {
     sParams.cel = CVarGetInteger(CVAR_ENHANCEMENT("Graphics.ToonLighting.Enabled"), 1) != 0;
@@ -295,12 +297,6 @@ static bool sHaveLastKey = false;
 static s8 sLastKeyDir[3];
 static u8 sLastKeyCol[3];
 
-// SOH [Enhancement] Cascaded shadow maps: one key direction for the whole frame, since a single set of
-// cascades cannot follow a per-actor light. Recorded (unquantized) as actor keys are emitted; outdoors
-// these are all the sun, so the frame's last key is representative rather than arbitrary. Points from the
-// surface toward the light, matching the toon convention -- the shadow projection negates it.
-// Read on the following frame, which lines up with the caster list also being one frame behind.
-static f32 sFrameKeyDir[3] = { 0.0f, 1.0f, 0.0f };
 
 static void ToonClearKeyStates(); // defined with the key-state map below
 
@@ -316,9 +312,11 @@ static void OnToonFrameUpdate() {
     sHaveLastKey = false;
     // The bracket re-opens toon ON each frame; match it so the first blacklisted actor toggles correctly.
     sToonEnabled = true;
-    if (!sParams.cel && !sParams.shadows) {
-        // Both features off (possibly via console, which never re-runs RegisterToonLighting): nothing
+    if (!sParams.cel && !sParams.shadows && !sParams.shadowMap) {
+        // Every feature off (possibly via console, which never re-runs RegisterToonLighting): nothing
         // below is needed, and the eased per-actor state must not go stale while disabled.
+        // shadowMap has to be in this test -- the cascade configuration is pushed further down, and
+        // returning early here left it stale whenever Shadow Map was on with cel shading off.
         ToonClearKeyStates();
         return;
     }
@@ -370,7 +368,19 @@ static void OnToonFrameUpdate() {
                           CVarGetFloat(CVAR_ENHANCEMENT("Graphics.ShadowMap.Split1"), SHADOW_MAP_DEFAULT_SPLIT_1),
                           CVarGetFloat(CVAR_ENHANCEMENT("Graphics.ShadowMap.Split2"), SHADOW_MAP_DEFAULT_SPLIT_2),
                           CVarGetFloat(CVAR_ENHANCEMENT("Graphics.ShadowMap.Split3"), SHADOW_MAP_DEFAULT_SPLIT_3) };
-        f32 lightDir[3] = { -sFrameKeyDir[0], -sFrameKeyDir[1], -sFrameKeyDir[2] };
+        // One sun (or moon) for the whole frame, straight from the environment directionals. This used to
+        // take the last actor key emitted, which looked right until Navi walked on screen: Navi IS a light,
+        // so her key became "the frame's light" and every shadow in the scene swung to point away from her.
+        // A single set of cascades can only have one direction, and it has to be the one that is actually
+        // global.
+        f32 envDir[3] = { 0.0f, 1.0f, 0.0f };
+        f32 envCol[3] = { 1.0f, 1.0f, 1.0f };
+        if (gPlayState != NULL) {
+            ToonEnvKey(gPlayState, envDir, envCol);
+        }
+        // Negated: the toon convention points from the surface toward the light, a shadow projection needs
+        // the direction the light travels.
+        f32 lightDir[3] = { -envDir[0], -envDir[1], -envDir[2] };
         interp->SetShadowMapParams(
             shadowMapOn,
             CVarGetInteger(CVAR_ENHANCEMENT("Graphics.ShadowMap.CascadeCount"), SHADOW_MAP_MAX_CASCADES),
@@ -830,10 +840,6 @@ static void HandleActorDraw(void* actorPtr) {
     }
 
     {
-        // Frame-global key for the shadow cascades (see sFrameKeyDir): taken before quantizing, so the
-        // cascade matrices are not built from an 8-bit direction.
-        sFrameKeyDir[0] = st.dir[0], sFrameKeyDir[1] = st.dir[1], sFrameKeyDir[2] = st.dir[2];
-
         s8 dx = (s8)(st.dir[0] * 127.0f);
         s8 dy = (s8)(st.dir[1] * 127.0f);
         s8 dz = (s8)(st.dir[2] * 127.0f);

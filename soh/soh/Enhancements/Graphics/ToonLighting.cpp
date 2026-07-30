@@ -113,7 +113,7 @@ static void RefreshFrameParams() {
                                                                      SHADOW_MAP_DEFAULT_SPLIT_1,
                                                                      SHADOW_MAP_DEFAULT_SPLIT_2,
                                                                      SHADOW_MAP_DEFAULT_SPLIT_3 };
-        s32 count = CVarGetInteger(CVAR_ENHANCEMENT("Graphics.ShadowMap.CascadeCount"), SHADOW_MAP_MAX_CASCADES);
+        s32 count = CVarGetInteger(CVAR_ENHANCEMENT("Graphics.ShadowMap.CascadeCount"), SHADOW_MAP_DEFAULT_CASCADES);
         count = count < 1 ? 1 : (count > SHADOW_MAP_MAX_CASCADES ? SHADOW_MAP_MAX_CASCADES : count);
         sParams.shadowMapReach = CVarGetFloat(kSplitCVars[count - 1], kSplitDefaults[count - 1]);
     } else {
@@ -422,7 +422,7 @@ static void OnToonFrameUpdate() {
         }
         interp->SetShadowMapParams(
             shadowMapOn,
-            CVarGetInteger(CVAR_ENHANCEMENT("Graphics.ShadowMap.CascadeCount"), SHADOW_MAP_MAX_CASCADES),
+            CVarGetInteger(CVAR_ENHANCEMENT("Graphics.ShadowMap.CascadeCount"), SHADOW_MAP_DEFAULT_CASCADES),
             CVarGetInteger(CVAR_ENHANCEMENT("Graphics.ShadowMap.Resolution"), SHADOW_MAP_DEFAULT_RESOLUTION), splits,
             lightDir, CVarGetFloat(CVAR_ENHANCEMENT("Graphics.ShadowMap.BlendFraction"),
                                    SHADOW_MAP_DEFAULT_BLEND_FRACTION),

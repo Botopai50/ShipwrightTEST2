@@ -1,6 +1,7 @@
 #include "global.h"
 
 #include "soh/frame_interpolation.h"
+#include "soh/Enhancements/Graphics/ToonLighting.h"
 
 Mtx* sSkyboxDrawMatrix;
 
@@ -16,6 +17,14 @@ Mtx* SkyboxDraw_UpdateMatrix(SkyboxContext* skyboxCtx, f32 x, f32 y, f32 z) {
 void SkyboxDraw_Draw(SkyboxContext* skyboxCtx, GraphicsContext* gfxCtx, s16 skyboxId, s16 blend, f32 x, f32 y, f32 z) {
     OPEN_DISPS(gfxCtx);
     FrameInterpolation_RecordOpenChild(NULL, FrameInterpolation_GetCameraEpoch());
+
+    // SOH [Enhancement] Cascaded shadow maps: the sky must not receive shadow. It is real 3D geometry, so it
+    // was being projected into the cascades like any other surface and came back with dark streaks smeared
+    // across it. Turned back on at the end of the function so nothing after it inherits the state.
+    s32 shadowMapOn = ToonLighting_ShadowMapEnabled();
+    if (shadowMapOn) {
+        gSPShadowMapReceiveOff(POLY_OPA_DISP++);
+    }
 
     Gfx_SetupDL_40Opa(gfxCtx);
 
@@ -93,6 +102,10 @@ void SkyboxDraw_Draw(SkyboxContext* skyboxCtx, GraphicsContext* gfxCtx, s16 skyb
 
     gDPPipeSync(POLY_OPA_DISP++);
     // gsSPShaderTest2(POLY_OPA_DISP++);
+
+    if (shadowMapOn) {
+        gSPShadowMapReceiveOn(POLY_OPA_DISP++);
+    }
 
     FrameInterpolation_RecordCloseChild();
     CLOSE_DISPS(gfxCtx);

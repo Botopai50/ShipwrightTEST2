@@ -1,4 +1,5 @@
 #include "global.h"
+#include "soh/Enhancements/Graphics/ToonLighting.h"
 #include <libultraship/libultra.h>
 #include "vt.h"
 #include "objects/gameplay_keep/gameplay_keep.h"
@@ -1307,6 +1308,13 @@ void Environment_DrawSunAndMoon(PlayState* play) {
 
     OPEN_DISPS(play->state.gfxCtx);
 
+    // SOH [Enhancement] Cascaded shadow maps: the sun and moon must not receive shadow, for the same reason
+    // the sky must not -- they are geometry in the world and were being shadowed like it.
+    s32 shadowMapOn = ToonLighting_ShadowMapEnabled();
+    if (shadowMapOn) {
+        gSPShadowMapReceiveOff(POLY_OPA_DISP++);
+    }
+
     if (play->csCtx.state != 0) {
         Math_SmoothStepToF(&play->envCtx.sunPos.x,
                            -(Math_SinS(((void)0, gSaveContext.dayTime) - 0x8000) * 120.0f) * 25.0f, 1.0f, 0.8f, 0.8f);
@@ -1402,6 +1410,10 @@ void Environment_DrawSunAndMoon(PlayState* play) {
             }
             gSPDisplayList(POLY_OPA_DISP++, gMoonDL);
         }
+    }
+
+    if (shadowMapOn) {
+        gSPShadowMapReceiveOn(POLY_OPA_DISP++);
     }
 
     CLOSE_DISPS(play->state.gfxCtx);

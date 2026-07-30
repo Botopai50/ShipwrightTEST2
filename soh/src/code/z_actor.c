@@ -3163,8 +3163,15 @@ void func_800315AC(PlayState* play, ActorContext* actorCtx) {
     // world effects land on them just like the static scene; they are skipped in the main loop below so each
     // still draws exactly once. The flushes must sit between this pre-pass and the rest of the actors (which
     // must NOT receive shadows, to avoid self-shadowing the casters) — that ordering is why they live here.
-    bool shadowsEnabled = ToonLighting_ShadowsEnabled();
-    bool receiversActive = shadowsEnabled; // the pre-pass rides with the feature (no separate toggle)
+    // Two different questions. The pre-pass below only matters to the stencil volumes, which need those
+    // surfaces already in the depth buffer to land on them. The flush marker further down matters to BOTH
+    // systems: it is what tells the renderer "the frame's casters are complete, build the shadows now", and
+    // for the shadow map it is also what swaps its caster buffers. Gating that marker on the stencil mode
+    // alone meant shadow-map mode never triggered its depth pass at all -- no shadows, and a caster list
+    // that grew all frame because nothing ever drained it.
+    bool stencilShadows = ToonLighting_ShadowsEnabled();
+    bool shadowsEnabled = stencilShadows || ToonLighting_ShadowMapEnabled();
+    bool receiversActive = stencilShadows; // the pre-pass rides with the stencil-volume feature only
 
     if (receiversActive) {
         // Every receiver id lives in the BG, PROP or SWITCH category (asserted by a note at the

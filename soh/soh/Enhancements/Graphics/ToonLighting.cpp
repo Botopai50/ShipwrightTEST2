@@ -755,7 +755,12 @@ static void HandleActorDraw(void* actorPtr) {
     }
 
     bool celEnabled = sParams.cel;
-    bool shadowsEnabled = sParams.shadows;
+    // The caster marker (gSPToonShadowArm) is what tells the renderer "this object casts a shadow", and BOTH
+    // non-vanilla systems need it: the stencil volumes build a silhouette from it, and the shadow map
+    // captures the same geometry in world space for its depth pass. Gating it on the stencil mode alone left
+    // shadow-map mode with no casters at all, so its cascades came out empty and nothing was ever shadowed.
+    // The renderer decides which technique consumes the capture; here we only mark the casters.
+    bool shadowsEnabled = sParams.shadows || ToonLighting_ShadowMapEnabled() != 0;
     if (!celEnabled && !shadowsEnabled) {
         return; // hooks stay registered so console toggles work; the per-frame snapshot gates the work
     }

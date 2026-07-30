@@ -31,7 +31,9 @@ typedef enum {
 // lookup, far too expensive to repeat for every drawn actor every frame.
 int ToonLighting_FeaturesActive(void);         // cel relight OR a non-vanilla shadow mode (gates the draw hook)
 int ToonLighting_CelEnabled(void);             // cel relight on (gates the toon bracket)
-int ToonLighting_ShadowsEnabled(void);         // actor-shadow mode on (gates the shadow flush/disarm)
+int ToonLighting_ShadowsEnabled(void);         // stencil-volume (Actor Shadows) mode on, specifically --
+                                               // callers that mean "any system that needs casters marked"
+                                               // must also test ToonLighting_ShadowMapEnabled()
 int ToonLighting_ShadowMapEnabled(void);       // shadow-map mode on (gates the depth-pass capture)
 int ToonLighting_ShadowMode(void);             // raw ShadowMode value
 int ToonLighting_SuppressVanillaShadows(void); // a non-vanilla mode is on AND set to hide the vanilla shadows

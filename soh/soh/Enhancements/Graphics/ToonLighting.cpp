@@ -393,9 +393,33 @@ static void OnToonFrameUpdate() {
         if (gPlayState != NULL) {
             ToonEnvKey(gPlayState, envDir, envCol);
         }
-        // Negated: the toon convention points from the surface toward the light, a shadow projection needs
-        // the direction the light travels.
-        f32 lightDir[3] = { -envDir[0], -envDir[1], -envDir[2] };
+        // Lift the light off the horizon before using it. A near-horizontal sun stretches every shadow
+        // towards infinity, which looks wrong well before it is geometrically wrong, and it also wastes the
+        // cascades on a footprint far longer than the scene being shaded. The compass bearing is kept; only
+        // the height is raised, and only when it is actually too low: a floor, not a remap. The stencil
+        // volumes remap instead, which is continuous but also shortens midday shadows -- at 45 degrees it
+        // would cut them by nearly half. A depth map can be faithful above the threshold and only intervene
+        // below it, so that is what this does.
+        // Same shape as the stencil volumes' Length control, but with its own value: a depth map can afford
+        // longer shadows than a flattened silhouette can.
+        f32 minElev = CVarGetFloat(CVAR_ENHANCEMENT("Graphics.ShadowMap.MinElevation"),
+                                   SHADOW_MAP_DEFAULT_MIN_ELEVATION);
+        minElev = CLAMP(minElev, 0.05f, 0.99f);
+        // Negated on the way out: the toon convention points from the surface toward the light, while a
+        // shadow projection needs the direction the light travels.
+        f32 lightDir[3] = { 0.0f, -1.0f, 0.0f };
+        {
+            const f32 up = envDir[1] < 0.0f ? 0.0f : envDir[1]; // below the horizon reads as "on it"
+            const f32 elev = up < minElev ? minElev : up;
+            const f32 hLen = sqrtf((envDir[0] * envDir[0]) + (envDir[2] * envDir[2]));
+            if (hLen >= 0.001f) {
+                const f32 hScale = sqrtf(1.0f - (elev * elev)) / hLen;
+                lightDir[0] = -hScale * envDir[0];
+                lightDir[1] = -elev;
+                lightDir[2] = -hScale * envDir[2];
+            }
+            // hLen ~ 0 means the light is straight overhead: the default straight-down vector is right.
+        }
         interp->SetShadowMapParams(
             shadowMapOn,
             CVarGetInteger(CVAR_ENHANCEMENT("Graphics.ShadowMap.CascadeCount"), SHADOW_MAP_MAX_CASCADES),

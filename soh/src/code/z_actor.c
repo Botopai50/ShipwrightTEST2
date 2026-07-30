@@ -3027,9 +3027,25 @@ s32 Ship_CalcShouldDrawAndUpdate(PlayState* play, Actor* actor, Vec3f* projected
             ratioAdjusted = MAX(currentAspectRatio / originalAspectRatio, 1.0f);
         }
 
-        if ((((fabsf(projectedPos->x) - actor->uncullZoneScale) * (clampedProjectedW / ratioAdjusted)) < 1.0f) &&
-            (((projectedPos->y + actor->uncullZoneDownward) * clampedProjectedW) > -1.0f) &&
-            (((projectedPos->y - actor->uncullZoneScale) * clampedProjectedW) < 1.0f)) {
+        // SOH [Enhancement] Cascaded shadow maps need casters the camera cannot see. This test is in screen
+        // space, so an actor just off the edge is not drawn -- and a caster that is not drawn is never
+        // captured, so its shadow vanishes even though it falls inside the view. That is why tilting the
+        // camera down made shadows blink out and tilting back up restored them: the caster left the top of
+        // the screen, not the scene.
+        // The margin widens only the DRAW decision. Update keeps the original bounds, because that is what
+        // drives ACTOR_FLAG_INSIDE_CULLING_VOLUME and therefore gameplay; drawing an off-screen actor adds
+        // geometry nothing can see, but updating one changes behaviour.
+        f32 shadowMargin = ToonLighting_ShadowMapEnabled() ? 1.5f : 1.0f;
+
+        bool insideForUpdate =
+            ((((fabsf(projectedPos->x) - actor->uncullZoneScale) * (clampedProjectedW / ratioAdjusted)) < 1.0f) &&
+             (((projectedPos->y + actor->uncullZoneDownward) * clampedProjectedW) > -1.0f) &&
+             (((projectedPos->y - actor->uncullZoneScale) * clampedProjectedW) < 1.0f));
+
+        if ((((fabsf(projectedPos->x) - actor->uncullZoneScale) * (clampedProjectedW / ratioAdjusted)) <
+             shadowMargin) &&
+            (((projectedPos->y + actor->uncullZoneDownward) * clampedProjectedW) > -shadowMargin) &&
+            (((projectedPos->y - actor->uncullZoneScale) * clampedProjectedW) < shadowMargin)) {
 
             if (CVarGetInteger(CVAR_ENHANCEMENT("ExtendedCullingExcludeGlitchActors"), 0)) {
                 // These actors are safe to draw without impacting glitches
@@ -3055,7 +3071,7 @@ s32 Ship_CalcShouldDrawAndUpdate(PlayState* play, Actor* actor, Vec3f* projected
             }
 
             *shouldDraw = true;
-            *shouldUpdate = true;
+            *shouldUpdate = insideForUpdate;
             return true;
         }
     }
@@ -3108,6 +3124,17 @@ static void Actor_DrawListEntry(PlayState* play, Actor* actor, s32 listIndex, Ac
                 actor->flags |= ACTOR_FLAG_INSIDE_CULLING_VOLUME;
             } else {
                 actor->flags &= ~ACTOR_FLAG_INSIDE_CULLING_VOLUME;
+            }
+
+            // SOH [Enhancement] Cascaded shadow maps: with none of the culling enhancements on, the check
+            // above is the only thing deciding what gets drawn -- and it stops at the screen edge, so a
+            // caster just outside the view is never submitted and its shadow disappears from inside the
+            // view. Ask for the widened DRAW decision as well, and take only that: the culling volume flag
+            // set just above stays exactly as vanilla computed it, so nothing about gameplay moves.
+            if (ToonLighting_ShadowMapEnabled()) {
+                bool shadowShouldUpdate = false;
+                Ship_CalcShouldDrawAndUpdate(play, actor, &actor->projectedPos, actor->projectedW,
+                                             &shipShouldDraw, &shadowShouldUpdate);
             }
         }
     }

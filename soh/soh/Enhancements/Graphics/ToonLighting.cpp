@@ -427,7 +427,10 @@ static void OnToonFrameUpdate() {
             lightDir, CVarGetFloat(CVAR_ENHANCEMENT("Graphics.ShadowMap.BlendFraction"),
                                    SHADOW_MAP_DEFAULT_BLEND_FRACTION),
             CVarGetFloat(CVAR_ENHANCEMENT("Graphics.ShadowMap.NormalOffset"), SHADOW_MAP_DEFAULT_NORMAL_OFFSET),
-            CVarGetFloat(CVAR_ENHANCEMENT("Graphics.ShadowMap.Strength"), SHADOW_MAP_DEFAULT_STRENGTH));
+            CVarGetFloat(CVAR_ENHANCEMENT("Graphics.ShadowMap.Strength"), SHADOW_MAP_DEFAULT_STRENGTH),
+            CVarGetFloat(CVAR_ENHANCEMENT("Graphics.ShadowMap.FilterWidth"), SHADOW_MAP_DEFAULT_FILTER_WIDTH),
+            CVarGetFloat(CVAR_ENHANCEMENT("Graphics.ShadowMap.MinCasterSize"),
+                         SHADOW_MAP_DEFAULT_MIN_CASTER_SIZE));
     }
 
     Fast::GfxRenderingAPI* rapi = GetRenderingApi();

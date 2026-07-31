@@ -442,7 +442,11 @@ static void OnToonFrameUpdate() {
             CVarGetFloat(CVAR_ENHANCEMENT("Graphics.ShadowMap.Strength"), SHADOW_MAP_DEFAULT_STRENGTH),
             CVarGetFloat(CVAR_ENHANCEMENT("Graphics.ShadowMap.FilterWidth"), SHADOW_MAP_DEFAULT_FILTER_WIDTH),
             CVarGetFloat(CVAR_ENHANCEMENT("Graphics.ShadowMap.MinCasterSize"),
-                         SHADOW_MAP_DEFAULT_MIN_CASTER_SIZE));
+                         SHADOW_MAP_DEFAULT_MIN_CASTER_SIZE),
+            // Debug: paints everything outside a cascade's footprint as fully occluded, which is the only
+            // way to see where a cascade actually ends -- a receiver outside it is silently reported lit,
+            // so a shadow that stops at the boundary is indistinguishable from one that was never cast.
+            (f32)CVarGetInteger(CVAR_DEVELOPER_TOOLS("ShadowMap.ShowCascadeBounds"), 0));
     }
 
     Fast::GfxRenderingAPI* rapi = GetRenderingApi();

@@ -135,14 +135,34 @@ void func_80095D04(PlayState* play, Room* room, u32 flags) {
     assert(polygon2->num <= SHAPE_SORT_MAX);
     sp78 = polygonDlist;
 
+    // SOH [Enhancement] Cascaded shadow maps: this handler culls each room SHAPE by its view depth, which
+    // is a directional test -- a shape behind the camera is never drawn, so the renderer never sees its
+    // triangles and cannot capture it as a shadow caster. That is why a wall or a ladder stopped casting the
+    // moment the player turned away from it, with the surface receiving the shadow still in full view.
+    // Nothing in the renderer could fix it: the geometry was never submitted.
+    // Same radial escape as the actor culling uses, and the same knob, because it is the same problem: the
+    // light comes from the sky, not from the eye, so what can cast is a question about distance, not facing.
+    f32 shadowCasterRadius = ToonLighting_ShadowMapCasterDrawRadius();
+
     for (sp9C = 0; sp9C < polygon2->num; sp9C++, polygonDlist++) {
         sp90.x = polygonDlist->pos.x;
         sp90.y = polygonDlist->pos.y;
         sp90.z = polygonDlist->pos.z;
         SkinMatrix_Vec3fMtxFMultXYZW(&play->viewProjectionMtxF, &sp90, &sp84, &sp80);
-        if (-(f32)polygonDlist->unk_06 < sp84.z) {
-            temp_f2 = sp84.z - polygonDlist->unk_06;
-            if (temp_f2 < play->lightCtx.fogFar) {
+        temp_f2 = sp84.z - polygonDlist->unk_06;
+
+        s32 keepShape = (-(f32)polygonDlist->unk_06 < sp84.z) && (temp_f2 < play->lightCtx.fogFar);
+        if (!keepShape && shadowCasterRadius > 0.0f) {
+            // Distance to the shape's bounding sphere, so a large shape whose centre is far but whose
+            // geometry reaches the camera still counts.
+            f32 reach = shadowCasterRadius + (f32)polygonDlist->unk_06;
+            if ((SQ(sp84.x) + SQ(sp84.y) + SQ(sp84.z)) < SQ(reach)) {
+                keepShape = true;
+            }
+        }
+
+        if (keepShape) {
+            {
                 phi_v0 = spB4;
                 spA4->unk_00 = polygonDlist;
                 spA4->unk_04 = temp_f2;

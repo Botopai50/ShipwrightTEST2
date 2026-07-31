@@ -3246,7 +3246,10 @@ void func_800315AC(PlayState* play, ActorContext* actorCtx) {
     // clear G_LIGHTING, so the open toon bracket above does not shade them.
     GameInteractor_ExecuteOnPlayDrawWorldLights(play);
 
-    if (shadowsEnabled) {
+    // Stencil volumes flush here, before the actors, so their shadows land only on the environment. The
+    // shadow map must NOT: it would be rendering casters from a frame ago, and the room -- already drawn --
+    // would sample the result a frame later still. It flushes after the loop instead (see below).
+    if (stencilShadows) {
         gSPToonShadowFlush(POLY_OPA_DISP++);
     }
 
@@ -3278,6 +3281,18 @@ void func_800315AC(PlayState* play, ActorContext* actorCtx) {
     // geometry (effects, the XLU stream) would leak into the last actor's silhouette.
     if (shadowsEnabled && !celEnabled) {
         gSPToonShadow(POLY_OPA_DISP++, 0, 0, 0, 0.0f);
+    }
+
+    // SOH [Enhancement] Cascaded shadow maps: render the cascades now that every actor has drawn, so the
+    // pass consumes this frame's own captures instead of last frame's. The disarm first closes the final
+    // actor's capture -- harmless if the cel bracket above already closed it, since a second disarm has
+    // nothing left to drain.
+    //
+    // The room still samples this a frame later, because it is drawn before the actors exist: one frame of
+    // lag on a character's shadow is structural, two was not.
+    if (ToonLighting_ShadowMapEnabled()) {
+        gSPToonShadow(POLY_OPA_DISP++, 0, 0, 0, 0.0f);
+        gSPShadowMapFlush(POLY_OPA_DISP++);
     }
 
     if ((HREG(64) != 1) || (HREG(73) != 0)) {

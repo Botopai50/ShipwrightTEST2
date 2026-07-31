@@ -3076,6 +3076,32 @@ s32 Ship_CalcShouldDrawAndUpdate(PlayState* play, Actor* actor, Vec3f* projected
         }
     }
 
+    // SOH [Enhancement] Cascaded shadow maps: draw actors near the camera in EVERY direction, purely so they
+    // can cast. This has to sit above the forward-distance test below, because that test is the one that
+    // rejects anything behind the camera outright -- and behind the camera is exactly where the problem is.
+    //
+    // The screen-space margin further down cannot reach these either: it divides by the projected w, which
+    // is negative behind the camera, so the clamp pins it to 1.0 and the comparison degenerates into "is
+    // this actor within a world unit or two of the view axis". No margin makes that pass.
+    //
+    // A caster behind the camera still casts into the view -- the light comes from the sky, not from the
+    // eye -- which is why turning around changed or erased the shadows on a wall that never moved. Distance
+    // from the camera is the one measure that does not care which way it is pointing, so the test is radial.
+    //
+    // DRAW only. shouldUpdate stays false, which is what vanilla just decided in func_800314D4 above, so
+    // nothing about gameplay moves: this adds geometry nobody can see and no actor logic at all.
+    f32 shadowCasterRadius = ToonLighting_ShadowMapCasterDrawRadius();
+    if (shadowCasterRadius > 0.0f) {
+        f32 rx = projectedPos->x;
+        f32 ry = projectedPos->y;
+        f32 rz = projectedPos->z;
+        if (((rx * rx) + (ry * ry) + (rz * rz)) < (shadowCasterRadius * shadowCasterRadius)) {
+            *shouldDraw = true;
+            *shouldUpdate = false;
+            return true;
+        }
+    }
+
     return false;
 }
 // #endregion

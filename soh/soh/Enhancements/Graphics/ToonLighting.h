@@ -35,6 +35,9 @@ int ToonLighting_ShadowsEnabled(void);         // stencil-volume (Actor Shadows)
                                                // callers that mean "any system that needs casters marked"
                                                // must also test ToonLighting_ShadowMapEnabled()
 int ToonLighting_ShadowMapEnabled(void);       // shadow-map mode on (gates the depth-pass capture)
+// Radius around the camera within which actors are drawn purely so they can cast (0 = off). Read per
+// actor by the draw-culling test, so it comes from the frame snapshot rather than a CVar lookup.
+float ToonLighting_ShadowMapCasterDrawRadius(void);
 int ToonLighting_ShadowMode(void);             // raw ShadowMode value
 int ToonLighting_SuppressVanillaShadows(void); // a non-vanilla mode is on AND set to hide the vanilla shadows
 

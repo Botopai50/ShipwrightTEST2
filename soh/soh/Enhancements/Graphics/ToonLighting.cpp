@@ -78,6 +78,7 @@ static struct {
     // Radial distance from the camera past which an actor is not worth capturing as a shadow caster: the
     // furthest active cascade, since beyond that there is no depth map left to record it in.
     f32 shadowMapReach = SHADOW_MAP_DEFAULT_SPLIT_3;
+    f32 shadowMapCasterDrawRadius = 0.0f;
     bool suppressVanilla = true;
     bool useNaviLight = true;
     bool showDebug = false;
@@ -116,8 +117,11 @@ static void RefreshFrameParams() {
         s32 count = CVarGetInteger(CVAR_ENHANCEMENT("Graphics.ShadowMap.CascadeCount"), SHADOW_MAP_DEFAULT_CASCADES);
         count = count < 1 ? 1 : (count > SHADOW_MAP_MAX_CASCADES ? SHADOW_MAP_MAX_CASCADES : count);
         sParams.shadowMapReach = CVarGetFloat(kSplitCVars[count - 1], kSplitDefaults[count - 1]);
+        sParams.shadowMapCasterDrawRadius = CVarGetFloat(CVAR_ENHANCEMENT("Graphics.ShadowMap.CasterDrawRadius"),
+                                                         SHADOW_MAP_DEFAULT_CASTER_DRAW_RADIUS);
     } else {
         sParams.shadowMapSupported = false;
+        sParams.shadowMapCasterDrawRadius = 0.0f;
     }
     sParams.suppressVanilla =
         CVarGetInteger(CVAR_ENHANCEMENT("Graphics.WorldShadows.SuppressVanillaShadows"), 1) != 0;
@@ -158,6 +162,9 @@ extern "C" int ToonLighting_ShadowsEnabled(void) {
 // implementation, and there the mode must degrade to vanilla rather than suppressing the vanilla shadows
 // and drawing nothing in their place. It is a runtime query rather than an #ifdef because one binary can
 // pick its backend at launch.
+extern "C" float ToonLighting_ShadowMapCasterDrawRadius(void) {
+    return (sParams.shadowMap && sParams.shadowMapSupported) ? sParams.shadowMapCasterDrawRadius : 0.0f;
+}
 extern "C" int ToonLighting_ShadowMapEnabled(void) {
     return sParams.shadowMap && sParams.shadowMapSupported;
 }

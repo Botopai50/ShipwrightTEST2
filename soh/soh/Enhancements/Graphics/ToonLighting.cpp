@@ -280,25 +280,31 @@ static bool ToonShadowDeepRooted(Actor* actor) {
     return actor->id == ACTOR_EN_KANBAN; // wooden signposts
 }
 
-// Actors whose canopy is drawn from the TRANSLUCENT display list rather than the opaque one. A tree is two
-// draws: EnWood02_Draw sends the trunk to POLY_OPA and the leaves to POLY_XLU, because the leaves fade out
-// with distance through an env-colour alpha. Every caster marker this file emits goes into POLY_OPA, and the
-// two buffers are concatenated with all of OPA first -- so the leaves were never inside a bracket at all, and
-// a tree cast its trunk and nothing else. Naming the actor here brackets its XLU stream as well.
+// Actors that are really SCENERY. A tree is spawned as an actor, but nothing about it is a character: it
+// stands still, it is part of the place, and its shadow belongs on everything the way a wall's does. That
+// distinction decides which caster layer it goes in, and the layers are not interchangeable -- characters
+// deliberately skip the actor layer so they cannot shadow each other, so a tree armed as an actor casts onto
+// the ground and never onto the player standing under it. Named here, it goes in the world layer instead,
+// beside the room mesh, and everything samples that.
 //
-// A whitelist rather than a render-mode test because no render-mode test can answer this. The canopy sets
-// exactly the state a pane of glass sets -- translucent zmode, alpha compare usually off -- so a rule wide
-// enough to admit it would also admit every water plane, glow, aura and particle in the translucent stream,
-// each of which would then drop a solid shadow. What makes the leaves different is knowledge about the model,
-// so the knowledge is written down here. The renderer only casts these through the alpha cutout, never as
-// solid polygons: without a usable texture to cut against, a bracketed draw casts nothing.
-static bool ToonShadowXluCaster(Actor* actor) {
+// Bracketing them also reaches geometry the actor arming never could. A tree is two draws: EnWood02_Draw
+// sends the trunk to POLY_OPA and the leaves to POLY_XLU, because the leaves fade with distance through an
+// env-colour alpha. Every actor marker goes into POLY_OPA and the two buffers run opaque-first, so the
+// canopy was never inside a bracket at all -- a tree cast its trunk and nothing else.
+//
+// A whitelist rather than a render-mode test, because no render-mode test can answer either question. The
+// canopy sets exactly the state a pane of glass sets -- translucent zmode, alpha compare usually off -- so a
+// rule wide enough to admit it would also admit every water plane, glow, aura and particle in the
+// translucent stream, each of which would then drop a solid shadow. What makes a tree different is knowledge
+// about the model, so the knowledge is written down here. Its translucent half still only ever casts through
+// the alpha cutout: with no usable texture to cut against, a bracketed draw casts nothing.
+static bool ToonShadowSceneryCaster(Actor* actor) {
     return actor->id == ACTOR_EN_WOOD02; // trees and standalone leaf clusters
 }
 
-// Tracks whether the translucent-pass caster bracket is currently open in the stream, so the marker is
-// emitted only on a change. Most frames contain no foliage-casting actor at all and then this costs nothing.
-static bool sXluCasterArmed = false;
+// Tracks whether the scenery bracket is currently open in the stream, so the markers are emitted only on a
+// change. Most frames contain no scenery actor at all and then this costs nothing.
+static bool sSceneryCasterArmed = false;
 
 // Walkable "floor" actors: scenery the player stands on that the game spawns as actors rather than baking
 // into the room mesh (the castle-town drawbridge, the Gerudo Valley bridge, some dungeon platforms). Because
@@ -921,15 +927,20 @@ static void HandleActorDraw(void* actorPtr) {
         return; // hooks stay registered so console toggles work; the per-frame snapshot gates the work
     }
 
-    // Close the previous actor's translucent-pass caster bracket, if it had one. This runs before the actor
-    // draws and therefore before its own XLU geometry is appended, which is what makes the bracket cover one
-    // actor exactly. It has to sit ahead of the early returns below, or an excluded actor drawing right after
-    // a tree would have its canopy counted as part of that tree's.
-    if (sXluCasterArmed) {
+    // Close the previous actor's scenery bracket, if it had one. This runs before the actor draws and
+    // therefore before any of its own geometry is appended, which is what makes the bracket cover one actor
+    // exactly. It has to sit ahead of the early returns below, or an excluded actor drawing right after a
+    // tree would have its geometry counted as part of that tree's.
+    //
+    // Both buffers, and not merged into the disarm the excluded-actor path emits a few lines down: that one
+    // is gSPToonShadow(0), which clears the ACTOR arming, and the two brackets are separate flags on the
+    // renderer. Closing one has never closed the other.
+    if (sSceneryCasterArmed) {
         OPEN_DISPS(play->state.gfxCtx);
-        gSPShadowMapXluCasterEnd(POLY_XLU_DISP++);
+        gSPShadowMapSceneryCasterEnd(POLY_OPA_DISP++);
+        gSPShadowMapSceneryCasterEnd(POLY_XLU_DISP++);
         CLOSE_DISPS(play->state.gfxCtx);
-        sXluCasterArmed = false;
+        sSceneryCasterArmed = false;
     }
 
     // Blacklist (doors/trees/water): excluded actors get neither cel relight nor a shadow. When cel shading
@@ -1109,17 +1120,32 @@ static void HandleActorDraw(void* actorPtr) {
             // Deep-rooted models (signposts) bury their geometry below the floor, which would sink the shadow
             // slab underground; pass the floor Y so the renderer lifts the slab's feet up to it. Everyone else
             // passes TOON_SHADOW_NO_CLAMP and keeps the captured feet.
-            f32 clampY = floorHeight < -32767.0f ? -32767.0f : (floorHeight > 32767.0f ? 32767.0f : floorHeight);
-            s16 feetClamp = ToonShadowDeepRooted(actor) ? (s16)clampY : (s16)TOON_SHADOW_NO_CLAMP;
-            gSPToonShadowArm(POLY_OPA_DISP++, feetClamp, st.shadowScale); // planeD = eased size scale
-            // Same decision, carried into the other buffer, for the actors whose model puts geometry there.
-            // Deliberately inside this branch and not beside the whitelist test: it inherits every gate the
-            // opaque arming passes through -- the shadow reach, the floor check, the eased fade -- so a
-            // canopy is captured exactly when its own trunk is, and a tree past the last cascade costs
-            // nothing in either stream.
-            if (ToonLighting_ShadowMapEnabled() && ToonShadowXluCaster(actor)) {
-                gSPShadowMapXluCasterBegin(POLY_XLU_DISP++);
-                sXluCasterArmed = true;
+            // A scenery actor is bracketed as scenery instead of armed as an actor, and in BOTH buffers,
+            // because a tree is drawn into both -- trunk to POLY_OPA, canopy to POLY_XLU. Instead of, not as
+            // well as: the actor arming would put the same geometry in the caster layer characters skip, and
+            // whichever list a triangle lands in first is the one it stays in, so arming both would put the
+            // tree back where its shadow cannot reach the player.
+            //
+            // Inside this branch rather than beside the whitelist test, so it inherits every gate the arming
+            // passes through -- shadow reach, floor check, the eased fade. A tree past the last cascade
+            // costs nothing in either stream, and its canopy is captured exactly when its trunk is.
+            if (ToonLighting_ShadowMapEnabled() && ToonShadowSceneryCaster(actor)) {
+                // Disarm the actor capture first, and explicitly. Not arming is not the same as being
+                // disarmed: the marker is a running state in the stream, so without this the tree inherits
+                // whichever actor drew before it, its geometry satisfies the actor branch in the renderer,
+                // and it lands back in the layer this whole bracket exists to keep it out of. It also closes
+                // that actor's object boundary, which is what the marker means anyway.
+                gSPToonShadow(POLY_OPA_DISP++, 0, 0, 0, 0.0f);
+                gSPShadowMapSceneryCasterBegin(POLY_OPA_DISP++);
+                gSPShadowMapSceneryCasterBegin(POLY_XLU_DISP++);
+                sSceneryCasterArmed = true;
+            } else {
+                // Deep-rooted models (signposts) bury their geometry below the floor, which would sink the
+                // shadow slab underground; pass the floor Y so the renderer lifts the slab's feet up to it.
+                // Everyone else passes TOON_SHADOW_NO_CLAMP and keeps the captured feet.
+                f32 clampY = floorHeight < -32767.0f ? -32767.0f : (floorHeight > 32767.0f ? 32767.0f : floorHeight);
+                s16 feetClamp = ToonShadowDeepRooted(actor) ? (s16)clampY : (s16)TOON_SHADOW_NO_CLAMP;
+                gSPToonShadowArm(POLY_OPA_DISP++, feetClamp, st.shadowScale); // planeD = eased size scale
             }
         } else {
             gSPToonShadow(POLY_OPA_DISP++, 0, 0, 0, 0.0f); // fully off
@@ -1147,14 +1173,15 @@ static void HandleActorDestroy(void* actorPtr) {
 // Close the last actor's translucent-pass caster bracket. Nothing draws after it inside the loop to do the
 // job, and everything that draws after the loop -- effects, particles, water, the lens pass -- is in the same
 // buffer, so leaving it open would feed all of it to the cutout path as though it were foliage.
-extern "C" void ToonLighting_ShadowMapXluCasterClose(GraphicsContext* gfxCtx) {
-    if (!sXluCasterArmed) {
+extern "C" void ToonLighting_ShadowMapSceneryCasterClose(GraphicsContext* gfxCtx) {
+    if (!sSceneryCasterArmed) {
         return;
     }
     OPEN_DISPS(gfxCtx);
-    gSPShadowMapXluCasterEnd(POLY_XLU_DISP++);
+    gSPShadowMapSceneryCasterEnd(POLY_OPA_DISP++);
+    gSPShadowMapSceneryCasterEnd(POLY_XLU_DISP++);
     CLOSE_DISPS(gfxCtx);
-    sXluCasterArmed = false;
+    sSceneryCasterArmed = false;
 }
 
 // Lens-of-Truth actors draw through Actor_Draw AFTER the main actor bracket has closed, so without

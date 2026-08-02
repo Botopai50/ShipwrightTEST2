@@ -13,6 +13,7 @@
 #include "soh/ResourceManagerHelpers.h"
 #include "soh/SaveManager.h"
 #include "soh/framebuffer_effects.h"
+#include "soh/Enhancements/Graphics/ToonLighting.h" // SOH [Enhancement] cascaded shadow maps: caster-first draw order
 
 #include <libultraship/libultraship.h>
 
@@ -1542,6 +1543,35 @@ void Play_Draw(PlayState* play) {
             Lights_Draw(sp228, gfxCtx);
         }
 
+        // SOH [Enhancement] Cascaded shadow maps: draw the actors BEFORE the room, so the depth pass runs
+        // between them and the room's pixels sample a map built from THIS frame's caster positions.
+        //
+        // In the vanilla order the room is shaded first and the actors are captured afterwards, so the
+        // ground always shows a character where he was one displayed frame ago. That offset is
+        // velocity times frame duration, which is why it is invisible on scenery (it does not move) and why
+        // it flickers when the frame cadence changes: the interpolation replays the same display list
+        // several times per game frame, and when the target rate changes the phase resets, so the size of
+        // the offset jumps.
+        //
+        // Actors lose nothing by drawing first. They sample the previous frame's map, whose world caster
+        // layer is a CACHE of static geometry rebuilt only when the scene changes -- so a frame-old world
+        // layer is indistinguishable from a current one. Trees included: they are scenery casters and live
+        // in that same cache. And no actor ever sampled the actor layer anyway, by design.
+        //
+        // Only when the mode is on: this reorders the game's own draw, and everything downstream of it --
+        // the skybox, the screen fills, the lens flare -- is left exactly where vanilla puts it.
+        // Not in scenes that draw the late skybox. That one is the interior backdrop (Link's House, the
+        // Bazaar, the shops) and it is set up by Gfx_SetupDL_40Opa, which carries no G_ZBUFFER -- it paints
+        // with no depth test at all. It sits between the room and the actors precisely so it can never
+        // reach the actors, and moving them above it would let a backdrop erase everyone in the room. The
+        // reorder is worth nothing there anyway: it buys a moving character's shadow on the ground, and
+        // these are small interiors.
+        s32 shadowMapCasterFirst = ToonLighting_ShadowMapEnabled() && (play->skyboxCtx.unk_140 == 0);
+
+        if (shadowMapCasterFirst && ((HREG(80) != 10) || (HREG(85) != 0))) {
+            func_800315AC(play, &play->actorCtx);
+        }
+
         if ((HREG(80) != 10) || (HREG(84) != 0)) {
             if (VREG(94) == 0) {
                 s32 roomDrawFlags;
@@ -1555,6 +1585,15 @@ void Play_Draw(PlayState* play) {
                 Room_Draw(play, &play->roomCtx.curRoom, roomDrawFlags & 3);
                 Room_Draw(play, &play->roomCtx.prevRoom, roomDrawFlags & 3);
             }
+        }
+
+        // SOH [Enhancement] WW light casting: the pools are normally cast from inside the actor loop, which
+        // under the order above now runs before the room. They composite against the scene's depth, so they
+        // have to follow the room, not the actors. One visible consequence to expect: the actors are already
+        // in the depth buffer by this point, so a torch pool now falls across a character standing in it
+        // rather than passing under him.
+        if (shadowMapCasterFirst) {
+            GameInteractor_ExecuteOnPlayDrawWorldLights(play);
         }
 
         if ((HREG(80) != 10) || (HREG(83) != 0)) {
@@ -1575,7 +1614,7 @@ void Play_Draw(PlayState* play) {
             Environment_FillScreen(gfxCtx, 0, 0, 0, play->unk_11E18, FILL_SCREEN_OPA);
         }
 
-        if ((HREG(80) != 10) || (HREG(85) != 0)) {
+        if (!shadowMapCasterFirst && ((HREG(80) != 10) || (HREG(85) != 0))) {
             func_800315AC(play, &play->actorCtx);
         }
 

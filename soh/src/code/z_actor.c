@@ -3252,7 +3252,14 @@ void func_800315AC(PlayState* play, ActorContext* actorCtx) {
     // torch/fairy pools fall on the walkable-floor actors too, not just the room — and still before the rest of
     // the actors below, so pools stay under them. No-op unless the feature is enabled (COND_HOOK). The pools
     // clear G_LIGHTING, so the open toon bracket above does not shade them.
-    GameInteractor_ExecuteOnPlayDrawWorldLights(play);
+    // SOH [Enhancement] Cascaded shadow maps: not from here under the caster-first draw order. The pools
+    // composite against the scene's depth -- the stencil mask is built from where the light volume meets
+    // solid geometry -- and in that order the room has not been drawn yet, so the mask would be built
+    // against an empty depth buffer and the whole sphere would paint as a blob. z_play.c casts them after
+    // the room instead.
+    if (!ToonLighting_ShadowMapEnabled()) {
+        GameInteractor_ExecuteOnPlayDrawWorldLights(play);
+    }
 
     // Stencil volumes flush here, before the actors, so their shadows land only on the environment. The
     // shadow map must NOT: it would be rendering casters from a frame ago, and the room -- already drawn --
@@ -3301,16 +3308,18 @@ void func_800315AC(PlayState* play, ActorContext* actorCtx) {
     if (ToonLighting_ShadowMapEnabled()) {
         gSPToonShadow(POLY_OPA_DISP++, 0, 0, 0, 0.0f);
         ToonLighting_ShadowMapSceneryCasterClose(play->state.gfxCtx);
-        // Into the TRANSLUCENT buffer, not the opaque one. All of POLY_OPA executes before any of POLY_XLU,
-        // so a marker in the opaque stream runs before every canopy in the frame has been submitted -- and a
-        // tree's leaves live in the translucent stream. Put here it lands after the last actor's canopy and
-        // before the effects, so the pass consumes the whole frame's captures.
+        // Into the OPAQUE buffer, because that is the only stream the room's ground is in. All of POLY_OPA
+        // executes before any of POLY_XLU, so a marker in the translucent buffer runs after every opaque
+        // pixel in the frame no matter where it sits -- including the ground the character's shadow lands
+        // on. With the actor loop now running ahead of the room (see z_play.c), this is what puts the depth
+        // pass between the two and takes the frame of lag off a moving character's shadow.
         //
-        // It costs nothing to move. Every receiver already reads the map one frame late, because the room
-        // and the actors are all drawn before this point either way; what the marker's position decides is
-        // whether the captures it consumes are this frame's or the last one's, and this is the first place
-        // in the frame where they are all in.
-        gSPShadowMapFlush(POLY_XLU_DISP++);
+        // What this costs is the tree canopies, which are translucent and are therefore submitted after
+        // this marker: their capture is consumed by the NEXT pass instead. That is free. They are scenery
+        // casters, so they go to the world layer, and the world layer is a cache rebuilt only when the
+        // scene changes -- a canopy arriving one pass later is written into a cache that is already a frame
+        // old by design, on geometry that does not move.
+        gSPShadowMapFlush(POLY_OPA_DISP++);
     }
 
     if ((HREG(64) != 1) || (HREG(73) != 0)) {

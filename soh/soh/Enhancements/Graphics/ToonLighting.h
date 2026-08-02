@@ -38,6 +38,11 @@ int ToonLighting_ShadowMapEnabled(void);       // shadow-map mode on (gates the 
 // Radius around the camera within which actors are drawn purely so they can cast (0 = off). Read per
 // actor by the draw-culling test, so it comes from the frame snapshot rather than a CVar lookup.
 float ToonLighting_ShadowMapCasterDrawRadius(void);
+// Is a caster at this world position worth drawing purely so it can cast? Follows the shadow along the key
+// light rather than measuring a straight line to the camera, so a distant object whose stretched shadow
+// reaches the view is kept and an equally distant one whose shadow goes elsewhere is not. casterSize is how
+// far its geometry reaches past the point given. Answers 0 whenever shadow-map mode is off.
+int ToonLighting_ShadowCasterInReach(float x, float y, float z, float casterSize);
 int ToonLighting_ShadowMode(void);             // raw ShadowMode value
 int ToonLighting_SuppressVanillaShadows(void); // a non-vanilla mode is on AND set to hide the vanilla shadows
 

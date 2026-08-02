@@ -140,9 +140,11 @@ void func_80095D04(PlayState* play, Room* room, u32 flags) {
     // triangles and cannot capture it as a shadow caster. That is why a wall or a ladder stopped casting the
     // moment the player turned away from it, with the surface receiving the shadow still in full view.
     // Nothing in the renderer could fix it: the geometry was never submitted.
-    // Same radial escape as the actor culling uses, and the same knob, because it is the same problem: the
-    // light comes from the sky, not from the eye, so what can cast is a question about distance, not facing.
-    f32 shadowCasterRadius = ToonLighting_ShadowMapCasterDrawRadius();
+    // Same escape as the actor culling uses, and the same knob, because it is the same problem: the light
+    // comes from the sky, not from the eye, so what can cast is a question about where the shadow lands,
+    // not about facing. Hoisted out of the loop -- the answer cannot change between shapes, and it is what
+    // lets every shape skip the test outright when the mode is off.
+    s32 shadowCasterEscape = (ToonLighting_ShadowMapCasterDrawRadius() > 0.0f);
 
     for (sp9C = 0; sp9C < polygon2->num; sp9C++, polygonDlist++) {
         sp90.x = polygonDlist->pos.x;
@@ -152,22 +154,11 @@ void func_80095D04(PlayState* play, Room* room, u32 flags) {
         temp_f2 = sp84.z - polygonDlist->unk_06;
 
         s32 keepShape = (-(f32)polygonDlist->unk_06 < sp84.z) && (temp_f2 < play->lightCtx.fogFar);
-        if (!keepShape && shadowCasterRadius > 0.0f) {
-            // Distance to the shape's bounding sphere, so a large shape whose centre is far but whose
-            // geometry reaches the camera still counts.
-            //
-            // Measured in WORLD space, from sp90, and not from the projected sp84 above. Only sp84.z is a
-            // distance -- x and y have been through the projection and carry its scale factors, roughly 1.3
-            // across and 1.7 up -- so treating the three as one vector inflates the result, and inflates it
-            // most for whatever is high up and off to the side. A windmill on a ledge is precisely that, and
-            // it was being measured as half again as far away as it is and rejected on the strength of it.
-            f32 reach = shadowCasterRadius + (f32)polygonDlist->unk_06;
-            f32 dx = sp90.x - play->view.eye.x;
-            f32 dy = sp90.y - play->view.eye.y;
-            f32 dz = sp90.z - play->view.eye.z;
-            if ((SQ(dx) + SQ(dy) + SQ(dz)) < SQ(reach)) {
-                keepShape = true;
-            }
+        if (!keepShape && shadowCasterEscape) {
+            // Asked of the shape's world position (sp90), not the projected one (sp84): only sp84.z is a
+            // distance, since x and y carry the projection's scale factors. Its bounding-sphere radius is
+            // the size, so a large shape whose centre is far but whose geometry reaches in still counts.
+            keepShape = ToonLighting_ShadowCasterInReach(sp90.x, sp90.y, sp90.z, (f32)polygonDlist->unk_06);
         }
 
         if (keepShape) {

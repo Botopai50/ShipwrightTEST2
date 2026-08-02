@@ -79,6 +79,10 @@ static struct {
     // furthest active cascade, since beyond that there is no depth map left to record it in.
     f32 shadowMapReach = SHADOW_MAP_DEFAULT_SPLIT_3;
     f32 shadowMapCasterDrawRadius = 0.0f;
+    // The direction the key light TRAVELS, world space, normalised -- the same vector the cascades are
+    // built from, kept here so the caster-reach test can follow a shadow along it. Straight down until the
+    // first frame computes it.
+    f32 shadowMapLightDir[3] = { 0.0f, -1.0f, 0.0f };
     bool suppressVanilla = true;
     bool useNaviLight = true;
     bool showDebug = false;
@@ -167,6 +171,61 @@ extern "C" float ToonLighting_ShadowMapCasterDrawRadius(void) {
 }
 extern "C" int ToonLighting_ShadowMapEnabled(void) {
     return sParams.shadowMap && sParams.shadowMapSupported;
+}
+
+// Is this caster worth drawing purely so it can cast? Shared by the actor culling and the room-mesh shape
+// culling, because it is one question asked in two places.
+//
+// The game's own culling is a screen test and drops everything behind the camera, so both call sites need an
+// escape -- and the escape used to be a sphere around the camera. A sphere is the wrong shape. What decides
+// whether a caster matters is not how far away it stands but whether its SHADOW arrives, and a low sun sends
+// a shadow much further than the caster stands: the Kakariko windmill can sit well outside any sphere worth
+// paying for and still lay its shadow across the ground at the player's feet. Growing the sphere until it
+// reached would mean drawing everything in every direction to catch the few things lying along one of them.
+//
+// So follow the light. The shadow of this caster runs from it along the light ray, for as far as a caster of
+// SHADOW_MAP_CASTER_SHADOW_HEIGHT would reach at the current elevation -- which is the whole point of doing
+// it this way, since that length grows exactly when shadows stretch and collapses at midday when they do
+// not. Keep the caster when any point of that ray passes within reach of the camera. The far tower whose
+// shadow arrives is admitted; the equally far one whose shadow goes the other way still is not.
+//
+// casterSize is how far the caster's geometry reaches past the point given, so a large object is measured by
+// its surface rather than by its origin.
+extern "C" int ToonLighting_ShadowCasterInReach(f32 x, f32 y, f32 z, f32 casterSize) {
+    if (!sParams.shadowMap || !sParams.shadowMapSupported || gPlayState == NULL) {
+        return 0;
+    }
+    f32 radius = sParams.shadowMapCasterDrawRadius;
+    if (radius <= 0.0f) {
+        return 0;
+    }
+    f32 reach = radius + (casterSize > 0.0f ? casterSize : 0.0f);
+
+    // Camera relative to the caster, world space. Both ends are world positions on purpose: the projected
+    // coordinates the surrounding culling uses carry the projection's scale factors in x and y, and only
+    // their z is a distance.
+    f32 vx = gPlayState->view.eye.x - x;
+    f32 vy = gPlayState->view.eye.y - y;
+    f32 vz = gPlayState->view.eye.z - z;
+
+    const f32* dir = sParams.shadowMapLightDir;
+    // How far along the ray a shadow can run. The light's y component IS the sine of its elevation (the
+    // vector is normalised), and a caster of height H drops that much over H/sin -- so this is the
+    // parametric length of the tallest shadow the scene can throw right now. Guarded because a light on the
+    // horizon would divide by nothing; the elevation floor keeps it near 0.5 in practice.
+    f32 elev = dir[1] < 0.0f ? -dir[1] : dir[1];
+    f32 rayLen = (elev > 0.01f) ? (SHADOW_MAP_CASTER_SHADOW_HEIGHT / elev) : 0.0f;
+
+    f32 t = (vx * dir[0]) + (vy * dir[1]) + (vz * dir[2]);
+    if (t < 0.0f) {
+        t = 0.0f; // behind the caster along the light: the nearest point of the shadow is the caster itself
+    } else if (t > rayLen) {
+        t = rayLen;
+    }
+    f32 ox = vx - (dir[0] * t);
+    f32 oy = vy - (dir[1] * t);
+    f32 oz = vz - (dir[2] * t);
+    return (((ox * ox) + (oy * oy) + (oz * oz)) < (reach * reach)) ? 1 : 0;
 }
 extern "C" int ToonLighting_ShadowMode(void) {
     return sParams.shadowMode;
@@ -452,6 +511,12 @@ static void OnToonFrameUpdate() {
             }
             // hLen ~ 0 means the light is straight overhead: the default straight-down vector is right.
         }
+        // Keep it for the caster-reach test, which follows a shadow along this ray (see
+        // ToonLighting_ShadowCasterInReach). Stored after the elevation floor, so it is the same light the
+        // cascades are actually built from and not the raw environment one.
+        sParams.shadowMapLightDir[0] = lightDir[0];
+        sParams.shadowMapLightDir[1] = lightDir[1];
+        sParams.shadowMapLightDir[2] = lightDir[2];
         interp->SetShadowMapParams(
             shadowMapOn,
             CVarGetInteger(CVAR_ENHANCEMENT("Graphics.ShadowMap.CascadeCount"), SHADOW_MAP_DEFAULT_CASCADES),

@@ -3292,6 +3292,10 @@ void func_800315AC(PlayState* play, ActorContext* actorCtx) {
     // lag on a character's shadow is structural, two was not.
     if (ToonLighting_ShadowMapEnabled()) {
         gSPToonShadow(POLY_OPA_DISP++, 0, 0, 0, 0.0f);
+        // Close the tree-canopy bracket in the OTHER buffer before the flush closes the frame. The two
+        // streams are captured by the same pass but they do not run at the same time: all of POLY_OPA
+        // executes first, so this marker lands after every actor's canopy and before the effects.
+        ToonLighting_ShadowMapXluCasterClose(play->state.gfxCtx);
         gSPShadowMapFlush(POLY_OPA_DISP++);
     }
 

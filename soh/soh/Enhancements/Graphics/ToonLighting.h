@@ -47,6 +47,12 @@ int ToonLighting_SuppressVanillaShadows(void); // a non-vanilla mode is on AND s
 void ToonLighting_LensBracketBegin(struct GraphicsContext* gfxCtx);
 void ToonLighting_LensBracketEnd(struct GraphicsContext* gfxCtx);
 
+// Close any open translucent-pass caster bracket (tree canopies -- see ToonShadowXluCaster). Call once at the
+// end of the actor draw loop: the bracket is opened per actor into POLY_XLU_DISP and the last one to open it
+// has nobody after it to close it, so without this the effects and water drawn afterwards would be captured
+// as leaves.
+void ToonLighting_ShadowMapXluCasterClose(struct GraphicsContext* gfxCtx);
+
 #ifdef __cplusplus
 }
 #endif

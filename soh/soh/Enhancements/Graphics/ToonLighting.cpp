@@ -1,4 +1,4 @@
-// Wind Waker-style toon lighting — game-side policy.
+// Wind Waker-style toon lighting -- game-side policy.
 //
 // libultraship owns the per-pixel transport: it relights the draws SoH brackets with gSPToon, using
 // one dominant light (gSPToonKey) and a generic ramp (SetToonRamp). This module owns the OoT-specific
@@ -42,13 +42,13 @@ extern PlayState* gPlayState;
 
 // Defaults match the GUI slider DefaultValue()s, so a fresh install (CVar unset) renders the same as
 // the slider's default position. (These intentionally differ from libultraship's neutral
-// TOON_SHADING_DEFAULT_* framework fallbacks — SoH always pushes these every frame.)
+// TOON_SHADING_DEFAULT_* framework fallbacks -- SoH always pushes these every frame.)
 static constexpr float kDefaultRampCenter = 0.5f;
 static constexpr float kDefaultRampSoftness = 0.02f;
 static constexpr float kDefaultHighlightIntensity = 0.6f;
 static constexpr float kDefaultShadowIntensity = 0.6f;
 
-// Selection defaults (game-side only — these never reach the framework).
+// Selection defaults (game-side only -- these never reach the framework).
 static constexpr float kDefaultPointLightRange = 1.5f;
 static constexpr float kDefaultTransitionTime = 1.0f;
 
@@ -66,7 +66,7 @@ static constexpr float kShadowFadeTime = 0.15f; // seconds to ease the shadow si
 
 // Per-frame snapshot of every CVar the per-actor hot path reads. CVarGet* is a string-keyed hash-map
 // lookup that heap-allocates for keys this long, and HandleActorDraw runs for EVERY drawn actor every
-// frame — reading them once per frame here removes thousands of lookups (and allocations) per second.
+// frame -- reading them once per frame here removes thousands of lookups (and allocations) per second.
 // Refreshed at the top of each game frame (OnToonFrameUpdate) and by RegisterToonLighting, so both menu
 // and console changes take effect within a frame.
 static struct {
@@ -179,7 +179,7 @@ extern "C" int ToonLighting_SuppressVanillaShadows(void) {
 
 // Actors the cel system skips entirely: they look wrong relit AND wrong casting a flattened shadow
 // (doors, the Great Deku Tree, water-box surfaces). Data-driven so it's easy to extend after seeing what
-// a scene actually relights — add an ACTOR_* id here (or a category below). The wooden sign (En_Kanban)
+// a scene actually relights -- add an ACTOR_* id here (or a category below). The wooden sign (En_Kanban)
 // is intentionally NOT excluded: its shape shadow is exactly what this feature is meant to reproduce.
 static bool ToonActorExcluded(Actor* actor) {
     if (actor->category == ACTORCAT_DOOR) {
@@ -190,8 +190,8 @@ static bool ToonActorExcluded(Actor* actor) {
         case ACTOR_BG_MIZU_WATER: // water-box surfaces
         case ACTOR_BG_HAKA_WATER:
         case ACTOR_EN_WOOD02:     // trees / bushes / leaf scenery
-        case ACTOR_OBJ_SWITCH:    // floor/crystal/eye switches — environment fixtures, not relit objects.
-        case ACTOR_OBJ_BEAN:      // magic bean plant/platform — same. Both are also RECEIVERS below, so
+        case ACTOR_OBJ_SWITCH:    // floor/crystal/eye switches -- environment fixtures, not relit objects.
+        case ACTOR_OBJ_BEAN:      // magic bean plant/platform -- same. Both are also RECEIVERS below, so
                                   // they still catch other actors' shadows like the ground does.
             return true;
         default:
@@ -221,14 +221,34 @@ static bool ToonShadowDeepRooted(Actor* actor) {
     return actor->id == ACTOR_EN_KANBAN; // wooden signposts
 }
 
+// Actors whose canopy is drawn from the TRANSLUCENT display list rather than the opaque one. A tree is two
+// draws: EnWood02_Draw sends the trunk to POLY_OPA and the leaves to POLY_XLU, because the leaves fade out
+// with distance through an env-colour alpha. Every caster marker this file emits goes into POLY_OPA, and the
+// two buffers are concatenated with all of OPA first -- so the leaves were never inside a bracket at all, and
+// a tree cast its trunk and nothing else. Naming the actor here brackets its XLU stream as well.
+//
+// A whitelist rather than a render-mode test because no render-mode test can answer this. The canopy sets
+// exactly the state a pane of glass sets -- translucent zmode, alpha compare usually off -- so a rule wide
+// enough to admit it would also admit every water plane, glow, aura and particle in the translucent stream,
+// each of which would then drop a solid shadow. What makes the leaves different is knowledge about the model,
+// so the knowledge is written down here. The renderer only casts these through the alpha cutout, never as
+// solid polygons: without a usable texture to cut against, a bracketed draw casts nothing.
+static bool ToonShadowXluCaster(Actor* actor) {
+    return actor->id == ACTOR_EN_WOOD02; // trees and standalone leaf clusters
+}
+
+// Tracks whether the translucent-pass caster bracket is currently open in the stream, so the marker is
+// emitted only on a change. Most frames contain no foliage-casting actor at all and then this costs nothing.
+static bool sXluCasterArmed = false;
+
 // Walkable "floor" actors: scenery the player stands on that the game spawns as actors rather than baking
 // into the room mesh (the castle-town drawbridge, the Gerudo Valley bridge, some dungeon platforms). Because
 // they are actors they are normally drawn AFTER the shadow-volume flush and so receive no shadow. The actor
 // draw loop (func_800315AC) special-cases this set: it draws them BEFORE the flush so their surfaces are in
-// the depth buffer and catch shadows like the static scene. Curated by id on purpose — only flat, broadly
+// the depth buffer and catch shadows like the static scene. Curated by id on purpose -- only flat, broadly
 // static, genuinely-walked-on pieces belong here (a moving platform would show the shadow's one-frame lag).
 // Extend cautiously and verify per actor; candidates to try next are noted inline.
-// NOTE: the receiver pre-pass in z_actor.c only scans the BG, PROP and SWITCH actor lists — every id
+// NOTE: the receiver pre-pass in z_actor.c only scans the BG, PROP and SWITCH actor lists -- every id
 // below is in one of those categories. If a receiver from another category is ever added here, extend
 // that scan or the new receiver will silently never pre-draw.
 static bool ToonShadowReceiver(Actor* actor) {
@@ -239,15 +259,15 @@ static bool ToonShadowReceiver(Actor* actor) {
         case ACTOR_BG_HAKA_MEGANEBG:   // Shadow Temple lens-revealed stone platforms (static)
         case ACTOR_BG_MENKURI_KAITEN:  // Large rotating stone ring (Gerudo Training Ground + Forest Temple).
                                        // Genuinely rotates while ridden, so the shadow shows a one-frame lag
-                                       // during motion — the test case for whether moving receivers look OK.
-        case ACTOR_OBJ_SWITCH:         // floor switches are stood on (SWITCH category — see the pre-pass note)
+                                       // during motion -- the test case for whether moving receivers look OK.
+        case ACTOR_OBJ_SWITCH:         // floor switches are stood on (SWITCH category -- see the pre-pass note)
         case ACTOR_OBJ_BEAN:           // the bean platform is ridden; excluded from relight too (above)
             return true;
         case ACTOR_BG_HAKA_GATE: {
             // Shadow Temple. One overlay drives four different things; the variant is the low byte of params
             // (the high byte is a switch flag the actor's Init strips). The overlay's own enum is
             // STATUE=0, FLOOR=1, GATE=2, SKULL=3. The walkable surfaces are the round opening trap FLOOR (1) and
-            // the truth-spinner STATUE disc (0) you stand on — both should catch shadows + light; verified in
+            // the truth-spinner STATUE disc (0) you stand on -- both should catch shadows + light; verified in
             // the trap-floor room. GATE (2) and SKULL (3) stay non-receivers so the skull posts around it keep
             // casting their own shadows.
             u16 type = actor->params & 0xFF;
@@ -261,17 +281,17 @@ static bool ToonShadowReceiver(Actor* actor) {
     }
 }
 
-// Actors that keep cel relight but should NOT cast a drop shadow (unlike ToonActorExcluded, which drops both) —
+// Actors that keep cel relight but should NOT cast a drop shadow (unlike ToonActorExcluded, which drops both) --
 // rationale per id inline. Shadow receivers are excluded too: a walkable floor casting its own silhouette down
 // into the void below reads wrong, and (now that it sits in the depth buffer at flush time) could self-shadow.
 static bool ToonShadowExcluded(Actor* actor) {
     switch (actor->id) {
-        case ACTOR_EN_KUSA:      // small cuttable grass — everywhere and tiny, a blob per tuft reads wrong
+        case ACTOR_EN_KUSA:      // small cuttable grass -- everywhere and tiny, a blob per tuft reads wrong
         case ACTOR_EN_SKJ:       // Skull Kid
         case ACTOR_EN_DNT_NOMAL: // Deku Scrub mound dwellers
         case ACTOR_EN_KZ:        // King Zora
         // Water surfaces. These sit in ToonActorExcluded for their own reasons, and that list no longer
-        // implies "does not cast" — so they have to be named here or a water box, which is a single flat
+        // implies "does not cast" -- so they have to be named here or a water box, which is a single flat
         // plane spanning a whole room, would drop the entire volume beneath it into shadow.
         case ACTOR_BG_MIZU_WATER:
         case ACTOR_BG_HAKA_WATER:
@@ -517,7 +537,7 @@ static f32 ToonSmoothDamp(f32 current, f32 target, f32* vel, f32 smoothTime, f32
 
 // Antipode-safe spherical interpolation of a unit direction by fraction t. Rotating along the sphere
 // (never through the centre) keeps the key from snapping when the dominant light swings to the far
-// side — e.g. when a fairy's light switches off. The near-aligned fast path uses no trig, so the
+// side -- e.g. when a fairy's light switches off. The near-aligned fast path uses no trig, so the
 // common per-frame case is cheap.
 static void ToonSlerp(f32 from[3], f32 to[3], f32 t, f32 out[3]) {
     f32 dot = (from[0] * to[0]) + (from[1] * to[1]) + (from[2] * to[2]);
@@ -575,13 +595,13 @@ static void ToonSlerp(f32 from[3], f32 to[3], f32 t, f32 out[3]) {
 // ---------------------------------------------------------------------------------------------------
 
 // Find the CLOSEST in-range point light (fairy, torch, bomb, ...) to the actor and, if any, fill the
-// key direction (toward the light) + its colour. Brightness is intentionally ignored — proximity
-// alone decides — so flickering torches are perfectly stable and the nearer of two always wins. A
+// key direction (toward the light) + its colour. Brightness is intentionally ignored -- proximity
+// alone decides -- so flickering torches are perfectly stable and the nearer of two always wins. A
 // light is "in range" out to its radius × pointRange (raise pointRange to extend reach).
 static bool ToonClosestPointLight(PlayState* play, Actor* actor, f32 pointRange, f32 dirOut[3], f32 colOut[3]) {
     // When the player opts Navi out, her two emitted lights are skipped by address (she blinks on/off
     // and orbits Link, so she'd constantly steal the key light). Resolved once per frame in
-    // OnToonFrameUpdate — identical for every actor.
+    // OnToonFrameUpdate -- identical for every actor.
     LightInfo* naviGlow = sNaviGlow;
     LightInfo* naviNoGlow = sNaviNoGlow;
 
@@ -692,7 +712,7 @@ static Gfx sToonRingDL[] = {
 
 // Draw one debug "light ray": a flat-coloured spike from `base` pointing along the unit direction
 // `dir`, `length` long and `thickness` wide. Drawn translucent and depth-test-free so every ray is
-// visible (debug only — gated by the caller).
+// visible (debug only -- gated by the caller).
 static void DrawDebugRay(PlayState* play, Vec3f* base, f32 dir[3], u8 r, u8 g, u8 b, f32 length, f32 thickness) {
     Vec3f axis;
     f32 horiz;
@@ -806,7 +826,7 @@ static void DrawDebugOverlay(PlayState* play, Actor* actor, f32 pointRange, f32 
         dn = dn->next;
     }
 
-    // The chosen key — a thin MAGENTA needle down the centre of the chosen light's cone, so the
+    // The chosen key -- a thin MAGENTA needle down the centre of the chosen light's cone, so the
     // direction is marked while the light's own colour is still visible in its (wider) cone.
     DrawDebugRay(play, &base, chosenDir, 255, 0, 255, 35.0f, 0.3f);
 }
@@ -836,6 +856,17 @@ static void HandleActorDraw(void* actorPtr) {
         return; // hooks stay registered so console toggles work; the per-frame snapshot gates the work
     }
 
+    // Close the previous actor's translucent-pass caster bracket, if it had one. This runs before the actor
+    // draws and therefore before its own XLU geometry is appended, which is what makes the bracket cover one
+    // actor exactly. It has to sit ahead of the early returns below, or an excluded actor drawing right after
+    // a tree would have its canopy counted as part of that tree's.
+    if (sXluCasterArmed) {
+        OPEN_DISPS(play->state.gfxCtx);
+        gSPShadowMapXluCasterEnd(POLY_XLU_DISP++);
+        CLOSE_DISPS(play->state.gfxCtx);
+        sXluCasterArmed = false;
+    }
+
     // Blacklist (doors/trees/water): excluded actors get neither cel relight nor a shadow. When cel shading
     // is on, flip its bracket OFF around them (deduped via sToonEnabled) so they keep vanilla lighting; the
     // next normal actor flips it back ON. The bracket only exists while cel shading is on, so skip the flip
@@ -849,7 +880,7 @@ static void HandleActorDraw(void* actorPtr) {
         CLOSE_DISPS(play->state.gfxCtx);
         sToonEnabled = wantToon;
         // Every gSPToon edge invalidates the renderer's key (it expects a fresh gSPToonKey per toon-on),
-        // so drop the dedup state too — otherwise the next actor with an unchanged key would skip its
+        // so drop the dedup state too -- otherwise the next actor with an unchanged key would skip its
         // emit and render with the renderer's neutral fallback key instead of the real one.
         sHaveLastKey = false;
     }
@@ -940,7 +971,7 @@ static void HandleActorDraw(void* actorPtr) {
     // boundary is always marked and the previous actor's capture can't leak into this one.
     if (shadowsEnabled) {
         // The shadow shows when the actor is on/near the ground, within the render-distance cull, and NOT on a
-        // wall — climbing a ladder/vine or climbing/hanging off a ledge, where it's flat against a vertical
+        // wall -- climbing a ladder/vine or climbing/hanging off a ledge, where it's flat against a vertical
         // surface and the ground shadow's slab would cut into the wall and leave broken lines. Rather than pop
         // on/off, the SIZE eases 0..1 (like Navi's light) so it grows in / shrinks to nothing. The eased scale
         // rides in planeD; the renderer scales the footprint by it (it ignores the floor plane otherwise), and
@@ -980,7 +1011,7 @@ static void HandleActorDraw(void* actorPtr) {
             // deep-rooted actors (the renderer otherwise builds the volume from the captured feet, not this
             // plane). Most actors expose actor->floorPoly from their bg check; a few (e.g. the Courtyard Guards,
             // En_Heishi1) never run one, so floorPoly stays null and the shadow would never arm. Fall back to a
-            // downward raycast for those — cached in the eased state (see ToonKeyState) so stationary
+            // downward raycast for those -- cached in the eased state (see ToonKeyState) so stationary
             // actors don't re-walk the static collision every frame.
             bool haveFloor = (actor->floorPoly != NULL);
             if (!haveFloor) {
@@ -1016,6 +1047,15 @@ static void HandleActorDraw(void* actorPtr) {
             f32 clampY = floorHeight < -32767.0f ? -32767.0f : (floorHeight > 32767.0f ? 32767.0f : floorHeight);
             s16 feetClamp = ToonShadowDeepRooted(actor) ? (s16)clampY : (s16)TOON_SHADOW_NO_CLAMP;
             gSPToonShadowArm(POLY_OPA_DISP++, feetClamp, st.shadowScale); // planeD = eased size scale
+            // Same decision, carried into the other buffer, for the actors whose model puts geometry there.
+            // Deliberately inside this branch and not beside the whitelist test: it inherits every gate the
+            // opaque arming passes through -- the shadow reach, the floor check, the eased fade -- so a
+            // canopy is captured exactly when its own trunk is, and a tree past the last cascade costs
+            // nothing in either stream.
+            if (ToonLighting_ShadowMapEnabled() && ToonShadowXluCaster(actor)) {
+                gSPShadowMapXluCasterBegin(POLY_XLU_DISP++);
+                sXluCasterArmed = true;
+            }
         } else {
             gSPToonShadow(POLY_OPA_DISP++, 0, 0, 0, 0.0f); // fully off
         }
@@ -1037,6 +1077,19 @@ static void HandleActorDraw(void* actorPtr) {
 // unbounded over a session.
 static void HandleActorDestroy(void* actorPtr) {
     sToonKeyStates.erase((Actor*)actorPtr);
+}
+
+// Close the last actor's translucent-pass caster bracket. Nothing draws after it inside the loop to do the
+// job, and everything that draws after the loop -- effects, particles, water, the lens pass -- is in the same
+// buffer, so leaving it open would feed all of it to the cutout path as though it were foliage.
+extern "C" void ToonLighting_ShadowMapXluCasterClose(GraphicsContext* gfxCtx) {
+    if (!sXluCasterArmed) {
+        return;
+    }
+    OPEN_DISPS(gfxCtx);
+    gSPShadowMapXluCasterEnd(POLY_XLU_DISP++);
+    CLOSE_DISPS(gfxCtx);
+    sXluCasterArmed = false;
 }
 
 // Lens-of-Truth actors draw through Actor_Draw AFTER the main actor bracket has closed, so without
@@ -1074,7 +1127,7 @@ extern "C" void ToonLighting_LensBracketEnd(GraphicsContext* gfxCtx) {
 }
 
 // The actor-shadow volumes are flushed by gSPToonShadowFlush emitted directly in the game's actor draw loop
-// (soh/src/code/z_actor.c, func_800315AC) — after the room and the walkable-floor receiver pre-pass, before
+// (soh/src/code/z_actor.c, func_800315AC) -- after the room and the walkable-floor receiver pre-pass, before
 // the remaining actors. That placement is why it lives in the draw loop rather than a hook here: it has to sit
 // between the two actor passes. The volumes are the previous frame's captures, so the shadow lags one frame
 // (imperceptible for a ground shadow). The receiver whitelist it consults is ToonShadowReceiver above, exposed
@@ -1098,7 +1151,7 @@ static void MigrateLegacyShadowToggle() {
 void RegisterToonLighting() {
     MigrateLegacyShadowToggle();
     // Registered unconditionally: the per-frame CVar snapshot (RefreshFrameParams) gates all the work,
-    // which is what lets a console `set` of either Enabled CVar take effect without this re-running —
+    // which is what lets a console `set` of either Enabled CVar take effect without this re-running --
     // the game-code guard (ToonLighting_FeaturesActive) keeps the hook dispatch itself out of the
     // per-actor path when both features are off.
     COND_HOOK(OnGameFrameUpdate, true, OnToonFrameUpdate);

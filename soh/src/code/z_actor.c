@@ -3090,12 +3090,29 @@ s32 Ship_CalcShouldDrawAndUpdate(PlayState* play, Actor* actor, Vec3f* projected
     //
     // DRAW only. shouldUpdate stays false, which is what vanilla just decided in func_800314D4 above, so
     // nothing about gameplay moves: this adds geometry nobody can see and no actor logic at all.
+    // Measured to the actor's GEOMETRY, not to its origin. The radius is a margin around the camera, and
+    // what has to clear that margin is the caster's surface -- which on a large actor reaches far past the
+    // single point the projection above was taken at. The room-mesh escape has always worked this way, adding
+    // each shape's bounding-sphere radius before comparing; this is the same rule, arriving late.
+    //
+    // Only the excess over an ordinary actor's extent counts (Actor_Init sets 350 a few hundred lines up).
+    // Adding the whole of it would widen the sphere for every actor in the scene, and this sphere is paid in
+    // draw calls for geometry nobody can see; adding only the excess leaves ordinary actors exactly where
+    // they were and hands the extra reach to the things that declared themselves large.
+    //
+    // The Kakariko windmill is what this is for. Its sails declare an uncull scale of 1300, near four times
+    // a normal actor, because the thing is a tower -- and vanilla culls it at that same 1300 behind the
+    // camera, a bound a radius of 800 could never reach past. So the sails stopped being drawn while the
+    // ground carrying their shadow was still in full view, and the shadow came and went with the camera
+    // angle rather than with anything in the scene.
     f32 shadowCasterRadius = ToonLighting_ShadowMapCasterDrawRadius();
     if (shadowCasterRadius > 0.0f) {
+        f32 excess = actor->uncullZoneScale - 350.0f;
+        f32 reach = shadowCasterRadius + ((excess > 0.0f) ? excess : 0.0f);
         f32 rx = projectedPos->x;
         f32 ry = projectedPos->y;
         f32 rz = projectedPos->z;
-        if (((rx * rx) + (ry * ry) + (rz * rz)) < (shadowCasterRadius * shadowCasterRadius)) {
+        if (((rx * rx) + (ry * ry) + (rz * rz)) < (reach * reach)) {
             *shouldDraw = true;
             *shouldUpdate = false;
             return true;

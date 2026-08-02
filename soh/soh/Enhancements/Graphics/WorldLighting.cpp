@@ -462,6 +462,21 @@ static void DrawWorldLights(void* playPtr) {
 
     BuildIcosphere();
 
+    // SOH [Enhancement] Cascaded shadow maps: a light pool must not RECEIVE shadow. Receiving is automatic
+    // for anything with a world position, which is right for the room and for actors and wrong for this:
+    // what is being drawn here is light, not a surface, and the shader's shadow term multiplies the colour
+    // it emits -- so a pool falling across shadowed ground came out with the shadow printed into the light
+    // itself, as though the torch were being blocked by the thing it is lighting.
+    //
+    // The lookup was not even asking about the ground. The composite pass draws the sphere's BACK faces with
+    // no depth test, so the world position reaching the shader is a point on the far side of the light
+    // volume -- usually underground -- and the depth there has nothing to do with the surface the pool is
+    // being composited onto. There is no correct shadow to apply, which is exactly the case this bracket
+    // exists for (the sky and the sun use it for the same reason).
+    OPEN_DISPS(play->state.gfxCtx);
+    gSPShadowMapReceiveOff(POLY_OPA_DISP++);
+    CLOSE_DISPS(play->state.gfxCtx);
+
     f32 sizeMult = CVarGetFloat(CVAR_ENHANCEMENT("Graphics.WorldLighting.SphereSize"), kDefaultSphereSize);
     // "Use Wind Waker default movement" pins the tumble + size pulse to the authentic 1x (and the GUI
     // disables those two sliders); otherwise the sliders drive them.
@@ -621,9 +636,12 @@ static void DrawWorldLights(void* playPtr) {
 
     // Reset the stencil mode so the actors drawn after this pass (and everything downstream) render
     // normally. The mode persists in the renderer until changed, so this is required even when no lights
-    // were cast (cheap: an empty flush + a no-op mode set).
+    // were cast (cheap: an empty flush + a no-op mode set). The shadow-receive bracket opened at the top of
+    // the pass is closed here for the same reason and reached on the same path: the only return above this
+    // point is the null check, before either was opened.
     OPEN_DISPS(play->state.gfxCtx);
     gSPStencil(POLY_OPA_DISP++, WL_STENCIL_OFF);
+    gSPShadowMapReceiveOn(POLY_OPA_DISP++);
     CLOSE_DISPS(play->state.gfxCtx);
 }
 

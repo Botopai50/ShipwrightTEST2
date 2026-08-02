@@ -3105,13 +3105,19 @@ s32 Ship_CalcShouldDrawAndUpdate(PlayState* play, Actor* actor, Vec3f* projected
     // camera, a bound a radius of 800 could never reach past. So the sails stopped being drawn while the
     // ground carrying their shadow was still in full view, and the shadow came and went with the camera
     // angle rather than with anything in the scene.
+    // Measured in WORLD space, against the camera, and not from projectedPos. Only projectedPos.z is a
+    // distance: x and y have been through the projection and carry its scale factors, about 1.3 across and
+    // 1.7 up. Treating the three as one vector inflates the result, and inflates it most for whatever is
+    // high up and off to the side -- a windmill on a ledge being exactly that, measured as half again as
+    // far as it is and rejected on the strength of it. The vanilla tests above are written in projected
+    // space because they are screen tests; this one is not, and had no business borrowing the units.
     f32 shadowCasterRadius = ToonLighting_ShadowMapCasterDrawRadius();
     if (shadowCasterRadius > 0.0f) {
         f32 excess = actor->uncullZoneScale - 350.0f;
         f32 reach = shadowCasterRadius + ((excess > 0.0f) ? excess : 0.0f);
-        f32 rx = projectedPos->x;
-        f32 ry = projectedPos->y;
-        f32 rz = projectedPos->z;
+        f32 rx = actor->world.pos.x - play->view.eye.x;
+        f32 ry = actor->world.pos.y - play->view.eye.y;
+        f32 rz = actor->world.pos.z - play->view.eye.z;
         if (((rx * rx) + (ry * ry) + (rz * rz)) < (reach * reach)) {
             *shouldDraw = true;
             *shouldUpdate = false;

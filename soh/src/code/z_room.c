@@ -155,8 +155,17 @@ void func_80095D04(PlayState* play, Room* room, u32 flags) {
         if (!keepShape && shadowCasterRadius > 0.0f) {
             // Distance to the shape's bounding sphere, so a large shape whose centre is far but whose
             // geometry reaches the camera still counts.
+            //
+            // Measured in WORLD space, from sp90, and not from the projected sp84 above. Only sp84.z is a
+            // distance -- x and y have been through the projection and carry its scale factors, roughly 1.3
+            // across and 1.7 up -- so treating the three as one vector inflates the result, and inflates it
+            // most for whatever is high up and off to the side. A windmill on a ledge is precisely that, and
+            // it was being measured as half again as far away as it is and rejected on the strength of it.
             f32 reach = shadowCasterRadius + (f32)polygonDlist->unk_06;
-            if ((SQ(sp84.x) + SQ(sp84.y) + SQ(sp84.z)) < SQ(reach)) {
+            f32 dx = sp90.x - play->view.eye.x;
+            f32 dy = sp90.y - play->view.eye.y;
+            f32 dz = sp90.z - play->view.eye.z;
+            if ((SQ(dx) + SQ(dy) + SQ(dz)) < SQ(reach)) {
                 keepShape = true;
             }
         }

@@ -3322,12 +3322,31 @@ void func_800315AC(PlayState* play, ActorContext* actorCtx) {
         gSPShadowMapFlush(POLY_OPA_DISP++);
     }
 
+    // SOH [Enhancement] Cascaded shadow maps: effects never cast, and this forbids it outright rather than
+    // relying on nothing being armed when they draw. A sword trail, a particle, a soft sprite is light and
+    // motion drawn as polygons; its render mode says whatever suited the artist, so the renderer's
+    // translucency test cannot be trusted to turn it away -- Link's charged spin trail declares an OPAQUE
+    // zmode and was landing on the ground as solid black blades.
+    //
+    // Both display lists, because effects draw into both, and around both calls rather than inside them so
+    // the whole class is covered instead of the one effect that was noticed.
+    s32 shadowMapNoEffectCasters = ToonLighting_ShadowMapEnabled();
+    if (shadowMapNoEffectCasters) {
+        gSPShadowMapCasterOff(POLY_OPA_DISP++);
+        gSPShadowMapCasterOff(POLY_XLU_DISP++);
+    }
+
     if ((HREG(64) != 1) || (HREG(73) != 0)) {
         Effect_DrawAll(play->state.gfxCtx);
     }
 
     if ((HREG(64) != 1) || (HREG(74) != 0)) {
         EffectSs_DrawAll(play);
+    }
+
+    if (shadowMapNoEffectCasters) {
+        gSPShadowMapCasterOn(POLY_OPA_DISP++);
+        gSPShadowMapCasterOn(POLY_XLU_DISP++);
     }
 
     if ((HREG(64) != 1) || (HREG(72) != 0)) {

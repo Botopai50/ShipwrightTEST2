@@ -540,7 +540,16 @@ static void OnToonFrameUpdate() {
             (f32)CVarGetInteger(CVAR_DEVELOPER_TOOLS("ShadowMap.ShowCascadeBounds"), 0),
             CVarGetFloat(CVAR_ENHANCEMENT("Graphics.ShadowMap.EdgeHardness"), SHADOW_MAP_DEFAULT_EDGE_HARDNESS),
             CVarGetFloat(CVAR_ENHANCEMENT("Graphics.ShadowMap.EdgeHardnessFar"),
-                         SHADOW_MAP_DEFAULT_EDGE_HARDNESS_FAR));
+                         SHADOW_MAP_DEFAULT_EDGE_HARDNESS_FAR),
+            // The incidence band, on scenery. This is the trade-off that decides what a wall does as it
+            // turns edge-on to the sun: below MinIncidence the shadow is not applied at all, because the map
+            // has no resolution left along the direction the surface recedes and its boundary quantises into
+            // wedges. Raising it hides those wedges on more surfaces and costs those surfaces their shadow.
+            // Live values rather than compile-time ones precisely because there is no single right answer.
+            CVarGetFloat(CVAR_ENHANCEMENT("Graphics.ShadowMap.MinIncidence"), SHADOW_MAP_MIN_INCIDENCE),
+            CVarGetFloat(CVAR_ENHANCEMENT("Graphics.ShadowMap.FullIncidence"), SHADOW_MAP_FULL_INCIDENCE),
+            CVarGetFloat(CVAR_ENHANCEMENT("Graphics.ShadowMap.MinHardnessScale"),
+                         SHADOW_MAP_MIN_EDGE_HARDNESS_SCALE));
     }
 
     Fast::GfxRenderingAPI* rapi = GetRenderingApi();

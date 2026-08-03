@@ -385,6 +385,24 @@ static bool ToonShadowReceiver(Actor* actor) {
 // into the void below reads wrong, and (now that it sits in the depth buffer at flush time) could self-shadow.
 static bool ToonShadowExcluded(Actor* actor) {
     switch (actor->id) {
+        // Actors that are pure light, named one at a time. The shortcut is a trap and it is worth recording
+        // why, because it looks compelling: carve out the CATEGORIES the game files effects under. It does
+        // not work here. ACTORCAT_ITEMACTION holds En_M_Thunder and the ocarina effects, and it also holds
+        // Bg_Gate_Shutter and Door_Gerudo -- solid gates whose shadows were the point of several fixes
+        // before this one. ACTORCAT_MISC holds magic and flames, and also Bg_Sst_Floor, a boss arena's
+        // floor. The categories sort actors by what the engine does with them, not by what they are made
+        // of, and the distinction this needs is the second one.
+        //
+        // They have to be named at all because the rule above is that scenery is the DEFAULT, with only
+        // characters carved out of it -- so an effect actor lands in the world caster layer beside the room
+        // mesh unless something stops it. That is what put the charged spin ring's own silhouette across
+        // the ground it was lighting.
+        case ACTOR_EN_M_THUNDER: // spin attack charge and its release
+        case ACTOR_MAGIC_DARK:   // Nayru's Love
+        case ACTOR_MAGIC_FIRE:   // Din's Fire
+        case ACTOR_MAGIC_WIND:   // Farore's Wind
+        case ACTOR_EN_ICE_HONO:  // blue fire
+        case ACTOR_EN_M_FIRE1:   // flames
         // Navi and every other fairy. She is a light SOURCE -- the world-lighting feature casts a pool from
         // her -- so a shadow off her is wrong on its own terms before any render state is consulted.
         //

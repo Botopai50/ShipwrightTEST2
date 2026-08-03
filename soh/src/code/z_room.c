@@ -657,10 +657,21 @@ void Room_Draw(PlayState* play, Room* room, u32 flags) {
         // not the skybox, not effects -- because those would cast enormous, meaningless shadows.
         // Unlike the actor marker, this does not stop the geometry from RECEIVING shadow: the room has to do
         // both. Cheap when the mode is off, since the whole bracket is skipped.
+        // Both display lists, because a room mesh is drawn into both: the handlers below run an opaque pass
+        // and a translucent one (flags 1 and 2), and every shape carries a list for each. The bracket only
+        // ever reached the opaque one, so whatever a scene keeps in its translucent list was invisible to the
+        // depth pass -- which is where scenery foliage lives, and why a tree modelled into the scene cast
+        // nothing while the trees spawned as actors did.
+        //
+        // Widening it does not admit the room's water or its decals. Those declare a translucent or decal
+        // zmode and the renderer turns them away on exactly the grounds it did before; the room's
+        // translucent pass is set up with G_RM_AA_ZB_OPA_SURF2, an opaque zmode, so what actually passes is
+        // solid geometry that was merely queued late.
         s32 shadowMapWorldCasters = ToonLighting_ShadowMapEnabled();
         if (shadowMapWorldCasters) {
             OPEN_DISPS(play->state.gfxCtx);
             gSPShadowMapWorldCasterBegin(POLY_OPA_DISP++);
+            gSPShadowMapWorldCasterBegin(POLY_XLU_DISP++);
             CLOSE_DISPS(play->state.gfxCtx);
         }
 
@@ -671,6 +682,7 @@ void Room_Draw(PlayState* play, Room* room, u32 flags) {
         if (shadowMapWorldCasters) {
             OPEN_DISPS(play->state.gfxCtx);
             gSPShadowMapWorldCasterEnd(POLY_OPA_DISP++);
+            gSPShadowMapWorldCasterEnd(POLY_XLU_DISP++);
             CLOSE_DISPS(play->state.gfxCtx);
         }
     }

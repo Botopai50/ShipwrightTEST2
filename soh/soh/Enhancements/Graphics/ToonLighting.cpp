@@ -327,34 +327,18 @@ static bool ToonShadowSceneryCaster(Actor* actor) {
 // change. Most frames contain no scenery actor at all and then this costs nothing.
 static bool sSceneryCasterArmed = false;
 
-// Mirror an actor's caster marker into the TRANSLUCENT display list.
+// The caster marker is NOT mirrored into the translucent display list, and that is deliberate rather than an
+// omission. It was, briefly: the Hyrule Castle gate is one of over a hundred actors drawn through
+// Gfx_SetupDL_25Xlu, which appends to POLY_XLU while setting an OPAQUE zmode, so a marker that only reached
+// POLY_OPA could never see them. Scenery reaches its own bracket now (ToonShadowSceneryCaster, which covers
+// both lists), so the only actors left taking the marker below are characters -- and what a character keeps
+// in the translucent list is never its body. It is effects: a charge trail, a hover-boots ring, a frozen
+// shell, a get-item sparkle. Those declare an opaque zmode as readily as the gate does, so the renderer
+// cannot turn them away on render state, and Link's spin-attack trail was landing on the ground as a set of
+// solid black blades.
 //
-// Which buffer an actor draws into says nothing about whether its geometry is see-through. Gfx_SetupDL_25Xlu
-// -- used by well over a hundred actors, the Hyrule Castle gate among them -- appends to POLY_XLU while
-// setting G_RM_AA_ZB_OPA_SURF2, an OPAQUE zmode. The two facts are independent, and the marker only ever
-// reached POLY_OPA, so every one of those actors was invisible to the depth pass no matter what it was made
-// of. A castle gate cast nothing; so did anything else built the same way.
-//
-// Mirroring the marker does not open the floodgates, because the renderer still decides. Its render-mode
-// test rejects ZMODE_XLU outright, so a glow, an aura, a water plane or a magic effect is turned away on the
-// same grounds as before -- what gets through is exactly the geometry that declared itself opaque and merely
-// happened to be queued in the other buffer. That is the discriminator that should have been deciding this
-// all along; it simply never got the chance to run.
-//
-// Shadow-map mode only. The stencil volumes build a silhouette from this same marker and were tuned against
-// the opaque stream alone, so widening what they see is a change to a different feature, not to this one.
-static void ToonShadowArmXlu(PlayState* play, bool arm, s16 feetClamp, f32 sizeScale) {
-    if (!ToonLighting_ShadowMapEnabled()) {
-        return;
-    }
-    OPEN_DISPS(play->state.gfxCtx);
-    if (arm) {
-        gSPToonShadowArm(POLY_XLU_DISP++, feetClamp, sizeScale);
-    } else {
-        gSPToonShadow(POLY_XLU_DISP++, 0, 0, 0, 0.0f);
-    }
-    CLOSE_DISPS(play->state.gfxCtx);
-}
+// So characters cast from their opaque geometry only. A character with real solid geometry queued in the
+// translucent list would lose that part of its shadow; that is a far smaller loss than a glow casting one.
 
 // Walkable "floor" actors: scenery the player stands on that the game spawns as actors rather than baking
 // into the room mesh (the castle-town drawbridge, the Gerudo Valley bridge, some dungeon platforms). Because
@@ -1052,7 +1036,6 @@ static void HandleActorDraw(void* actorPtr) {
         if (shadowsEnabled) {
             OPEN_DISPS(play->state.gfxCtx);
             gSPToonShadow(POLY_OPA_DISP++, 0, 0, 0, 0.0f);
-            ToonShadowArmXlu(play, false, 0, 0.0f);
             CLOSE_DISPS(play->state.gfxCtx);
         }
         return;
@@ -1211,7 +1194,6 @@ static void HandleActorDraw(void* actorPtr) {
                 // and it lands back in the layer this whole bracket exists to keep it out of. It also closes
                 // that actor's object boundary, which is what the marker means anyway.
                 gSPToonShadow(POLY_OPA_DISP++, 0, 0, 0, 0.0f);
-                ToonShadowArmXlu(play, false, 0, 0.0f);
                 gSPShadowMapSceneryCasterBegin(POLY_OPA_DISP++);
                 gSPShadowMapSceneryCasterBegin(POLY_XLU_DISP++);
                 sSceneryCasterArmed = true;
@@ -1222,11 +1204,9 @@ static void HandleActorDraw(void* actorPtr) {
                 f32 clampY = floorHeight < -32767.0f ? -32767.0f : (floorHeight > 32767.0f ? 32767.0f : floorHeight);
                 s16 feetClamp = ToonShadowDeepRooted(actor) ? (s16)clampY : (s16)TOON_SHADOW_NO_CLAMP;
                 gSPToonShadowArm(POLY_OPA_DISP++, feetClamp, st.shadowScale); // planeD = eased size scale
-                ToonShadowArmXlu(play, true, feetClamp, st.shadowScale);
             }
         } else {
             gSPToonShadow(POLY_OPA_DISP++, 0, 0, 0, 0.0f); // fully off
-            ToonShadowArmXlu(play, false, 0, 0.0f);
         }
     } else {
         // Shadows off (cel still on): keep the eased size at zero so re-enabling grows the shadow in
@@ -1292,9 +1272,6 @@ extern "C" void ToonLighting_LensBracketEnd(GraphicsContext* gfxCtx) {
         // No closing bracket edge exists with cel off, so disarm the capture explicitly (the edge
         // above already does it when cel is on).
         gSPToonShadow(POLY_OPA_DISP++, 0, 0, 0, 0.0f);
-        if (ToonLighting_ShadowMapEnabled()) {
-            gSPToonShadow(POLY_XLU_DISP++, 0, 0, 0, 0.0f);
-        }
     }
     CLOSE_DISPS(gfxCtx);
 }

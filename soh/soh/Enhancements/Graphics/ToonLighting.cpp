@@ -609,7 +609,12 @@ static void OnToonFrameUpdate() {
             CVarGetFloat(CVAR_ENHANCEMENT("Graphics.ShadowMap.MinIncidence"), SHADOW_MAP_MIN_INCIDENCE),
             CVarGetFloat(CVAR_ENHANCEMENT("Graphics.ShadowMap.FullIncidence"), SHADOW_MAP_FULL_INCIDENCE),
             CVarGetFloat(CVAR_ENHANCEMENT("Graphics.ShadowMap.MinHardnessScale"),
-                         SHADOW_MAP_MIN_EDGE_HARDNESS_SCALE));
+                         SHADOW_MAP_MIN_EDGE_HARDNESS_SCALE),
+            // Front-face culling: record only the far side of each caster, so the lit surface is not in the
+            // map to be compared against itself. Off by default -- it assumes closed casters, and this
+            // game's scenery is largely single-sided (see the note in fast/shadow_map.h).
+            CVarGetInteger(CVAR_ENHANCEMENT("Graphics.ShadowMap.FrontFaceCulling"), 0) ? SHADOW_MAP_CULL_FRONT
+                                                                                      : SHADOW_MAP_CULL_NONE);
     }
 
     Fast::GfxRenderingAPI* rapi = GetRenderingApi();

@@ -533,6 +533,7 @@ void SohMenu::AddMenuWindWakerStyle() {
             CVarClear(CVAR_ENHANCEMENT("Graphics.ShadowMap.EdgeHardness"));
             CVarClear(CVAR_ENHANCEMENT("Graphics.ShadowMap.EdgeHardnessFar"));
             CVarClear(CVAR_ENHANCEMENT("Graphics.ShadowMap.MinIncidence"));
+            CVarClear(CVAR_ENHANCEMENT("Graphics.ShadowMap.FrontFaceCulling"));
             CVarClear(CVAR_ENHANCEMENT("Graphics.ShadowMap.MinElevation"));
             CVarClear(CVAR_ENHANCEMENT("Graphics.ShadowMap.CasterDrawRadius"));
             Ship::Context::GetInstance()->GetWindow()->GetGui()->SaveConsoleVariablesNextFrame();
@@ -691,6 +692,20 @@ void SohMenu::AddMenuWindWakerStyle() {
                      .Min(0.0f)
                      .Max(0.9f)
                      .DefaultValue(0.35f)); // SHADOW_MAP_MIN_INCIDENCE
+
+    AddWidget(path, "Front-Face Culling", WIDGET_CVAR_CHECKBOX)
+        .CVar(CVAR_ENHANCEMENT("Graphics.ShadowMap.FrontFaceCulling"))
+        .RaceDisable(false)
+        .PreFunc(hideUnlessShadowMap)
+        .Options(CheckboxOptions().DefaultValue(false).Tooltip(
+            "Records only the BACK of each caster in the depth map, so the surface the light actually "
+            "strikes is never stored and cannot be compared against itself. That removes self-shadowing "
+            "acne at the source instead of biasing it out of sight.\n\n"
+            "It assumes SOLID casters, and much of this game is not built that way -- walls, ground and "
+            "foliage are frequently modelled from one side only. Those have nothing left once their front "
+            "is culled, so they stop casting entirely. Turn it on and check that walls and leaves still "
+            "have shadows before keeping it; if they vanish, that is what happened, and this is the switch "
+            "to put back."));
 
     AddWidget(path, "Light and Casters", WIDGET_SEPARATOR_TEXT).PreFunc(hideUnlessShadowMap);
     AddWidget(path, "Minimum Sun Height", WIDGET_CVAR_SLIDER_FLOAT)

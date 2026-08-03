@@ -534,6 +534,9 @@ void SohMenu::AddMenuWindWakerStyle() {
             CVarClear(CVAR_ENHANCEMENT("Graphics.ShadowMap.EdgeHardnessFar"));
             CVarClear(CVAR_ENHANCEMENT("Graphics.ShadowMap.MinIncidence"));
             CVarClear(CVAR_ENHANCEMENT("Graphics.ShadowMap.FrontFaceCulling"));
+            CVarClear(CVAR_ENHANCEMENT("Graphics.ShadowMap.DepthBias"));
+            CVarClear(CVAR_ENHANCEMENT("Graphics.ShadowMap.SlopeBias"));
+            CVarClear(CVAR_ENHANCEMENT("Graphics.ShadowMap.NormalOffset"));
             CVarClear(CVAR_ENHANCEMENT("Graphics.ShadowMap.MinElevation"));
             CVarClear(CVAR_ENHANCEMENT("Graphics.ShadowMap.CasterDrawRadius"));
             Ship::Context::GetInstance()->GetWindow()->GetGui()->SaveConsoleVariablesNextFrame();
@@ -692,6 +695,55 @@ void SohMenu::AddMenuWindWakerStyle() {
                      .Min(0.0f)
                      .Max(0.9f)
                      .DefaultValue(0.35f)); // SHADOW_MAP_MIN_INCIDENCE
+
+    AddWidget(path, "Bias", WIDGET_SEPARATOR_TEXT).PreFunc(hideUnlessShadowMap);
+    AddWidget(path, "Constant Bias", WIDGET_CVAR_SLIDER_FLOAT)
+        .CVar(CVAR_ENHANCEMENT("Graphics.ShadowMap.DepthBias"))
+        .RaceDisable(false)
+        .PreFunc(hideUnlessShadowMap)
+        .Options(FloatSliderOptions()
+                     .Tooltip("A flat push of the shadow comparison, in world units (the player is about 60 "
+                              "tall). The same physical distance in every band, whatever their sizes.\n\n"
+                              "This is the bluntest of the three: it slides the comparison along the light "
+                              "ray, so every unit of it is also a unit of the shadow detaching from whatever "
+                              "casts it. Raise it until acne stops, then stop -- past that you are buying a "
+                              "gap under the caster's feet.")
+                     .Format("%.2f")
+                     .Min(0.0f)
+                     .Max(8.0f)
+                     .DefaultValue(1.0f)); // SHADOW_MAP_DEFAULT_DEPTH_BIAS_WORLD
+    AddWidget(path, "Slope Bias", WIDGET_CVAR_SLIDER_FLOAT)
+        .CVar(CVAR_ENHANCEMENT("Graphics.ShadowMap.SlopeBias"))
+        .RaceDisable(false)
+        .PreFunc(hideUnlessShadowMap)
+        .Options(FloatSliderOptions()
+                     .Tooltip("A multiple of how fast the surface's own depth changes across one map cell.\n\n"
+                              "This is the one that actually targets acne, because it costs nothing where "
+                              "nothing is wrong: a surface facing the light has almost no gradient and gets "
+                              "almost no push, while one edge-on to it -- where depth runs away across a cell "
+                              "and the stripes appear -- gets a lot. Reach for this before the constant one. "
+                              "Each band caps it separately so a distant cell, several world units across, "
+                              "cannot run away with it.")
+                     .Format("%.2f")
+                     .Min(0.0f)
+                     .Max(16.0f)
+                     .DefaultValue(4.0f)); // SHADOW_MAP_DEFAULT_SLOPE_BIAS
+    AddWidget(path, "Normal Offset", WIDGET_CVAR_SLIDER_FLOAT)
+        .CVar(CVAR_ENHANCEMENT("Graphics.ShadowMap.NormalOffset"))
+        .RaceDisable(false)
+        .PreFunc(hideUnlessShadowMap)
+        .Options(FloatSliderOptions()
+                     .Tooltip("How far the surface is nudged along its own normal before the comparison, in "
+                              "map cells, scaled by how edge-on it is to the light.\n\n"
+                              "The other two slide the sample ALONG the light ray, which keeps it inside the "
+                              "same polygon; this one moves it sideways, off the surface causing the problem. "
+                              "That is why it fixes curved and grazing surfaces the others cannot, and why it "
+                              "costs the least detachment for what it removes. Too much and shadows start to "
+                              "creep away from corners.")
+                     .Format("%.2f")
+                     .Min(0.0f)
+                     .Max(8.0f)
+                     .DefaultValue(3.0f)); // SHADOW_MAP_DEFAULT_NORMAL_OFFSET
 
     AddWidget(path, "Front-Face Culling", WIDGET_CVAR_CHECKBOX)
         .CVar(CVAR_ENHANCEMENT("Graphics.ShadowMap.FrontFaceCulling"))

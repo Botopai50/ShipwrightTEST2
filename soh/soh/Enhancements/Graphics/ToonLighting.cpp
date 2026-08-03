@@ -614,7 +614,12 @@ static void OnToonFrameUpdate() {
             // map to be compared against itself. Off by default -- it assumes closed casters, and this
             // game's scenery is largely single-sided (see the note in fast/shadow_map.h).
             CVarGetInteger(CVAR_ENHANCEMENT("Graphics.ShadowMap.FrontFaceCulling"), 0) ? SHADOW_MAP_CULL_FRONT
-                                                                                      : SHADOW_MAP_CULL_NONE);
+                                                                                      : SHADOW_MAP_CULL_NONE,
+            // The two biases. Constant is a flat push in world units; slope multiplies the polygon's own
+            // depth gradient, so it is nearly nothing on a surface facing the light and large on one edge-on
+            // to it -- which is where acne lives and why the two are separate controls rather than one.
+            CVarGetFloat(CVAR_ENHANCEMENT("Graphics.ShadowMap.DepthBias"), SHADOW_MAP_DEFAULT_DEPTH_BIAS_WORLD),
+            CVarGetFloat(CVAR_ENHANCEMENT("Graphics.ShadowMap.SlopeBias"), SHADOW_MAP_DEFAULT_SLOPE_BIAS));
     }
 
     Fast::GfxRenderingAPI* rapi = GetRenderingApi();

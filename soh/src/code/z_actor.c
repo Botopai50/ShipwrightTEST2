@@ -3322,11 +3322,18 @@ void func_800315AC(PlayState* play, ActorContext* actorCtx) {
         gSPShadowMapFlush(POLY_OPA_DISP++);
     }
 
-    // SOH [Enhancement] Cascaded shadow maps: effects never cast, and this forbids it outright rather than
-    // relying on nothing being armed when they draw. A sword trail, a particle, a soft sprite is light and
-    // motion drawn as polygons; its render mode says whatever suited the artist, so the renderer's
-    // translucency test cannot be trusted to turn it away -- Link's charged spin trail declares an OPAQUE
-    // zmode and was landing on the ground as solid black blades.
+    // SOH [Enhancement] Cascaded shadow maps: effects neither cast NOR receive.
+    //
+    // Receiving is the one that was actually wrong, and it is the same fault the torch pools had. An effect
+    // is light drawn as polygons, and the shader multiplies the colour it emits by the shadow term -- so
+    // Link's charged spin trail, a ribbon sweeping the ground right where his own shadow lands, came back
+    // with that shadow painted into it as solid black blades. The blades were never a shadow OF the trail;
+    // they were the trail, darkened. Which is why removing every path by which it could cast changed
+    // nothing at all.
+    //
+    // Casting is forbidden too, on its own merits: an effect's render mode says whatever suited the artist,
+    // and the trail declares an OPAQUE zmode, so the renderer's translucency test cannot be relied on to
+    // turn it away -- the same trap Navi's glow fell into.
     //
     // Both display lists, because effects draw into both, and around both calls rather than inside them so
     // the whole class is covered instead of the one effect that was noticed.
@@ -3334,6 +3341,8 @@ void func_800315AC(PlayState* play, ActorContext* actorCtx) {
     if (shadowMapNoEffectCasters) {
         gSPShadowMapCasterOff(POLY_OPA_DISP++);
         gSPShadowMapCasterOff(POLY_XLU_DISP++);
+        gSPShadowMapReceiveOff(POLY_OPA_DISP++);
+        gSPShadowMapReceiveOff(POLY_XLU_DISP++);
     }
 
     if ((HREG(64) != 1) || (HREG(73) != 0)) {
@@ -3347,6 +3356,8 @@ void func_800315AC(PlayState* play, ActorContext* actorCtx) {
     if (shadowMapNoEffectCasters) {
         gSPShadowMapCasterOn(POLY_OPA_DISP++);
         gSPShadowMapCasterOn(POLY_XLU_DISP++);
+        gSPShadowMapReceiveOn(POLY_OPA_DISP++);
+        gSPShadowMapReceiveOn(POLY_XLU_DISP++);
     }
 
     if ((HREG(64) != 1) || (HREG(72) != 0)) {

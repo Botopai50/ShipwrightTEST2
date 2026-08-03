@@ -499,6 +499,13 @@ static bool ToonShadowExcluded(Actor* actor) {
         case ACTOR_EN_BUTTE:  // butterflies
         case ACTOR_EN_INSECT: // bugs
         case ACTOR_EN_FISH:   // fish
+        // The environment particle swarm: fairies, snow, lightning, the Sun's Song grave sparks, and the
+        // shafts of light through the trees. One actor, drawing dozens of billboards, which is why it is
+        // the thing the census could name and reasoning could not -- it reads as a SINGLE scenery caster
+        // and paints a whole field with bars.
+        //
+        // Every one of its five modes is light or weather. Not one of them is an object.
+        case ACTOR_OBJECT_KANKYO:
         case ACTOR_EN_SKJ:       // Skull Kid
         case ACTOR_EN_DNT_NOMAL: // Deku Scrub mound dwellers
         case ACTOR_EN_KZ:        // King Zora

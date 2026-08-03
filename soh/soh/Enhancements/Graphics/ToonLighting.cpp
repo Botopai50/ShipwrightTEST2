@@ -299,24 +299,28 @@ static bool ToonShadowDeepRooted(Actor* actor) {
 // about the model, so the knowledge is written down here. Its translucent half still only ever casts through
 // the alpha cutout: with no usable texture to cut against, a bracketed draw casts nothing.
 static bool ToonShadowSceneryCaster(Actor* actor) {
-    // By category, not by id. The game already sorts its actors into what they ARE, and the three below are
-    // its own word for scenery: BG is the background pieces it spawns as actors rather than baking into the
-    // room, DOOR is every door and gate, SWITCH is the fixtures bolted to the floor. Naming them one at a
-    // time would be a list without an end -- the Hyrule Castle gate alone shares its shape with over a
-    // hundred others -- and the distinction those ids would be tracing is exactly the one the category
-    // already draws.
+    // Asked the other way round: not "is this scenery" but "is this a CHARACTER".
     //
-    // Nothing here is at risk from moving: the scenery casters are captured every frame like characters, not
-    // cached like the room mesh, which is what lets the castle gate slide open with its shadow.
+    // Listing the scenery categories was the wrong shape and it kept missing things -- name BG, DOOR and
+    // SWITCH and a gate filed under PROP still falls through, and there is no way to know which ones are
+    // missing except by finding each of them in a screenshot. The character list has no such problem,
+    // because the actor caster layer exists for exactly one reason: characters must not shadow each other.
+    // What belongs in it is precisely the things that rule is about, and that is these four and nothing else.
+    //
+    // Everything else the game spawns is part of the place -- gates, doors, chests, pots, bombs, signs,
+    // trees, switches -- and its shadow belongs on everything, the way a wall's does. Anything in that set
+    // that genuinely should not cast is named in ToonShadowExcluded, which is where Navi and the water
+    // surfaces already live; that list is the exception and this is the rule, rather than the other way
+    // round.
     switch (actor->category) {
-        case ACTORCAT_BG:
-        case ACTORCAT_DOOR:
-        case ACTORCAT_SWITCH:
-            return true;
+        case ACTORCAT_PLAYER:
+        case ACTORCAT_NPC:
+        case ACTORCAT_ENEMY:
+        case ACTORCAT_BOSS:
+            return false;
         default:
-            break;
+            return true;
     }
-    return actor->id == ACTOR_EN_WOOD02; // trees and standalone leaf clusters (PROP, and the only one)
 }
 
 // Tracks whether the scenery bracket is currently open in the stream, so the markers are emitted only on a

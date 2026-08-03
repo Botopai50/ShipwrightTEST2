@@ -532,7 +532,6 @@ void SohMenu::AddMenuWindWakerStyle() {
             CVarClear(CVAR_ENHANCEMENT("Graphics.ShadowMap.FilterWidth"));
             CVarClear(CVAR_ENHANCEMENT("Graphics.ShadowMap.EdgeHardness"));
             CVarClear(CVAR_ENHANCEMENT("Graphics.ShadowMap.EdgeHardnessFar"));
-            CVarClear(CVAR_ENHANCEMENT("Graphics.ShadowMap.MinIncidence"));
             CVarClear(CVAR_ENHANCEMENT("Graphics.ShadowMap.FrontFaceCulling"));
             CVarClear(CVAR_ENHANCEMENT("Graphics.ShadowMap.DepthBias"));
             CVarClear(CVAR_ENHANCEMENT("Graphics.ShadowMap.SlopeBias"));
@@ -565,7 +564,7 @@ void SohMenu::AddMenuWindWakerStyle() {
                               "grows with the square of this number.")
                      .Min(256)
                      .Max(4096)
-                     .DefaultValue(2048) // SHADOW_MAP_DEFAULT_RESOLUTION
+                     .DefaultValue(4096) // SHADOW_MAP_DEFAULT_RESOLUTION
                      .ShowButtons(true)
                      .Format("%d"));
     AddWidget(path, "Cascade Count: %d", WIDGET_CVAR_SLIDER_INT)
@@ -610,7 +609,7 @@ void SohMenu::AddMenuWindWakerStyle() {
                      .Format("%.0f")
                      .Min(100.0f)
                      .Max(1500.0f)
-                     .DefaultValue(350.0f)); // SHADOW_MAP_DEFAULT_SPLIT_1
+                     .DefaultValue(500.0f)); // SHADOW_MAP_DEFAULT_SPLIT_1
     AddWidget(path, "Far Band Ends At: %.0f", WIDGET_CVAR_SLIDER_FLOAT)
         .CVar(CVAR_ENHANCEMENT("Graphics.ShadowMap.Split2"))
         .RaceDisable(false)
@@ -621,7 +620,7 @@ void SohMenu::AddMenuWindWakerStyle() {
                      .Format("%.0f")
                      .Min(300.0f)
                      .Max(4000.0f)
-                     .DefaultValue(1500.0f)); // SHADOW_MAP_DEFAULT_SPLIT_2
+                     .DefaultValue(2500.0f)); // SHADOW_MAP_DEFAULT_SPLIT_2
     AddWidget(path, "Shadow Draw Distance: %.0f", WIDGET_CVAR_SLIDER_FLOAT)
         .CVar(CVAR_ENHANCEMENT("Graphics.ShadowMap.Split3"))
         .RaceDisable(false)
@@ -651,7 +650,7 @@ void SohMenu::AddMenuWindWakerStyle() {
                      .Format("%.2f")
                      .Min(0.0f)
                      .Max(1.5f)
-                     .DefaultValue(0.4f)); // SHADOW_MAP_DEFAULT_FILTER_WIDTH
+                     .DefaultValue(0.6f)); // SHADOW_MAP_DEFAULT_FILTER_WIDTH
     AddWidget(path, "Hardness (Near)", WIDGET_CVAR_SLIDER_FLOAT)
         .CVar(CVAR_ENHANCEMENT("Graphics.ShadowMap.EdgeHardness"))
         .RaceDisable(false)
@@ -666,7 +665,7 @@ void SohMenu::AddMenuWindWakerStyle() {
                      .Format("%.2f")
                      .Min(0.0f)
                      .Max(1.0f)
-                     .DefaultValue(0.75f)); // SHADOW_MAP_DEFAULT_EDGE_HARDNESS
+                     .DefaultValue(0.6f)); // SHADOW_MAP_DEFAULT_EDGE_HARDNESS
     AddWidget(path, "Hardness (Far)", WIDGET_CVAR_SLIDER_FLOAT)
         .CVar(CVAR_ENHANCEMENT("Graphics.ShadowMap.EdgeHardnessFar"))
         .RaceDisable(false)
@@ -679,23 +678,7 @@ void SohMenu::AddMenuWindWakerStyle() {
                      .Format("%.2f")
                      .Min(0.0f)
                      .Max(1.0f)
-                     .DefaultValue(1.0f)); // SHADOW_MAP_DEFAULT_EDGE_HARDNESS_FAR
-    AddWidget(path, "Grazing Cutoff", WIDGET_CVAR_SLIDER_FLOAT)
-        .CVar(CVAR_ENHANCEMENT("Graphics.ShadowMap.MinIncidence"))
-        .RaceDisable(false)
-        .PreFunc(hideUnlessShadowMap)
-        .Options(FloatSliderOptions()
-                     .Tooltip("Where scenery stops taking shadow as it turns edge-on to the sun.\n\n"
-                              "A surface nearly parallel to the light has almost no map resolution along the "
-                              "direction it recedes, so its shadow outline breaks into long spikes -- no amount "
-                              "of blur or bias reaches those, because the outline is being drawn at a "
-                              "resolution that does not exist. This gives up on it instead. Raise it if you see "
-                              "spiky wedges on walls; the cost is those walls losing their shadow entirely.")
-                     .Format("%.2f")
-                     .Min(0.0f)
-                     .Max(0.9f)
-                     .DefaultValue(0.35f)); // SHADOW_MAP_MIN_INCIDENCE
-
+                     .DefaultValue(0.6f)); // SHADOW_MAP_DEFAULT_EDGE_HARDNESS_FAR
     AddWidget(path, "Bias", WIDGET_SEPARATOR_TEXT).PreFunc(hideUnlessShadowMap);
     AddWidget(path, "Constant Bias", WIDGET_CVAR_SLIDER_FLOAT)
         .CVar(CVAR_ENHANCEMENT("Graphics.ShadowMap.DepthBias"))
@@ -711,7 +694,7 @@ void SohMenu::AddMenuWindWakerStyle() {
                      .Format("%.2f")
                      .Min(0.0f)
                      .Max(8.0f)
-                     .DefaultValue(1.0f)); // SHADOW_MAP_DEFAULT_DEPTH_BIAS_WORLD
+                     .DefaultValue(4.0f)); // SHADOW_MAP_DEFAULT_DEPTH_BIAS_WORLD
     AddWidget(path, "Slope Bias", WIDGET_CVAR_SLIDER_FLOAT)
         .CVar(CVAR_ENHANCEMENT("Graphics.ShadowMap.SlopeBias"))
         .RaceDisable(false)
@@ -743,7 +726,7 @@ void SohMenu::AddMenuWindWakerStyle() {
                      .Format("%.2f")
                      .Min(0.0f)
                      .Max(8.0f)
-                     .DefaultValue(3.0f)); // SHADOW_MAP_DEFAULT_NORMAL_OFFSET
+                     .DefaultValue(0.0f)); // SHADOW_MAP_DEFAULT_NORMAL_OFFSET
 
     AddWidget(path, "Front-Face Culling", WIDGET_CVAR_CHECKBOX)
         .CVar(CVAR_ENHANCEMENT("Graphics.ShadowMap.FrontFaceCulling"))

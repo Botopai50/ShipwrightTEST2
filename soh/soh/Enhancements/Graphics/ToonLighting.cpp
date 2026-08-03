@@ -397,6 +397,16 @@ static bool ToonShadowReceiver(Actor* actor) {
 // into the void below reads wrong, and (now that it sits in the depth buffer at flush time) could self-shadow.
 static bool ToonShadowExcluded(Actor* actor) {
     switch (actor->id) {
+        // Navi and every other fairy. She is a light SOURCE -- the world-lighting feature casts a pool from
+        // her -- so a shadow off her is wrong on its own terms before any render state is consulted.
+        //
+        // She also slips the renderer's translucency test, which is worth writing down because the next glow
+        // will do the same. That test turns away ZMODE_XLU, and Navi's body is drawn with the cloud-surface
+        // blender: alpha-blended through and through, and declared ZMODE_OPA. The zmode field is what the
+        // engine says about depth sorting, not about opacity, and the two part company exactly here. She was
+        // harmless while the caster marker only reached the opaque display list; she is in the translucent
+        // one, and now that the marker reaches there too she has to be named.
+        case ACTOR_EN_ELF:
         case ACTOR_EN_KUSA:      // small cuttable grass -- everywhere and tiny, a blob per tuft reads wrong
         case ACTOR_EN_SKJ:       // Skull Kid
         case ACTOR_EN_DNT_NOMAL: // Deku Scrub mound dwellers

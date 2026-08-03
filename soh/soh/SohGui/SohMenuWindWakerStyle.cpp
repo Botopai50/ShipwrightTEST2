@@ -510,6 +510,239 @@ void SohMenu::AddMenuWindWakerStyle() {
             "Draws the actual 3D shadow volume translucently so you can see its shape: black top/bottom caps, "
             "blue side walls. The ground inside this volume is what gets shadowed."));
 
+    // Shadow Map tuning. Shown only in that mode, next to the Actor Shadows sliders it replaces, because the
+    // two systems share nothing: these describe a depth map and its cascades, those describe a stencil
+    // silhouette. Defaults here are written out rather than pulled from fast/shadow_map.h so the menu builds
+    // without the renderer's headers -- they must be kept in step with it, and each one names its constant.
+    auto hideUnlessShadowMap = [](WidgetInfo& info) {
+        info.isHidden = CVarGetInteger(CVAR_ENHANCEMENT("Graphics.WorldShadows.Mode"), SHADOW_MODE_VANILLA) !=
+                        SHADOW_MODE_SHADOW_MAP;
+    };
+    AddWidget(path, "Options", WIDGET_SEPARATOR_TEXT).PreFunc(hideUnlessShadowMap);
+    AddWidget(path, "Reset All to Defaults", WIDGET_BUTTON)
+        .PreFunc(hideUnlessShadowMap)
+        .Callback([](WidgetInfo& info) {
+            CVarClear(CVAR_ENHANCEMENT("Graphics.ShadowMap.Strength"));
+            CVarClear(CVAR_ENHANCEMENT("Graphics.ShadowMap.Resolution"));
+            CVarClear(CVAR_ENHANCEMENT("Graphics.ShadowMap.CascadeCount"));
+            CVarClear(CVAR_ENHANCEMENT("Graphics.ShadowMap.Split0"));
+            CVarClear(CVAR_ENHANCEMENT("Graphics.ShadowMap.Split1"));
+            CVarClear(CVAR_ENHANCEMENT("Graphics.ShadowMap.Split2"));
+            CVarClear(CVAR_ENHANCEMENT("Graphics.ShadowMap.Split3"));
+            CVarClear(CVAR_ENHANCEMENT("Graphics.ShadowMap.FilterWidth"));
+            CVarClear(CVAR_ENHANCEMENT("Graphics.ShadowMap.EdgeHardness"));
+            CVarClear(CVAR_ENHANCEMENT("Graphics.ShadowMap.EdgeHardnessFar"));
+            CVarClear(CVAR_ENHANCEMENT("Graphics.ShadowMap.MinIncidence"));
+            CVarClear(CVAR_ENHANCEMENT("Graphics.ShadowMap.MinElevation"));
+            CVarClear(CVAR_ENHANCEMENT("Graphics.ShadowMap.CasterDrawRadius"));
+            Ship::Context::GetInstance()->GetWindow()->GetGui()->SaveConsoleVariablesNextFrame();
+        })
+        .Options(ButtonOptions().Tooltip("Resets every Shadow Map setting below to its default value."));
+    AddWidget(path, "Strength", WIDGET_CVAR_SLIDER_FLOAT)
+        .CVar(CVAR_ENHANCEMENT("Graphics.ShadowMap.Strength"))
+        .RaceDisable(false)
+        .PreFunc(hideUnlessShadowMap)
+        .Options(FloatSliderOptions()
+                     .Tooltip("How dark a fully shadowed surface gets. 0 = no visible shadow at all; 1 = black.")
+                     .Min(0.0f)
+                     .Max(1.0f)
+                     .DefaultValue(0.5f) // SHADOW_MAP_DEFAULT_STRENGTH
+                     .IsPercentage());
+    AddWidget(path, "Resolution: %d", WIDGET_CVAR_SLIDER_INT)
+        .CVar(CVAR_ENHANCEMENT("Graphics.ShadowMap.Resolution"))
+        .RaceDisable(false)
+        .PreFunc(hideUnlessShadowMap)
+        .Options(IntSliderOptions()
+                     .Tooltip("Size of each cascade's depth map, per side. This is the single biggest quality "
+                              "control: every shadow edge is drawn on this grid, so doubling it halves the "
+                              "size of the steps along a shadow's outline.\n\n"
+                              "It is also the biggest cost. Each cascade gets its own map at this size, and "
+                              "there are two sets of them (one for scenery, one for characters), so the memory "
+                              "grows with the square of this number.")
+                     .Min(256)
+                     .Max(4096)
+                     .DefaultValue(2048) // SHADOW_MAP_DEFAULT_RESOLUTION
+                     .ShowButtons(true)
+                     .Format("%d"));
+    AddWidget(path, "Cascade Count: %d", WIDGET_CVAR_SLIDER_INT)
+        .CVar(CVAR_ENHANCEMENT("Graphics.ShadowMap.CascadeCount"))
+        .RaceDisable(false)
+        .PreFunc(hideUnlessShadowMap)
+        .Options(IntSliderOptions()
+                     .Tooltip("How many of the four distance bands below are actually built.\n\n"
+                              "This is not a quality setting: the distances are absolute, so lowering the count "
+                              "does not spread the same range over fewer maps -- it CUTS the range short at the "
+                              "last active band, and shadows simply stop beyond it. Lower it to buy frames, "
+                              "knowing distant shadows go with it.")
+                     .Min(1)
+                     .Max(4)
+                     .DefaultValue(4) // SHADOW_MAP_DEFAULT_CASCADES
+                     .ShowButtons(true)
+                     .Format("%d"));
+
+    AddWidget(path, "Distances", WIDGET_SEPARATOR_TEXT).PreFunc(hideUnlessShadowMap);
+    AddWidget(path, "Near Band Ends At: %.0f", WIDGET_CVAR_SLIDER_FLOAT)
+        .CVar(CVAR_ENHANCEMENT("Graphics.ShadowMap.Split0"))
+        .RaceDisable(false)
+        .PreFunc(hideUnlessShadowMap)
+        .Options(FloatSliderOptions()
+                     .Tooltip("Where the first cascade stops, in world units (the player is about 60 tall).\n\n"
+                              "Each band gets a map of the same resolution, so a SHORTER band spends that map "
+                              "on less ground and its shadows come out sharper. This first one covers whatever "
+                              "is right around the player, so it is the one that decides how crisp his own "
+                              "shadow looks. Pull it in for sharper close-up shadows.")
+                     .Format("%.0f")
+                     .Min(50.0f)
+                     .Max(600.0f)
+                     .DefaultValue(150.0f)); // SHADOW_MAP_DEFAULT_SPLIT_0
+    AddWidget(path, "Mid Band Ends At: %.0f", WIDGET_CVAR_SLIDER_FLOAT)
+        .CVar(CVAR_ENHANCEMENT("Graphics.ShadowMap.Split1"))
+        .RaceDisable(false)
+        .PreFunc(hideUnlessShadowMap)
+        .Options(FloatSliderOptions()
+                     .Tooltip("Where the second cascade stops. Keep the four distances in increasing order; if "
+                              "one lands below the band before it, the renderer pushes it back up and that band "
+                              "ends up covering nothing.")
+                     .Format("%.0f")
+                     .Min(100.0f)
+                     .Max(1500.0f)
+                     .DefaultValue(350.0f)); // SHADOW_MAP_DEFAULT_SPLIT_1
+    AddWidget(path, "Far Band Ends At: %.0f", WIDGET_CVAR_SLIDER_FLOAT)
+        .CVar(CVAR_ENHANCEMENT("Graphics.ShadowMap.Split2"))
+        .RaceDisable(false)
+        .PreFunc(hideUnlessShadowMap)
+        .Options(FloatSliderOptions()
+                     .Tooltip("Where the third cascade stops. This is usually the band a building's shadow "
+                              "falls in, so it is worth tightening if mid-distance shadows look coarse.")
+                     .Format("%.0f")
+                     .Min(300.0f)
+                     .Max(4000.0f)
+                     .DefaultValue(1500.0f)); // SHADOW_MAP_DEFAULT_SPLIT_2
+    AddWidget(path, "Shadow Draw Distance: %.0f", WIDGET_CVAR_SLIDER_FLOAT)
+        .CVar(CVAR_ENHANCEMENT("Graphics.ShadowMap.Split3"))
+        .RaceDisable(false)
+        .PreFunc(hideUnlessShadowMap)
+        .Options(FloatSliderOptions()
+                     .Tooltip("Where the last cascade stops, and with it every shadow: past this distance "
+                              "nothing is shadowed at all.\n\n"
+                              "Raising it stretches the same map over more ground, so distant shadows get "
+                              "blockier rather than better. Lowering it sharpens everything inside the new "
+                              "range and simply ends shadows sooner.")
+                     .Format("%.0f")
+                     .Min(1000.0f)
+                     .Max(12000.0f)
+                     .DefaultValue(6000.0f)); // SHADOW_MAP_DEFAULT_SPLIT_3
+
+    AddWidget(path, "Edges", WIDGET_SEPARATOR_TEXT).PreFunc(hideUnlessShadowMap);
+    AddWidget(path, "Blur", WIDGET_CVAR_SLIDER_FLOAT)
+        .CVar(CVAR_ENHANCEMENT("Graphics.ShadowMap.FilterWidth"))
+        .RaceDisable(false)
+        .PreFunc(hideUnlessShadowMap)
+        .Options(FloatSliderOptions()
+                     .Tooltip("How wide the softening filter reaches around each shadow edge, in map cells.\n\n"
+                              "This is what hides the steps along an outline, and it is not free: what it "
+                              "actually softens is the whole edge, so too much reads as a shadow with no shape. "
+                              "Raise it only until the steps stop showing, then use Hardness below to win the "
+                              "definition back.")
+                     .Format("%.2f")
+                     .Min(0.0f)
+                     .Max(1.5f)
+                     .DefaultValue(0.4f)); // SHADOW_MAP_DEFAULT_FILTER_WIDTH
+    AddWidget(path, "Hardness (Near)", WIDGET_CVAR_SLIDER_FLOAT)
+        .CVar(CVAR_ENHANCEMENT("Graphics.ShadowMap.EdgeHardness"))
+        .RaceDisable(false)
+        .PreFunc(hideUnlessShadowMap)
+        .Options(FloatSliderOptions()
+                     .Tooltip("Snaps the blurred edge back into a defined outline, close to the camera.\n\n"
+                              "It works on the result of the blur rather than undoing it: the filter's soft "
+                              "gradient is remapped so the middle of it becomes an edge again. That keeps the "
+                              "blur's sub-cell placement -- which is what stops the outline looking like stair "
+                              "steps -- while giving back a shadow with a shape. 0 leaves the blur as it is; 1 "
+                              "is a nearly hard edge.")
+                     .Format("%.2f")
+                     .Min(0.0f)
+                     .Max(1.0f)
+                     .DefaultValue(0.75f)); // SHADOW_MAP_DEFAULT_EDGE_HARDNESS
+    AddWidget(path, "Hardness (Far)", WIDGET_CVAR_SLIDER_FLOAT)
+        .CVar(CVAR_ENHANCEMENT("Graphics.ShadowMap.EdgeHardnessFar"))
+        .RaceDisable(false)
+        .PreFunc(hideUnlessShadowMap)
+        .Options(FloatSliderOptions()
+                     .Tooltip("The same control for the furthest band, ramped between the two across the "
+                              "distance bands. Distant cells are much larger, so the blur covers far more "
+                              "ground out there and a distant shadow washes out long before a near one does -- "
+                              "which is why this is usually set higher than the near value.")
+                     .Format("%.2f")
+                     .Min(0.0f)
+                     .Max(1.0f)
+                     .DefaultValue(1.0f)); // SHADOW_MAP_DEFAULT_EDGE_HARDNESS_FAR
+    AddWidget(path, "Grazing Cutoff", WIDGET_CVAR_SLIDER_FLOAT)
+        .CVar(CVAR_ENHANCEMENT("Graphics.ShadowMap.MinIncidence"))
+        .RaceDisable(false)
+        .PreFunc(hideUnlessShadowMap)
+        .Options(FloatSliderOptions()
+                     .Tooltip("Where scenery stops taking shadow as it turns edge-on to the sun.\n\n"
+                              "A surface nearly parallel to the light has almost no map resolution along the "
+                              "direction it recedes, so its shadow outline breaks into long spikes -- no amount "
+                              "of blur or bias reaches those, because the outline is being drawn at a "
+                              "resolution that does not exist. This gives up on it instead. Raise it if you see "
+                              "spiky wedges on walls; the cost is those walls losing their shadow entirely.")
+                     .Format("%.2f")
+                     .Min(0.0f)
+                     .Max(0.9f)
+                     .DefaultValue(0.35f)); // SHADOW_MAP_MIN_INCIDENCE
+
+    AddWidget(path, "Light and Casters", WIDGET_SEPARATOR_TEXT).PreFunc(hideUnlessShadowMap);
+    AddWidget(path, "Minimum Sun Height", WIDGET_CVAR_SLIDER_FLOAT)
+        .CVar(CVAR_ENHANCEMENT("Graphics.ShadowMap.MinElevation"))
+        .RaceDisable(false)
+        .PreFunc(hideUnlessShadowMap)
+        .Options(FloatSliderOptions()
+                     .Tooltip("How low the sun is allowed to sit before shadows are cast from it, as the sine "
+                              "of its angle above the horizon (0.5 is thirty degrees).\n\n"
+                              "A sun on the horizon stretches every shadow towards infinity, which reads as "
+                              "wrong long before it is geometrically wrong, and wastes the maps on a footprint "
+                              "far longer than the scene. Only the height is lifted; the compass direction the "
+                              "shadows point is left alone.")
+                     .Format("%.2f")
+                     .Min(0.1f)
+                     .Max(0.95f)
+                     .DefaultValue(0.5f)); // SHADOW_MAP_DEFAULT_MIN_ELEVATION
+    AddWidget(path, "Off-Screen Caster Reach: %.0f", WIDGET_CVAR_SLIDER_FLOAT)
+        .CVar(CVAR_ENHANCEMENT("Graphics.ShadowMap.CasterDrawRadius"))
+        .RaceDisable(false)
+        .PreFunc(hideUnlessShadowMap)
+        .Options(FloatSliderOptions()
+                     .Tooltip("How far outside the view something is still drawn purely so it can cast.\n\n"
+                              "The game normally stops drawing what the camera cannot see, but a tree behind "
+                              "you still throws its shadow in front of you -- so without this, shadows blink "
+                              "out as you turn. The test follows the light rather than a plain circle, so this "
+                              "is the margin around the shadow's path, not around the object. Lower it to gain "
+                              "frames in open areas; the cost is distant landmarks losing their shadows when "
+                              "they leave the screen.")
+                     .Format("%.0f")
+                     .Min(400.0f)
+                     .Max(4000.0f)
+                     .DefaultValue(1500.0f)); // SHADOW_MAP_DEFAULT_CASTER_DRAW_RADIUS
+
+    AddWidget(path, "Debug", WIDGET_SEPARATOR_TEXT).PreFunc(hideUnlessShadowMap);
+    AddWidget(path, "Show Cascade Bounds: %d", WIDGET_CVAR_SLIDER_INT)
+        .CVar(CVAR_DEVELOPER_TOOLS("ShadowMap.ShowCascadeBounds"))
+        .PreFunc(hideUnlessShadowMap)
+        .Options(IntSliderOptions()
+                     .Tooltip("0 = off.\n\n"
+                              "1 = paint everything OUTSIDE a cascade's footprint as fully shadowed. A surface "
+                              "outside one is silently reported lit, so a shadow that stops at a boundary looks "
+                              "exactly like one that was never cast; this is the only way to tell them apart.\n\n"
+                              "2 = colour the two caster layers instead of shading with them. GREEN where "
+                              "scenery blocks the light, RED where a character does. Use it to find out whether "
+                              "something is being captured at all, and into which layer.")
+                     .Min(0)
+                     .Max(2)
+                     .DefaultValue(0)
+                     .ShowButtons(true)
+                     .Format("%d"));
+
     // ===========================================================================================
     // Sky — the Wind Waker-style sky replacement: gradient dome + drifting clouds + night stars.
     // ===========================================================================================

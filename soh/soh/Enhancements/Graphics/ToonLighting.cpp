@@ -610,11 +610,6 @@ static void OnToonFrameUpdate() {
             CVarGetFloat(CVAR_ENHANCEMENT("Graphics.ShadowMap.FullIncidence"), SHADOW_MAP_FULL_INCIDENCE),
             CVarGetFloat(CVAR_ENHANCEMENT("Graphics.ShadowMap.MinHardnessScale"),
                          SHADOW_MAP_MIN_EDGE_HARDNESS_SCALE),
-            // Front-face culling: record only the far side of each caster, so the lit surface is not in the
-            // map to be compared against itself. Off by default -- it assumes closed casters, and this
-            // game's scenery is largely single-sided (see the note in fast/shadow_map.h).
-            CVarGetInteger(CVAR_ENHANCEMENT("Graphics.ShadowMap.FrontFaceCulling"), 0) ? SHADOW_MAP_CULL_FRONT
-                                                                                      : SHADOW_MAP_CULL_NONE,
             // The two biases. Constant is a flat push in world units; slope multiplies the polygon's own
             // depth gradient, so it is nearly nothing on a surface facing the light and large on one edge-on
             // to it -- which is where acne lives and why the two are separate controls rather than one.

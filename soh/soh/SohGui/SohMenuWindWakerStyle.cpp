@@ -1,4 +1,5 @@
 #include "SohMenu.h"
+#include <cstdlib> // std::abs for the resolution snap below
 #include "SohGui.hpp"
 #include "soh/OTRGlobals.h"
 #include "UIWidgets.hpp"
@@ -8,6 +9,15 @@ namespace SohGui {
 
 extern std::shared_ptr<SohMenu> mSohMenu;
 using namespace UIWidgets;
+
+// Offered shadow-map sizes. Keys are the actual resolution, which is what the CVar stores, so the combobox
+// reads and writes the value the renderer uses rather than an index into this list.
+static const std::map<int32_t, const char*> shadowMapResolutionLabels = {
+    { 512, "512" },
+    { 1024, "1024" },
+    { 2048, "2048" },
+    { 4096, "4096" },
+};
 
 // Keyed by ShadowMode (see ToonLighting.h) -- the three shadow systems are mutually exclusive.
 static const std::map<int32_t, const char*> shadowModeLabels = {
@@ -532,7 +542,6 @@ void SohMenu::AddMenuWindWakerStyle() {
             CVarClear(CVAR_ENHANCEMENT("Graphics.ShadowMap.FilterWidth"));
             CVarClear(CVAR_ENHANCEMENT("Graphics.ShadowMap.EdgeHardness"));
             CVarClear(CVAR_ENHANCEMENT("Graphics.ShadowMap.EdgeHardnessFar"));
-            CVarClear(CVAR_ENHANCEMENT("Graphics.ShadowMap.FrontFaceCulling"));
             CVarClear(CVAR_ENHANCEMENT("Graphics.ShadowMap.DepthBias"));
             CVarClear(CVAR_ENHANCEMENT("Graphics.ShadowMap.SlopeBias"));
             CVarClear(CVAR_ENHANCEMENT("Graphics.ShadowMap.NormalOffset"));
@@ -551,22 +560,40 @@ void SohMenu::AddMenuWindWakerStyle() {
                      .Max(1.0f)
                      .DefaultValue(0.5f) // SHADOW_MAP_DEFAULT_STRENGTH
                      .IsPercentage());
-    AddWidget(path, "Resolution: %d", WIDGET_CVAR_SLIDER_INT)
+    // Snapped to the offered sizes before the widget draws. The combobox looks its current value up with
+    // map::at and throws on anything not in the list, and this CVar is reachable from the console and was a
+    // free slider in an earlier build -- so a stray value is a crash on opening the menu, not a stray value.
+    AddWidget(path, "Resolution", WIDGET_CVAR_COMBOBOX)
         .CVar(CVAR_ENHANCEMENT("Graphics.ShadowMap.Resolution"))
         .RaceDisable(false)
-        .PreFunc(hideUnlessShadowMap)
-        .Options(IntSliderOptions()
+        .PreFunc([](WidgetInfo& info) {
+            info.isHidden = CVarGetInteger(CVAR_ENHANCEMENT("Graphics.WorldShadows.Mode"), SHADOW_MODE_VANILLA) !=
+                            SHADOW_MODE_SHADOW_MAP;
+            if (info.isHidden) {
+                return;
+            }
+            const int32_t offered[] = { 512, 1024, 2048, 4096 };
+            int32_t current = CVarGetInteger(CVAR_ENHANCEMENT("Graphics.ShadowMap.Resolution"), 4096);
+            int32_t nearest = offered[0];
+            for (int32_t candidate : offered) {
+                if (std::abs(candidate - current) < std::abs(nearest - current)) {
+                    nearest = candidate;
+                }
+            }
+            if (nearest != current) {
+                CVarSetInteger(CVAR_ENHANCEMENT("Graphics.ShadowMap.Resolution"), nearest);
+            }
+        })
+        .Options(ComboboxOptions()
+                     .DefaultIndex(4096) // SHADOW_MAP_DEFAULT_RESOLUTION
+                     .ComboMap(shadowMapResolutionLabels)
                      .Tooltip("Size of each cascade's depth map, per side. This is the single biggest quality "
                               "control: every shadow edge is drawn on this grid, so doubling it halves the "
                               "size of the steps along a shadow's outline.\n\n"
-                              "It is also the biggest cost. Each cascade gets its own map at this size, and "
-                              "there are two sets of them (one for scenery, one for characters), so the memory "
-                              "grows with the square of this number.")
-                     .Min(256)
-                     .Max(4096)
-                     .DefaultValue(4096) // SHADOW_MAP_DEFAULT_RESOLUTION
-                     .ShowButtons(true)
-                     .Format("%d"));
+                              "It is also the biggest cost, and it grows with the SQUARE of the number. Each "
+                              "cascade gets its own map at this size and there are two sets of them, one for "
+                              "scenery and one for characters -- eight in all, so 4096 is around 268 MB of "
+                              "video memory against 17 MB at 1024. Drop it here first on modest hardware."));
     AddWidget(path, "Cascade Count: %d", WIDGET_CVAR_SLIDER_INT)
         .CVar(CVAR_ENHANCEMENT("Graphics.ShadowMap.CascadeCount"))
         .RaceDisable(false)
@@ -727,20 +754,6 @@ void SohMenu::AddMenuWindWakerStyle() {
                      .Min(0.0f)
                      .Max(8.0f)
                      .DefaultValue(0.0f)); // SHADOW_MAP_DEFAULT_NORMAL_OFFSET
-
-    AddWidget(path, "Front-Face Culling", WIDGET_CVAR_CHECKBOX)
-        .CVar(CVAR_ENHANCEMENT("Graphics.ShadowMap.FrontFaceCulling"))
-        .RaceDisable(false)
-        .PreFunc(hideUnlessShadowMap)
-        .Options(CheckboxOptions().DefaultValue(false).Tooltip(
-            "Records only the BACK of each caster in the depth map, so the surface the light actually "
-            "strikes is never stored and cannot be compared against itself. That removes self-shadowing "
-            "acne at the source instead of biasing it out of sight.\n\n"
-            "It assumes SOLID casters, and much of this game is not built that way -- walls, ground and "
-            "foliage are frequently modelled from one side only. Those have nothing left once their front "
-            "is culled, so they stop casting entirely. Turn it on and check that walls and leaves still "
-            "have shadows before keeping it; if they vanish, that is what happened, and this is the switch "
-            "to put back."));
 
     AddWidget(path, "Light and Casters", WIDGET_SEPARATOR_TEXT).PreFunc(hideUnlessShadowMap);
     AddWidget(path, "Minimum Sun Height", WIDGET_CVAR_SLIDER_FLOAT)

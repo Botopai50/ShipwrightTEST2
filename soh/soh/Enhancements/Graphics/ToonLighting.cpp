@@ -299,7 +299,24 @@ static bool ToonShadowDeepRooted(Actor* actor) {
 // about the model, so the knowledge is written down here. Its translucent half still only ever casts through
 // the alpha cutout: with no usable texture to cut against, a bracketed draw casts nothing.
 static bool ToonShadowSceneryCaster(Actor* actor) {
-    return actor->id == ACTOR_EN_WOOD02; // trees and standalone leaf clusters
+    // By category, not by id. The game already sorts its actors into what they ARE, and the three below are
+    // its own word for scenery: BG is the background pieces it spawns as actors rather than baking into the
+    // room, DOOR is every door and gate, SWITCH is the fixtures bolted to the floor. Naming them one at a
+    // time would be a list without an end -- the Hyrule Castle gate alone shares its shape with over a
+    // hundred others -- and the distinction those ids would be tracing is exactly the one the category
+    // already draws.
+    //
+    // Nothing here is at risk from moving: the scenery casters are captured every frame like characters, not
+    // cached like the room mesh, which is what lets the castle gate slide open with its shadow.
+    switch (actor->category) {
+        case ACTORCAT_BG:
+        case ACTORCAT_DOOR:
+        case ACTORCAT_SWITCH:
+            return true;
+        default:
+            break;
+    }
+    return actor->id == ACTOR_EN_WOOD02; // trees and standalone leaf clusters (PROP, and the only one)
 }
 
 // Tracks whether the scenery bracket is currently open in the stream, so the markers are emitted only on a

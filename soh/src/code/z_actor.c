@@ -3296,6 +3296,9 @@ void func_800315AC(PlayState* play, ActorContext* actorCtx) {
     // geometry (effects, the XLU stream) would leak into the last actor's silhouette.
     if (shadowsEnabled && !celEnabled) {
         gSPToonShadow(POLY_OPA_DISP++, 0, 0, 0, 0.0f);
+        if (ToonLighting_ShadowMapEnabled()) {
+            gSPToonShadow(POLY_XLU_DISP++, 0, 0, 0, 0.0f);
+        }
     }
 
     // SOH [Enhancement] Cascaded shadow maps: render the cascades now that every actor has drawn, so the
@@ -3307,6 +3310,10 @@ void func_800315AC(PlayState* play, ActorContext* actorCtx) {
     // lag on a character's shadow is structural, two was not.
     if (ToonLighting_ShadowMapEnabled()) {
         gSPToonShadow(POLY_OPA_DISP++, 0, 0, 0, 0.0f);
+        // The translucent stream carries the marker too now (see ToonShadowArmXlu), and the last actor to
+        // arm it has nobody after it to close it -- so the effects queued behind it would keep casting as
+        // though they were still part of him.
+        gSPToonShadow(POLY_XLU_DISP++, 0, 0, 0, 0.0f);
         ToonLighting_ShadowMapSceneryCasterClose(play->state.gfxCtx);
         // Into the OPAQUE buffer, because that is the only stream the room's ground is in. All of POLY_OPA
         // executes before any of POLY_XLU, so a marker in the translucent buffer runs after every opaque

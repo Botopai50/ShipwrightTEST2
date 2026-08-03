@@ -24,6 +24,10 @@
 
 #include <memory>
 #include <unordered_map>
+#include <vector>
+#include <string>
+#include <algorithm>
+#include <cstdio>
 
 extern "C" {
 #include "z64.h"
@@ -86,6 +90,9 @@ static struct {
     bool suppressVanilla = true;
     bool useNaviLight = true;
     bool showDebug = false;
+    // The shadow-map debug view (ShadowMap.ShowCascadeBounds). Non-zero also turns on the scenery-caster
+    // census below -- the view says SOMETHING is casting, the census says what.
+    bool shadowMapCensus = false;
     f32 pointRange = kDefaultPointLightRange;
     f32 transitionTime = kDefaultTransitionTime;
     f32 maxDist = (f32)kDefaultShadowMaxDistance;
@@ -94,6 +101,74 @@ static struct {
 static Fast::GfxRenderingAPI* GetRenderingApi(); // defined with the other Fast3D accessors below
 // Key light from the environment directionals (sun or moon, whichever is brighter); defined below.
 static void ToonEnvKey(PlayState* play, f32 dirOut[3], f32 colOut[3]);
+
+// ===================================================================================================
+// Scenery-caster census.
+//
+// The debug view (ShadowMap.ShowCascadeBounds = 2) answers "is this being captured, and into which
+// layer" and it has settled several arguments that reasoning about the display lists got wrong every
+// time. What it cannot answer is WHICH ACTOR a green blob came from, and that is the question every one
+// of those arguments actually turned on: the caster layer is chosen by category, the categories sort
+// actors by what the engine does with them rather than what they are made of, and so the only reliable
+// way to name the thing casting is to have the code that classified it say so.
+//
+// This counts the actors that opened the scenery bracket, per id, over a short window, and publishes a
+// readable table for the menu to display beside the debug slider. Costs an integer bump per scenery
+// actor and only while the debug view is on.
+// ===================================================================================================
+static std::unordered_map<s16, u32> sCensusAccum; // id -> bracket opens accumulated this window
+static u32 sCensusFrames = 0;                     // frames accumulated into the above
+static std::string sCensusText;                   // published table, read by the menu
+
+static void ToonShadowCensusPublish() {
+    if (!sParams.shadowMapCensus) {
+        if (!sCensusAccum.empty()) {
+            sCensusAccum.clear();
+            sCensusFrames = 0;
+            sCensusText.clear();
+        }
+        return;
+    }
+    sCensusFrames++;
+    if (sCensusFrames < 20) { // ~1/3 s: long enough that a flickering count settles, short enough to feel live
+        return;
+    }
+
+    std::vector<std::pair<s16, u32>> rows(sCensusAccum.begin(), sCensusAccum.end());
+    std::sort(rows.begin(), rows.end(), [](const std::pair<s16, u32>& a, const std::pair<s16, u32>& b) {
+        return a.second != b.second ? a.second > b.second : a.first < b.first;
+    });
+
+    sCensusText.clear();
+    if (rows.empty()) {
+        sCensusText = "(no scenery casters)";
+    }
+    // Only the busiest handful: a scattered particle is by definition many instances, so whatever is
+    // wanted here is at the top. Averaged over the window, because an actor drawn every frame should read
+    // as its instance count and not as a multiple of it.
+    const size_t kMaxRows = 12;
+    for (size_t i = 0; i < rows.size() && i < kMaxRows; i++) {
+        const char* name = "?";
+        if (ActorDB::Instance != nullptr) {
+            ActorDB::Entry& e = ActorDB::Instance->RetrieveEntry(rows[i].first);
+            if (e.entry.valid && !e.name.empty()) {
+                name = e.name.c_str();
+            }
+        }
+        f32 avg = (f32)rows[i].second / (f32)sCensusFrames;
+        char line[128];
+        snprintf(line, sizeof(line), "%5.1f  %s (id %d)\n", avg, name, (int)rows[i].first);
+        sCensusText += line;
+    }
+    if (rows.size() > kMaxRows) {
+        char more[64];
+        snprintf(more, sizeof(more), "... and %d more ids\n", (int)(rows.size() - kMaxRows));
+        sCensusText += more;
+    }
+
+    sCensusAccum.clear();
+    sCensusFrames = 0;
+}
 
 static void RefreshFrameParams() {
     sParams.cel = CVarGetInteger(CVAR_ENHANCEMENT("Graphics.ToonLighting.Enabled"), 1) != 0;
@@ -131,6 +206,9 @@ static void RefreshFrameParams() {
         CVarGetInteger(CVAR_ENHANCEMENT("Graphics.WorldShadows.SuppressVanillaShadows"), 1) != 0;
     sParams.useNaviLight = CVarGetInteger(CVAR_ENHANCEMENT("Graphics.ToonLighting.UseNaviLight"), 1) != 0;
     sParams.showDebug = CVarGetInteger(CVAR_DEVELOPER_TOOLS("ToonLighting.ShowDebug"), 0) != 0;
+    sParams.shadowMapCensus =
+        sParams.shadowMap && CVarGetInteger(CVAR_DEVELOPER_TOOLS("ShadowMap.ShowCascadeBounds"), 0) != 0;
+    ToonShadowCensusPublish();
     sParams.pointRange = CVarGetFloat(CVAR_ENHANCEMENT("Graphics.ToonLighting.PointLightRange"), kDefaultPointLightRange);
     sParams.transitionTime =
         CVarGetFloat(CVAR_ENHANCEMENT("Graphics.ToonLighting.TransitionTime"), kDefaultTransitionTime);
@@ -414,6 +492,13 @@ static bool ToonShadowExcluded(Actor* actor) {
         // one, and now that the marker reaches there too she has to be named.
         case ACTOR_EN_ELF:
         case ACTOR_EN_KUSA:      // small cuttable grass -- everywhere and tiny, a blob per tuft reads wrong
+        // Ambient critters. Same argument as the grass: sprite-sized, spawned in swarms (Obj_Mure drops
+        // them a dozen at a time across a field), and every one of them lands in the world caster layer by
+        // default, so a meadow comes out speckled with little dark diamonds that track nothing the player
+        // can see. They are ambience, not scenery.
+        case ACTOR_EN_BUTTE:  // butterflies
+        case ACTOR_EN_INSECT: // bugs
+        case ACTOR_EN_FISH:   // fish
         case ACTOR_EN_SKJ:       // Skull Kid
         case ACTOR_EN_DNT_NOMAL: // Deku Scrub mound dwellers
         case ACTOR_EN_KZ:        // King Zora
@@ -426,6 +511,12 @@ static bool ToonShadowExcluded(Actor* actor) {
         default:
             return ToonShadowReceiver(actor);
     }
+}
+
+// The scenery-caster census as a printable table, for the debug section of the menu. Empty string when the
+// debug view is off (nothing is being counted then) or before the first window has closed.
+extern "C" const char* ToonLighting_ShadowMapCasterCensus(void) {
+    return sCensusText.c_str();
 }
 
 // C-callable export (see ToonLighting.h): lets the decompiled actor draw loop reorder receivers ahead of the
@@ -1215,6 +1306,9 @@ static void HandleActorDraw(void* actorPtr) {
                 gSPShadowMapSceneryCasterBegin(POLY_OPA_DISP++);
                 gSPShadowMapSceneryCasterBegin(POLY_XLU_DISP++);
                 sSceneryCasterArmed = true;
+                if (sParams.shadowMapCensus) {
+                    sCensusAccum[actor->id]++; // see ToonShadowCensusPublish
+                }
             } else {
                 // Deep-rooted models (signposts) bury their geometry below the floor, which would sink the
                 // shadow slab underground; pass the floor Y so the renderer lifts the slab's feet up to it.

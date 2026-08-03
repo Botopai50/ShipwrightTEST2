@@ -799,12 +799,27 @@ void SohMenu::AddMenuWindWakerStyle() {
                               "exactly like one that was never cast; this is the only way to tell them apart.\n\n"
                               "2 = colour the two caster layers instead of shading with them. GREEN where "
                               "scenery blocks the light, RED where a character does. Use it to find out whether "
-                              "something is being captured at all, and into which layer.")
+                              "something is being captured at all, and into which layer.\n\n"
+                              "Any non-zero value also fills in the caster list below.")
                      .Min(0)
                      .Max(2)
                      .DefaultValue(0)
                      .ShowButtons(true)
                      .Format("%d"));
+    // Live list of what the world (green) caster layer is actually made of, so a stray green blob in the
+    // debug view can be named instead of guessed at. WIDGET_TEXT draws widget.name, and PreFunc runs first,
+    // so rewriting the name each frame is what makes it live.
+    AddWidget(path, "Scenery casters (avg/frame):", WIDGET_TEXT)
+        .RaceDisable(false)
+        .PreFunc([](WidgetInfo& info) {
+            info.isHidden = CVarGetInteger(CVAR_ENHANCEMENT("Graphics.WorldShadows.Mode"), SHADOW_MODE_VANILLA) !=
+                                SHADOW_MODE_SHADOW_MAP ||
+                            CVarGetInteger(CVAR_DEVELOPER_TOOLS("ShadowMap.ShowCascadeBounds"), 0) == 0;
+            if (!info.isHidden) {
+                const char* census = ToonLighting_ShadowMapCasterCensus();
+                info.name = std::string("Scenery casters (avg/frame):\n") + (census != nullptr ? census : "");
+            }
+        });
 
     // ===========================================================================================
     // Sky — the Wind Waker-style sky replacement: gradient dome + drifting clouds + night stars.

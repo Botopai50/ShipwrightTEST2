@@ -58,6 +58,13 @@ void ToonLighting_LensBracketEnd(struct GraphicsContext* gfxCtx);
 // as though they were part of a tree.
 void ToonLighting_ShadowMapSceneryCasterClose(struct GraphicsContext* gfxCtx);
 
+// Debug: which actors are being captured into the WORLD (scenery) caster layer right now, as a printable
+// table of "average instances per frame / actor name / id", busiest first. Only counts while the shadow-map
+// debug view is on; returns an empty string otherwise. Never null. The debug view says something is casting
+// and into which layer, this says which actor it was -- the question that decides whether the classification
+// or the exclusion list is what needs changing.
+const char* ToonLighting_ShadowMapCasterCensus(void);
+
 #ifdef __cplusplus
 }
 #endif

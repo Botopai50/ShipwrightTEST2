@@ -14,6 +14,7 @@
 #include "soh/SaveManager.h"
 #include "soh/framebuffer_effects.h"
 #include "soh/Enhancements/Graphics/ToonLighting.h" // SOH [Enhancement] cascaded shadow maps: caster-first draw order
+#include "soh/Enhancements/Graphics/WaterRendering.h" // SOH [Enhancement] BOTW-style water: scene capture marker
 
 #include <libultraship/libultraship.h>
 
@@ -1617,6 +1618,18 @@ void Play_Draw(PlayState* play) {
         if (!shadowMapCasterFirst && ((HREG(80) != 10) || (HREG(85) != 0))) {
             func_800315AC(play, &play->actorCtx);
         }
+
+        // SOH [Enhancement] Breath of the Wild-style water: take the scene capture the water material reads
+        // (see soh/Enhancements/Graphics/WaterRendering.h). Here, and not earlier, because this is the first
+        // point at which BOTH the room and every actor have queued their solid geometry -- and not later,
+        // because what follows is lens flare and screen fills, which are camera effects rather than parts of
+        // the world and have no business showing up refracted through a lake.
+        //
+        // The marker goes into POLY_OPA, where the whole stream runs before the first translucent command, so
+        // it sees a complete opaque scene and nothing translucent. Both draw orders converge here: the
+        // caster-first path put the actors ahead of the room, the ordinary path put them after, and either
+        // way both are behind us by now.
+        WaterRendering_EmitCapture(gfxCtx);
 
         if ((HREG(80) != 10) || (HREG(86) != 0)) {
             if (!play->envCtx.sunMoonDisabled) {

@@ -62,7 +62,15 @@ extern "C" int WaterRendering_Enabled(void) {
     return sParams.enabled ? 1 : 0;
 }
 
-static void OnWaterFrameUpdate() {
+// The half of the snapshot that reads only settings and the backend, and is therefore safe to run at ANY
+// point -- including registration, which happens during InitOTR before the game's own state exists.
+//
+// Split out from the frame hook after learning the difference the hard way: the hook also advances the clock,
+// the clock comes from R_UPDATE_RATE, and that is gGameInfo->data[...] with gGameInfo allocated by Regs_Init,
+// which runs long after ShipInit. Calling the whole hook at registration dereferenced a null pointer before
+// the title screen. ToonLighting already draws this line -- RefreshFrameParams reads settings,
+// OnToonFrameUpdate touches game state -- and it is worth stating why rather than just copying the shape.
+static void RefreshWaterParams() {
     const bool wanted = CVarGetInteger(CVAR_ENHANCEMENT("Graphics.Water.Enabled"), 0) != 0;
 
     int quality = CVarGetInteger(CVAR_ENHANCEMENT("Graphics.Water.Quality"), WATER_DEFAULT_QUALITY);
@@ -86,12 +94,7 @@ static void OnWaterFrameUpdate() {
     sParams.quality = quality;
     sParams.debugView = debugView;
 
-    // One game frame's worth of time. R_UPDATE_RATE is how many 60Hz ticks the game advances per draw, so
-    // this is the same clock the rest of the world moves on -- pausing the game freezes the water with it,
-    // which is the behaviour anything sitting next to a paused actor needs to have.
-    if (sParams.enabled) {
-        sParams.time += (float)R_UPDATE_RATE / 60.0f;
-    } else {
+    if (!sParams.enabled) {
         sParams.time = 0.0f; // a re-enable starts the surface from a defined phase rather than mid-scroll
     }
 
@@ -100,6 +103,21 @@ static void OnWaterFrameUpdate() {
         // repeat the check -- the same contract the shadow map uses.
         interp->SetWaterParams(sParams.enabled, sParams.quality, sParams.debugView, sParams.time);
     }
+}
+
+static void OnWaterFrameUpdate() {
+    // One game frame's worth of time, advanced before the snapshot so the value pushed below is this frame's.
+    // R_UPDATE_RATE is how many 60Hz ticks the game advances per draw, so this is the same clock the rest of
+    // the world moves on -- pausing the game freezes the water with it, which is the behaviour anything
+    // sitting next to a paused actor needs to have.
+    //
+    // Guarded on gGameInfo because that is what R_UPDATE_RATE reads through, and it is null until Regs_Init.
+    // The hook should never fire that early, but a null deref here costs the whole program and the check
+    // costs a comparison.
+    if (sParams.enabled && gGameInfo != NULL) {
+        sParams.time += (float)R_UPDATE_RATE / 60.0f;
+    }
+    RefreshWaterParams();
 }
 
 extern "C" void WaterRendering_EmitCapture(GraphicsContext* gfxCtx) {
@@ -122,7 +140,8 @@ void RegisterWaterRendering() {
     // Registered unconditionally, like the toon module: the per-frame snapshot gates all the work, which is
     // what lets a console `set` of the CVar take effect without this having to re-run.
     COND_HOOK(OnGameFrameUpdate, true, OnWaterFrameUpdate);
-    OnWaterFrameUpdate();
+    // The settings half only. This runs during InitOTR, where the game's own state does not exist yet.
+    RefreshWaterParams();
 }
 
 static RegisterShipInitFunc waterInitFunc(RegisterWaterRendering, { CVAR_ENHANCEMENT("Graphics.Water.Enabled") });

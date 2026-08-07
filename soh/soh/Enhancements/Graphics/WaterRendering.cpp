@@ -23,12 +23,18 @@
 #include "soh/Enhancements/Graphics/WaterRendering.h"
 
 #include <memory>
+#include <vector>
+#include <string>
+#include <cstdio>
 
 extern "C" {
 #include "z64.h"
 #include "macros.h"
 #include "functions.h"
 #include "variables.h"
+// Zora's Domain's hard-coded water box: it is not in the collision header, and it is the one that lets the
+// player swim under the waterfall (see PushWaterBoxes).
+extern WaterBox zdWaterBox;
 }
 
 // The one-per-frame snapshot. Read by every entry point below, refreshed once at the top of the game frame --
@@ -105,6 +111,72 @@ static void RefreshWaterParams() {
     }
 }
 
+// Gather the scene's ACTIVE water boxes and hand them to the renderer.
+//
+// Deliberately mirrors WaterBox_GetSurfaceImpl (z_bgcheck.c) rather than iterating the collision header
+// directly, because three things in there are easy to miss and each one is silent when missed:
+//
+//   * the room filter. The box's property bits carry a room index, and a box belongs to that room only --
+//     unless the index is 0x3F, which means every room. Ignore it and the Water Temple gets water from
+//     neighbouring rooms cutting through walls.
+//   * Zora's Domain has a water box that is NOT in the collision header at all. It is hard-coded (zdWaterBox)
+//     and it is the one that lets the player swim under the waterfall. Iterate only the header and one of
+//     the design document's primary test scenes has a body of water the feature cannot see.
+//   * a collision header whose water box pointer still equals segment 0 has not finished loading. Reading it
+//     as a list gives garbage, and scene transitions are exactly when it happens.
+static void PushWaterBoxes() {
+    static std::vector<Fast::WaterBoxDesc> boxes;
+    boxes.clear();
+
+    auto interp = GetInterpreter();
+    if (interp == nullptr) {
+        return;
+    }
+    if (!sParams.enabled || gPlayState == NULL) {
+        interp->SetWaterBoxes(nullptr, 0);
+        return;
+    }
+
+    CollisionHeader* col = gPlayState->colCtx.colHeader;
+    const s32 scene = gPlayState->sceneNum;
+    const s32 curRoom = gPlayState->roomCtx.curRoom.num;
+
+    auto add = [&](const WaterBox* w, uint32_t index) {
+        if (boxes.size() >= (size_t)WATER_MAX_BOXES) {
+            return;
+        }
+        Fast::WaterBoxDesc d;
+        d.xMin = (float)w->xMin;
+        d.zMin = (float)w->zMin;
+        d.xLength = (float)w->xLength;
+        d.zLength = (float)w->zLength;
+        d.ySurface = (float)w->ySurface;
+        // Scene in the high bits, box index in the low ones: stable for the same body of water across
+        // frames, which is what a mesh cache (F2) and an appearance profile (F16) will be keyed by.
+        d.id = ((uint32_t)scene << 16) | (index & 0xFFFFu);
+        boxes.push_back(d);
+    };
+
+    if (col != NULL && col->numWaterBoxes > 0 &&
+        col->waterBoxes != (WaterBox*)PHYSICAL_TO_VIRTUAL(gSegments[0])) {
+        for (s32 i = 0; i < col->numWaterBoxes; i++) {
+            const WaterBox* w = &col->waterBoxes[i];
+            const u32 room = (w->properties >> 13) & 0x3F;
+            if (room != 0x3F && room != (u32)curRoom) {
+                continue;
+            }
+            add(w, (uint32_t)i);
+        }
+    }
+
+    if (scene == SCENE_ZORAS_DOMAIN) {
+        // Index past anything the header can hold, so its stable id cannot collide with a real box's.
+        add(&zdWaterBox, 0xFFFFu);
+    }
+
+    interp->SetWaterBoxes(boxes.empty() ? nullptr : boxes.data(), (int)boxes.size());
+}
+
 static void OnWaterFrameUpdate() {
     // One game frame's worth of time, advanced before the snapshot so the value pushed below is this frame's.
     // R_UPDATE_RATE is how many 60Hz ticks the game advances per draw, so this is the same clock the rest of
@@ -118,6 +190,38 @@ static void OnWaterFrameUpdate() {
         sParams.time += (float)R_UPDATE_RATE / 60.0f;
     }
     RefreshWaterParams();
+    // After the snapshot, so a frame in which the feature was just switched off pushes an empty list rather
+    // than leaving the previous scene's boxes live for one more frame.
+    PushWaterBoxes();
+}
+
+// The identification census as printable text, for the debug section of the menu. Same instrument as the
+// shadow map's caster list, and for the same reason: it answers "is it finding this water, and how much of
+// it" from the code that decides, instead of from a screenshot.
+static std::string sCensusText;
+
+extern "C" const char* WaterRendering_Census(void) {
+    if (!sParams.enabled) {
+        sCensusText = "(water material inactive)";
+        return sCensusText.c_str();
+    }
+    auto interp = GetInterpreter();
+    if (interp == nullptr) {
+        sCensusText = "(no renderer)";
+        return sCensusText.c_str();
+    }
+    int tris = 0, boxesHit = 0, boxesTotal = 0;
+    interp->GetWaterCensus(&tris, &boxesHit, &boxesTotal);
+
+    char buf[192];
+    if (boxesTotal == 0) {
+        snprintf(buf, sizeof(buf), "no water boxes in this room");
+    } else {
+        snprintf(buf, sizeof(buf), "%d surface tris from %d of %d box%s", tris, boxesHit, boxesTotal,
+                 boxesTotal == 1 ? "" : "es");
+    }
+    sCensusText = buf;
+    return sCensusText.c_str();
 }
 
 extern "C" void WaterRendering_EmitCapture(GraphicsContext* gfxCtx) {

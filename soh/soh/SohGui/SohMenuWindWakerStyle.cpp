@@ -4,6 +4,7 @@
 #include "soh/OTRGlobals.h"
 #include "UIWidgets.hpp"
 #include "soh/Enhancements/Graphics/ToonLighting.h"
+#include "soh/Enhancements/Graphics/WaterRendering.h"
 
 namespace SohGui {
 
@@ -875,6 +876,7 @@ void SohMenu::AddMenuWindWakerStyle() {
         { 1, "Scene colour" },   // WATER_DEBUG_SCENE_COLOR
         { 2, "Linear depth" },   // WATER_DEBUG_LINEAR_DEPTH
         { 3, "Both" },           // WATER_DEBUG_BOTH
+        { 4, "Hide surfaces" },  // WATER_DEBUG_HIDE_SURFACES
     };
     AddWidget(path, "Show Capture", WIDGET_CVAR_COMBOBOX)
         .CVar(CVAR_DEVELOPER_TOOLS("Water.DebugView"))
@@ -891,7 +893,22 @@ void SohMenu::AddMenuWindWakerStyle() {
                               "there at all — sky. Water in front of magenta has to read as infinitely deep, "
                               "so telling that apart from 'very distant floor' is most of what this view is "
                               "for. The gradient should be smooth and continuous as you walk; banding or "
-                              "flicker in the distance means the depth precision is not holding up."));
+                              "flicker in the distance means the depth precision is not holding up.\n\n"
+                              "Hide surfaces: skip drawing every triangle identified as a water surface. The "
+                              "water vanishing is what proves the identification found it AND that the draw "
+                              "can be taken cleanly out of the frame, which is where the new material goes. "
+                              "Anything left behind is water the identification missed; anything else that "
+                              "disappears is a false positive — and lava disappearing would be the one that "
+                              "matters."));
+    AddWidget(path, "Water surfaces found", WIDGET_TEXT)
+        .RaceDisable(false)
+        .PreFunc([](WidgetInfo& info) {
+            info.isHidden = !CVarGetInteger(CVAR_ENHANCEMENT("Graphics.Water.Enabled"), 0);
+            if (!info.isHidden) {
+                const char* census = WaterRendering_Census();
+                info.name = std::string("Identified: ") + (census != nullptr ? census : "");
+            }
+        });
 
     // ===========================================================================================
     // Sky — the Wind Waker-style sky replacement: gradient dome + drifting clouds + night stars.

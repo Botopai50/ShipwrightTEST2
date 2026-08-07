@@ -28,6 +28,12 @@ int WaterRendering_Enabled(void);
 // stream where the water will be drawn: what the water refracts is whatever was drawn before this marker.
 void WaterRendering_EmitCapture(struct GraphicsContext* gfxCtx);
 
+// Debug: how much of the current room's water the identification is actually finding, as a one-line summary
+// ("N surface tris from M of K boxes"). Never null. Shown in the menu, so that "does it see this lake" is
+// answered by the code that decides rather than inferred from a screenshot -- the lesson the shadow map's
+// caster census taught.
+const char* WaterRendering_Census(void);
+
 #ifdef __cplusplus
 }
 #endif

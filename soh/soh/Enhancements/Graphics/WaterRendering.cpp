@@ -32,6 +32,9 @@ extern "C" {
 #include "macros.h"
 #include "functions.h"
 #include "variables.h"
+// Not declared by variables.h despite living beside everything that is -- every module that wants it
+// declares it, the way ToonLighting.cpp does.
+extern PlayState* gPlayState;
 // Zora's Domain's hard-coded water box: it is not in the collision header, and it is the one that lets the
 // player swim under the waterfall (see PushWaterBoxes).
 extern WaterBox zdWaterBox;

@@ -213,15 +213,24 @@ extern "C" const char* WaterRendering_Census(void) {
         sCensusText = "(no renderer)";
         return sCensusText.c_str();
     }
-    int tris = 0, boxesHit = 0, boxesTotal = 0;
-    interp->GetWaterCensus(&tris, &boxesHit, &boxesTotal);
+    int tris = 0, boxesHit = 0, boxesTotal = 0, breakdown[5] = {};
+    interp->GetWaterCensus(&tris, &boxesHit, &boxesTotal, breakdown);
 
-    char buf[192];
+    char buf[320];
     if (boxesTotal == 0) {
         snprintf(buf, sizeof(buf), "no water boxes in this room");
     } else {
-        snprintf(buf, sizeof(buf), "%d surface tris from %d of %d box%s", tris, boxesHit, boxesTotal,
-                 boxesTotal == 1 ? "" : "es");
+        // The breakdown is the point. "0 of 2 boxes" says the identification failed; these say WHICH
+        // condition failed it, which is the difference between a fix and a guess.
+        snprintf(buf, sizeof(buf),
+                 "%d tris from %d of %d box%s\n"
+                 "  in footprint : %d\n"
+                 "  wrong height : %d\n"
+                 "  not flat     : %d\n"
+                 "  taken (xlu)  : %d\n"
+                 "  taken (opa)  : %d",
+                 tris, boxesHit, boxesTotal, boxesTotal == 1 ? "" : "es", breakdown[0], breakdown[1],
+                 breakdown[2], breakdown[3], breakdown[4]);
     }
     sCensusText = buf;
     return sCensusText.c_str();

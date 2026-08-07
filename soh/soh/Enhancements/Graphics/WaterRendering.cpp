@@ -228,7 +228,7 @@ extern "C" const char* WaterRendering_Census(void) {
                  "  wrong height : %d\n"
                  "  not flat     : %d\n"
                  "  taken (xlu)  : %d\n"
-                 "  taken (opa)  : %d",
+                 "  left  (opa)  : %d",
                  tris, boxesHit, boxesTotal, boxesTotal == 1 ? "" : "es", breakdown[0], breakdown[1],
                  breakdown[2], breakdown[3], breakdown[4]);
     }

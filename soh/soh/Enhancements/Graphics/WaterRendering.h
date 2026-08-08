@@ -34,20 +34,6 @@ void WaterRendering_EmitCapture(struct GraphicsContext* gfxCtx);
 // caster census taught.
 const char* WaterRendering_Census(void);
 
-// Whether this actor draws a genuine water SURFACE, and so must be exempt from the veto that covers the
-// actor draw loop. Two of them: the Water Temple's rising water and the Shadow Temple's. Everything else an
-// actor puts at water height is on the water rather than being it.
-struct Actor;
-int WaterRendering_ActorDrawsWater(struct Actor* actor);
-
-// Close any water-surface veto left open by the actor loop. Call once at the end of it.
-//
-// The per-actor hook emits only on a CHANGE, so a vetoed actor drawn last leaves the veto open with nobody
-// after it to close it -- and everything drawn after the loop then inherits it. With the caster-first draw
-// order that is the room itself, which is where the water surface lives, so a single waterfall drawn late
-// silently turned off the water for the whole scene.
-void WaterRendering_ActorVetoClose(struct GraphicsContext* gfxCtx);
-
 #ifdef __cplusplus
 }
 #endif

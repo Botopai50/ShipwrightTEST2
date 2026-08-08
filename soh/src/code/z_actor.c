@@ -3287,11 +3287,6 @@ void func_800315AC(PlayState* play, ActorContext* actorCtx) {
         }
     }
 
-    // SOH [Enhancement] Water: close any veto the last actor left open (see WaterRendering.h). Without this
-    // a waterfall drawn last leaves it open, and with the caster-first draw order the room -- which is where
-    // the water surface lives -- inherits it and the scene loses its water entirely.
-    WaterRendering_ActorVetoClose(play->state.gfxCtx);
-
     // SOH [Enhancement] Toon lighting: end the actor bracket before effects/lens/UI are drawn.
     if (celEnabled) {
         gSPToon(POLY_OPA_DISP++, false);

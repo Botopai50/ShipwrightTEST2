@@ -72,10 +72,6 @@ static Fast::GfxRenderingAPI* GetRenderingApi() {
     return interpreter == nullptr ? nullptr : interpreter->GetCurrentRenderingAPI();
 }
 
-// Tracks whether the water-surface veto is currently CLOSED in the stream, so markers are emitted only on a
-// change. Almost every actor is not one of the vetoed ones, so almost every frame this costs nothing.
-static bool sWaterActorVetoed = false;
-
 extern "C" int WaterRendering_Enabled(void) {
     return sParams.enabled ? 1 : 0;
 }
@@ -115,9 +111,6 @@ static void RefreshWaterParams() {
     if (!sParams.enabled) {
         sParams.time = 0.0f; // a re-enable starts the surface from a defined phase rather than mid-scroll
     }
-    // Nothing brackets the actor loop any more, so identification starts each frame open and the tracker
-    // has to start agreeing with that.
-    sWaterActorVetoed = false;
 
     if (auto interp = GetInterpreter()) {
         // `enabled` already folds in the backend capability, so the interpreter can trust it and does not
@@ -251,69 +244,6 @@ extern "C" const char* WaterRendering_Census(void) {
     return sCensusText.c_str();
 }
 
-// Actors that are never a water surface, however exactly they sit at the water's height.
-//
-// The blanket rule -- "no actor is ever the surface" -- was the right generalisation and the wrong reach: it
-// took Zora's Domain's own water with it. Zora is exceptional in more than one way (it is the one scene with
-// a hard-coded water box, and it plainly does not draw its water the standard way), so a rule broad enough
-// to be safe there is not broad enough to be useful.
-//
-// Named instead, and named for what they ARE rather than for where they sit: these draw the mist and spray
-// at the foot of a waterfall. That geometry is flat, translucent and exactly at water height -- because that
-// is where spray belongs -- so nothing about its shape can turn it away. The ripples around a swimmer are
-// covered separately, by the veto around the effect passes, which is where they are drawn.
-static bool WaterActorNeverSurface(Actor* actor) {
-    if (actor == NULL) {
-        return false;
-    }
-    switch (actor->id) {
-        case ACTOR_BG_SPOT03_TAKI: // Zora's Domain waterfall: the mist at its foot
-        case ACTOR_BG_SPOT07_TAKI: // Zora's Fountain waterfall
-            return true;
-        default:
-            return false;
-    }
-}
-
-extern "C" int WaterRendering_ActorDrawsWater(Actor* actor) {
-    return WaterActorNeverSurface(actor) ? 0 : 1;
-}
-
-// Per-actor hook: close the water identification around the named actors and reopen it afterwards.
-//
-// Its own hook rather than a branch inside ToonLighting's, because that one returns early when both cel
-// shading and shadows are off, and the water feature has to work whether or not those are on.
-static void HandleWaterActorDraw(void* actorPtr) {
-    if (!sParams.enabled || gPlayState == NULL) {
-        return;
-    }
-    const bool veto = WaterActorNeverSurface((Actor*)actorPtr);
-    if (veto == sWaterActorVetoed) {
-        return; // deduped: almost every actor is not one of these, so almost every frame this emits nothing
-    }
-    sWaterActorVetoed = veto;
-    OPEN_DISPS(gPlayState->state.gfxCtx);
-    if (veto) {
-        gSPWaterSurfaceOff(POLY_OPA_DISP++);
-        gSPWaterSurfaceOff(POLY_XLU_DISP++);
-    } else {
-        gSPWaterSurfaceOn(POLY_OPA_DISP++);
-        gSPWaterSurfaceOn(POLY_XLU_DISP++);
-    }
-    CLOSE_DISPS(gPlayState->state.gfxCtx);
-}
-
-extern "C" void WaterRendering_ActorVetoClose(GraphicsContext* gfxCtx) {
-    if (!sWaterActorVetoed || gfxCtx == NULL) {
-        return;
-    }
-    sWaterActorVetoed = false;
-    OPEN_DISPS(gfxCtx);
-    gSPWaterSurfaceOn(POLY_OPA_DISP++);
-    gSPWaterSurfaceOn(POLY_XLU_DISP++);
-    CLOSE_DISPS(gfxCtx);
-}
-
 extern "C" void WaterRendering_EmitCapture(GraphicsContext* gfxCtx) {
     if (!sParams.enabled || gfxCtx == NULL) {
         return;
@@ -334,7 +264,6 @@ void RegisterWaterRendering() {
     // Registered unconditionally, like the toon module: the per-frame snapshot gates all the work, which is
     // what lets a console `set` of the CVar take effect without this having to re-run.
     COND_HOOK(OnGameFrameUpdate, true, OnWaterFrameUpdate);
-    COND_HOOK(OnActorDraw, true, HandleWaterActorDraw);
     // The settings half only. This runs during InitOTR, where the game's own state does not exist yet.
     RefreshWaterParams();
 }

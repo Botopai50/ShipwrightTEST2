@@ -18,7 +18,6 @@
 #include "soh/cvar_prefixes.h"
 #include "soh/ActorDB.h" // SOH [Enhancement] actor-name lookup for the cel-shading blacklist
 #include "soh/Enhancements/Graphics/ToonLighting.h"
-#include "soh/Enhancements/Graphics/WaterRendering.h"
 // Declares the FrameInterpolation_Record* functions (with C linkage) that the OPEN_DISPS/CLOSE_DISPS
 // macros call, so their references in this TU match the definitions. Must precede any OPEN_DISPS use.
 #include "soh/frame_interpolation.h"

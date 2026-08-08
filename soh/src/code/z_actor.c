@@ -18,6 +18,7 @@
 #include "soh/ActorDB.h"
 #include "soh/OTRGlobals.h"
 #include "soh/Enhancements/Graphics/ToonLighting.h"
+#include "soh/Enhancements/Graphics/WaterRendering.h"
 
 #include <string.h>
 #include <stdlib.h>
@@ -3345,6 +3346,19 @@ void func_800315AC(PlayState* play, ActorContext* actorCtx) {
         gSPShadowMapReceiveOff(POLY_XLU_DISP++);
     }
 
+    // SOH [Enhancement] Water: effects are not a water surface either, and for the same reason they are not
+    // casters -- they are not part of the world. The ripples the game draws around a swimming player are the
+    // case that forces this: they are flat, translucent and sit exactly at the water's height, so every
+    // geometric test the identification can make says "water surface". Taken as one, each ripple gets the
+    // material, which composes an opaque colour and throws away the ripple texture's own alpha -- so instead
+    // of a thin ring the whole quad fills in, and the overlapping rings pile up into a bright stair-stepped
+    // block around the player.
+    s32 waterNoEffectSurfaces = WaterRendering_Enabled();
+    if (waterNoEffectSurfaces) {
+        gSPWaterSurfaceOff(POLY_OPA_DISP++);
+        gSPWaterSurfaceOff(POLY_XLU_DISP++);
+    }
+
     if ((HREG(64) != 1) || (HREG(73) != 0)) {
         Effect_DrawAll(play->state.gfxCtx);
     }
@@ -3358,6 +3372,10 @@ void func_800315AC(PlayState* play, ActorContext* actorCtx) {
         gSPShadowMapCasterOn(POLY_XLU_DISP++);
         gSPShadowMapReceiveOn(POLY_OPA_DISP++);
         gSPShadowMapReceiveOn(POLY_XLU_DISP++);
+    }
+    if (waterNoEffectSurfaces) {
+        gSPWaterSurfaceOn(POLY_OPA_DISP++);
+        gSPWaterSurfaceOn(POLY_XLU_DISP++);
     }
 
     if ((HREG(64) != 1) || (HREG(72) != 0)) {

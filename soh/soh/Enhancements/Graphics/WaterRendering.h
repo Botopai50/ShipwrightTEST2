@@ -40,6 +40,14 @@ const char* WaterRendering_Census(void);
 struct Actor;
 int WaterRendering_ActorDrawsWater(struct Actor* actor);
 
+// Close any water-surface veto left open by the actor loop. Call once at the end of it.
+//
+// The per-actor hook emits only on a CHANGE, so a vetoed actor drawn last leaves the veto open with nobody
+// after it to close it -- and everything drawn after the loop then inherits it. With the caster-first draw
+// order that is the room itself, which is where the water surface lives, so a single waterfall drawn late
+// silently turned off the water for the whole scene.
+void WaterRendering_ActorVetoClose(struct GraphicsContext* gfxCtx);
+
 #ifdef __cplusplus
 }
 #endif

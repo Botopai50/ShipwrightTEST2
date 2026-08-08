@@ -303,6 +303,17 @@ static void HandleWaterActorDraw(void* actorPtr) {
     CLOSE_DISPS(gPlayState->state.gfxCtx);
 }
 
+extern "C" void WaterRendering_ActorVetoClose(GraphicsContext* gfxCtx) {
+    if (!sWaterActorVetoed || gfxCtx == NULL) {
+        return;
+    }
+    sWaterActorVetoed = false;
+    OPEN_DISPS(gfxCtx);
+    gSPWaterSurfaceOn(POLY_OPA_DISP++);
+    gSPWaterSurfaceOn(POLY_XLU_DISP++);
+    CLOSE_DISPS(gfxCtx);
+}
+
 extern "C" void WaterRendering_EmitCapture(GraphicsContext* gfxCtx) {
     if (!sParams.enabled || gfxCtx == NULL) {
         return;

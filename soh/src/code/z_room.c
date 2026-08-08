@@ -11,7 +11,6 @@
 #include <libultraship/bridge/gfxbridge.h>
 #include "soh/OTRGlobals.h"
 #include "soh/Enhancements/Graphics/ToonLighting.h"
-#include "soh/Enhancements/Graphics/WaterRendering.h"
 #include "soh/ResourceManagerHelpers.h"
 
 void func_80095AB4(PlayState* play, Room* room, u32 flags);

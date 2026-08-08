@@ -4,7 +4,6 @@
 #include "soh/OTRGlobals.h"
 #include "UIWidgets.hpp"
 #include "soh/Enhancements/Graphics/ToonLighting.h"
-#include "soh/Enhancements/Graphics/WaterRendering.h"
 
 namespace SohGui {
 
@@ -819,94 +818,6 @@ void SohMenu::AddMenuWindWakerStyle() {
             if (!info.isHidden) {
                 const char* census = ToonLighting_ShadowMapCasterCensus();
                 info.name = std::string("Scenery casters (avg/frame):\n") + (census != nullptr ? census : "");
-            }
-        });
-
-    // ===========================================================================================
-    // Water — the Breath of the Wild-style water material. Staged: this panel grows one control group
-    // per implementation phase, and only the groups whose phase exists are shown. Defaults are written
-    // out rather than pulled from fast/water.h so the menu builds without the renderer's headers; each
-    // one names the constant it must be kept in step with.
-    // ===========================================================================================
-    AddWidget(path, "Water", WIDGET_SEPARATOR_TEXT);
-    AddWidget(path, "Breath of the Wild Water", WIDGET_CVAR_CHECKBOX)
-        .CVar(CVAR_ENHANCEMENT("Graphics.Water.Enabled"))
-        .Options(CheckboxOptions().Tooltip(
-            "Replaces the N64 water surface — a flat polygon with a scrolling texture — with a material "
-            "whose colour comes from how much water the view ray passes through, which reflects the sky, "
-            "refracts what is submerged, glints toward the sun and foams where it meets anything solid.\n\n"
-            "Direct3D 11 only. On the other backends the original water is drawn and this does nothing."));
-
-    auto hideUnlessWater = [](WidgetInfo& info) {
-        info.isHidden = !CVarGetInteger(CVAR_ENHANCEMENT("Graphics.Water.Enabled"), 0);
-    };
-    static const std::map<int32_t, const char*> waterQualityLabels = {
-        { 1, "Low" },    // WATER_QUALITY_LOW
-        { 2, "Medium" }, // WATER_QUALITY_MEDIUM
-        { 3, "High" },   // WATER_QUALITY_HIGH
-    };
-    // Snapped before the widget draws, for the same reason the shadow map's resolution combobox is: the
-    // widget looks its current value up with map::at and throws on anything the map does not hold, and this
-    // CVar is reachable from the console. WATER_QUALITY_OFF (0) is deliberately not in the map -- the
-    // checkbox above is what turns the feature off -- so a config carrying it would otherwise be a crash on
-    // opening the menu rather than a stray value.
-    AddWidget(path, "Quality", WIDGET_CVAR_COMBOBOX)
-        .CVar(CVAR_ENHANCEMENT("Graphics.Water.Quality"))
-        .PreFunc([](WidgetInfo& info) {
-            info.isHidden = !CVarGetInteger(CVAR_ENHANCEMENT("Graphics.Water.Enabled"), 0);
-            if (info.isHidden) {
-                return;
-            }
-            const int32_t current = CVarGetInteger(CVAR_ENHANCEMENT("Graphics.Water.Quality"), 2);
-            if (current < 1 || current > 3) { // WATER_QUALITY_LOW .. WATER_QUALITY_HIGH
-                CVarSetInteger(CVAR_ENHANCEMENT("Graphics.Water.Quality"), current < 1 ? 1 : 3);
-            }
-        })
-        .Options(ComboboxOptions()
-                     .ComboMap(waterQualityLabels)
-                     .DefaultIndex(2) // WATER_DEFAULT_QUALITY == WATER_QUALITY_MEDIUM
-                     .Tooltip("Low: colour by depth, Fresnel and sky reflection.\n"
-                              "Medium: adds refraction, waves and screen-space reflection.\n"
-                              "High: adds full reflection stepping and caustics.\n\n"
-                              "Each level is a superset of the one below it."));
-
-    AddWidget(path, "Water Debug", WIDGET_SEPARATOR_TEXT).PreFunc(hideUnlessWater);
-    static const std::map<int32_t, const char*> waterDebugLabels = {
-        { 0, "Off" },            // WATER_DEBUG_OFF
-        { 1, "Scene colour" },   // WATER_DEBUG_SCENE_COLOR
-        { 2, "Linear depth" },   // WATER_DEBUG_LINEAR_DEPTH
-        { 3, "Both" },           // WATER_DEBUG_BOTH
-        { 4, "Hide surfaces" },  // WATER_DEBUG_HIDE_SURFACES
-    };
-    AddWidget(path, "Show Capture", WIDGET_CVAR_COMBOBOX)
-        .CVar(CVAR_DEVELOPER_TOOLS("Water.DebugView"))
-        .PreFunc(hideUnlessWater)
-        .Options(ComboboxOptions()
-                     .ComboMap(waterDebugLabels)
-                     .DefaultIndex(0)
-                     .Tooltip("Draws what the water material is actually reading, as thumbnails in the "
-                              "corner.\n\n"
-                              "Scene colour: the copy of the frame taken just before the water is drawn — "
-                              "what gets refracted and reflected.\n\n"
-                              "Linear depth: the same image's depth, converted to distance from the camera in "
-                              "world units. Black is near, white is far, and MAGENTA means nothing was drawn "
-                              "there at all — sky. Water in front of magenta has to read as infinitely deep, "
-                              "so telling that apart from 'very distant floor' is most of what this view is "
-                              "for. The gradient should be smooth and continuous as you walk; banding or "
-                              "flicker in the distance means the depth precision is not holding up.\n\n"
-                              "Hide surfaces: skip drawing every triangle identified as a water surface. The "
-                              "water vanishing is what proves the identification found it AND that the draw "
-                              "can be taken cleanly out of the frame, which is where the new material goes. "
-                              "Anything left behind is water the identification missed; anything else that "
-                              "disappears is a false positive — and lava disappearing would be the one that "
-                              "matters."));
-    AddWidget(path, "Water surfaces found", WIDGET_TEXT)
-        .RaceDisable(false)
-        .PreFunc([](WidgetInfo& info) {
-            info.isHidden = !CVarGetInteger(CVAR_ENHANCEMENT("Graphics.Water.Enabled"), 0);
-            if (!info.isHidden) {
-                const char* census = WaterRendering_Census();
-                info.name = std::string("Identified: ") + (census != nullptr ? census : "");
             }
         });
 

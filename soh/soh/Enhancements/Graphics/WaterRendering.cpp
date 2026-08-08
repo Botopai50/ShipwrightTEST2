@@ -249,19 +249,21 @@ extern "C" void WaterRendering_EmitCapture(GraphicsContext* gfxCtx) {
         return;
     }
     OPEN_DISPS(gfxCtx);
-    // Into the TRANSLUCENT list, at the point the caller emits it -- immediately before the room's own
-    // translucent pass, which is where the water surface is drawn.
+    // Into the OPAQUE list, and this is the third position tried -- the two before it each broke something
+    // that the reasoning behind them had not accounted for, so the reasoning is written down.
     //
-    // It was in POLY_OPA, which looks equivalent (all of that stream runs before any of this one) and is
-    // not. The material composes its colour from the capture and writes the result, so anything drawn
-    // BETWEEN the capture and the water is overwritten rather than composited over. A marker at the end of
-    // the opaque stream therefore erased every translucent thing queued ahead of the water -- Navi, drawn
-    // translucent and queued ahead of the room by the caster-first order, disappeared wherever there was
-    // water behind her.
+    // The capture has to happen after EVERYTHING that writes depth. That is not the same as "after the
+    // opaque display list", because the room's TRANSLUCENT pass is set up with G_RM_AA_ZB_OPA_SURF2 -- an
+    // opaque zmode. Terrain queued into POLY_XLU therefore still writes depth, and a marker placed early in
+    // that list is taken BEFORE it: the linear depth target came back holding the nothing-drawn sentinel
+    // across ground that had been drawn perfectly well, which is what "magenta over terrain" was.
     //
-    // The capture has to sit as close in front of the water as the stream allows. That is what design
-    // document 4.2 item 8 means by taking the copy immediately before the water group.
-    gSPWaterCapture(POLY_XLU_DISP++);
+    // POLY_OPA is the only position where the depth is complete, because every command here runs before the
+    // first one there. The cost is known and accepted: translucent geometry queued ahead of the water is not
+    // in the colour copy and gets overwritten by it. F5 removes that cost rather than trading it -- its
+    // leak correction (design document 2.5.2) is precisely a test for "this sample is in front of the
+    // surface", which is the question that both failures here were really about.
+    gSPWaterCapture(POLY_OPA_DISP++);
     CLOSE_DISPS(gfxCtx);
 }
 

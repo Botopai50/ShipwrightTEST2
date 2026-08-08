@@ -1619,6 +1619,23 @@ void Play_Draw(PlayState* play) {
             func_800315AC(play, &play->actorCtx);
         }
 
+        // SOH [Enhancement] Breath of the Wild-style water: take the scene capture the water material reads.
+        //
+        // Here because this is the first point at which every depth write in the world has happened -- the
+        // room and every actor, under either draw order -- and before the lens flare and screen fills, which
+        // are camera effects rather than parts of the world and have no business showing up through a lake.
+        //
+        // It was moved into the translucent list for a while, to get Navi into the colour copy so the water
+        // would stop erasing her. That broke something worse and taught the rule this comment exists to
+        // record: the room's TRANSLUCENT pass is set up with an OPAQUE zmode, so terrain queued there still
+        // writes depth, and a marker early in that list is taken before it. The depth target came back
+        // holding the nothing-drawn sentinel over ground that had drawn perfectly well.
+        //
+        // So the capture belongs at the end of the opaque stream, and the cost -- translucent things queued
+        // ahead of the water being overwritten by it -- is carried until F5, whose leak correction is
+        // precisely a test for "this sample is in front of the surface".
+        WaterRendering_EmitCapture(gfxCtx);
+
 
         if ((HREG(80) != 10) || (HREG(86) != 0)) {
             if (!play->envCtx.sunMoonDisabled) {

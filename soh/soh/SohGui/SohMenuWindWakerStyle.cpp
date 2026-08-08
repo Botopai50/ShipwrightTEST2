@@ -721,7 +721,7 @@ void SohMenu::AddMenuWindWakerStyle() {
                      .Format("%.2f")
                      .Min(0.0f)
                      .Max(8.0f)
-                     .DefaultValue(4.0f)); // SHADOW_MAP_DEFAULT_DEPTH_BIAS_WORLD
+                     .DefaultValue(0.05f)); // SHADOW_MAP_DEFAULT_DEPTH_BIAS_WORLD
     AddWidget(path, "Slope Bias", WIDGET_CVAR_SLIDER_FLOAT)
         .CVar(CVAR_ENHANCEMENT("Graphics.ShadowMap.SlopeBias"))
         .RaceDisable(false)
@@ -737,7 +737,7 @@ void SohMenu::AddMenuWindWakerStyle() {
                      .Format("%.2f")
                      .Min(0.0f)
                      .Max(16.0f)
-                     .DefaultValue(4.0f)); // SHADOW_MAP_DEFAULT_SLOPE_BIAS
+                     .DefaultValue(1.0f)); // SHADOW_MAP_DEFAULT_SLOPE_BIAS
     AddWidget(path, "Normal Offset", WIDGET_CVAR_SLIDER_FLOAT)
         .CVar(CVAR_ENHANCEMENT("Graphics.ShadowMap.NormalOffset"))
         .RaceDisable(false)

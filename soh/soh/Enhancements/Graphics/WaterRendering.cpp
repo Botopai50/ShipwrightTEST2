@@ -52,6 +52,11 @@ static struct WaterParams {
     // ticking on the renderer's side would scroll the water at the interpolated rate while everything beside
     // it moved at the game's.
     float time = 0.0f;
+    // How much of a claimed surface the material may replace, as a gain on that surface's own alpha. A
+    // slider rather than a constant because what it must be set against -- the alpha the combiner actually
+    // produces for water -- is not readable from either side, and finding one number a build at a time is
+    // the slow way to do it.
+    float coverageGain = WATER_DEFAULT_COVERAGE_GAIN;
 } sParams;
 
 static std::shared_ptr<Fast::Interpreter> GetInterpreter() {
@@ -86,6 +91,8 @@ static void RefreshWaterParams() {
     if (quality < WATER_QUALITY_OFF || quality >= WATER_QUALITY_COUNT) {
         quality = WATER_DEFAULT_QUALITY;
     }
+    sParams.coverageGain =
+        CVarGetFloat(CVAR_ENHANCEMENT("Graphics.Water.CoverageGain"), WATER_DEFAULT_COVERAGE_GAIN);
     int debugView = CVarGetInteger(CVAR_DEVELOPER_TOOLS("Water.DebugView"), WATER_DEBUG_OFF);
     if (debugView < WATER_DEBUG_OFF || debugView >= WATER_DEBUG_COUNT) {
         debugView = WATER_DEBUG_OFF;
@@ -110,7 +117,8 @@ static void RefreshWaterParams() {
     if (auto interp = GetInterpreter()) {
         // `enabled` already folds in the backend capability, so the interpreter can trust it and does not
         // repeat the check -- the same contract the shadow map uses.
-        interp->SetWaterParams(sParams.enabled, sParams.quality, sParams.debugView, sParams.time);
+        interp->SetWaterParams(sParams.enabled, sParams.quality, sParams.debugView, sParams.time,
+                               sParams.coverageGain);
     }
 }
 

@@ -214,7 +214,8 @@ extern "C" const char* WaterRendering_Census(void) {
         return sCensusText.c_str();
     }
     int tris = 0, boxesHit = 0, boxesTotal = 0, breakdown[5] = {};
-    interp->GetWaterCensus(&tris, &boxesHit, &boxesTotal, breakdown);
+    float avgAlpha = 0.0f;
+    interp->GetWaterCensus(&tris, &boxesHit, &boxesTotal, breakdown, &avgAlpha);
 
     char buf[320];
     if (boxesTotal == 0) {
@@ -228,9 +229,10 @@ extern "C" const char* WaterRendering_Census(void) {
                  "  wrong height : %d\n"
                  "  not flat     : %d\n"
                  "  taken (xlu)  : %d\n"
-                 "  left  (opa)  : %d",
+                 "  left  (opa)  : %d\n"
+                 "  mean alpha   : %.2f",
                  tris, boxesHit, boxesTotal, boxesTotal == 1 ? "" : "es", breakdown[0], breakdown[1],
-                 breakdown[2], breakdown[3], breakdown[4]);
+                 breakdown[2], breakdown[3], breakdown[4], avgAlpha);
     }
     sCensusText = buf;
     return sCensusText.c_str();

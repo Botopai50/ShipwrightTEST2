@@ -1567,20 +1567,7 @@ void Play_Draw(PlayState* play) {
         // reach the actors, and moving them above it would let a backdrop erase everyone in the room. The
         // reorder is worth nothing there anyway: it buys a moving character's shadow on the ground, and
         // these are small interiors.
-        // SOH [Enhancement] Cascaded shadow maps draw the actors ahead of the room so the depth pass can
-        // consume this frame's own captures, which is what took the lag off a moving character's shadow.
-        //
-        // The water material cannot live with that order. It composes its colour from a capture of the frame
-        // and WRITES the result, so anything translucent queued ahead of it is either erased (absent from
-        // the capture) or tinted as though it were underwater (present in the capture but not in the depth,
-        // because translucent geometry does not write depth -- which is what makes it translucent). Navi
-        // over a lake hit both in turn. No capture position fixes it: the fix is for the water to be drawn
-        // BEFORE the translucent things that sit in front of it, which means the room going first.
-        //
-        // So the two features want opposite orders and water wins while it is on. The cost is real and worth
-        // naming: character shadows get back the one frame of lag that the caster-first order removed.
-        s32 shadowMapCasterFirst = ToonLighting_ShadowMapEnabled() && (play->skyboxCtx.unk_140 == 0) &&
-                                   !WaterRendering_Enabled();
+        s32 shadowMapCasterFirst = ToonLighting_ShadowMapEnabled() && (play->skyboxCtx.unk_140 == 0);
 
         if (shadowMapCasterFirst && ((HREG(80) != 10) || (HREG(85) != 0))) {
             func_800315AC(play, &play->actorCtx);

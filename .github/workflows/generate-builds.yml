@@ -17,13 +17,19 @@ jobs:
 
   generate-soh-otr:
     # SOH [fork] Build the default branch (whatever it is currently named -- this warms the
-    # ccache/deps/vcpkg caches, which only `save` on the default branch), release tags, and
-    # anything started by hand. Pushes to other branches skip instantly at zero cost. Every other job
-    # `needs:` this one, so they skip with it.
+    # ccache/deps/vcpkg caches, which only `save` on the default branch), release tags, feature
+    # branches named below, and anything started by hand. Pushes to other branches skip instantly at
+    # zero cost. Every other job `needs:` this one, so they skip with it.
+    #
+    # The name substrings are the opt-in: a branch whose work is worth a build on every push says so
+    # by carrying one, and everything else stays free. `shadowmap` joins `celshade` because that work
+    # lands in the renderer's Windows-only depth pass -- the one part of it no other job compiles, so
+    # a push that is never built is a push that is never checked.
     if: >-
       github.event_name == 'workflow_dispatch'
       || github.ref_name == github.event.repository.default_branch
       || contains(github.ref, 'celshade')
+      || contains(github.ref, 'shadowmap')
     runs-on: ubuntu-22.04
     steps:
     - name: Git Checkout

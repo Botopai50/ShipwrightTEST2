@@ -3219,6 +3219,22 @@ void func_800315AC(PlayState* play, ActorContext* actorCtx) {
         gSPToon(POLY_XLU_DISP++, true);
     }
 
+    // SOH [Enhancement] Water: an ACTOR is not the water surface. The surface is scene geometry -- a lake,
+    // a river, a moat are part of the room mesh -- while what actors put at that height is what floats on
+    // it or falls into it: the ripples around a swimmer, the mist at the foot of Zora's waterfall, spray.
+    // Every one of those is flat, translucent and exactly at the water's height, because that is where such
+    // things belong, so no geometric test can separate them from the surface itself.
+    //
+    // Bracketing the whole loop rather than naming them one at a time is the point. Three of these were
+    // found one screenshot at a time and each fix only covered the one that had been noticed; this covers
+    // the ones nobody has walked past yet. The two actors that genuinely DO draw a water surface lift the
+    // veto for themselves (see WaterRendering_ActorDrawsWater).
+    s32 waterActorVeto = WaterRendering_Enabled();
+    if (waterActorVeto) {
+        gSPWaterSurfaceOff(POLY_OPA_DISP++);
+        gSPWaterSurfaceOff(POLY_XLU_DISP++);
+    }
+
     // SOH [Enhancement] WW actor shadows/light casting: walkable-floor receiver pre-pass.
     // A few "floors" are actors, not room mesh (drawbridge, Gerudo Valley bridge, some dungeon platforms).
     // Drawn here, BEFORE the light-pool and shadow flushes below, their surfaces enter the depth buffer so both
@@ -3285,6 +3301,12 @@ void func_800315AC(PlayState* play, ActorContext* actorCtx) {
 
             actor = actor->next;
         }
+    }
+
+    // SOH [Enhancement] Water: reopen it for the scene geometry that follows.
+    if (waterActorVeto) {
+        gSPWaterSurfaceOn(POLY_OPA_DISP++);
+        gSPWaterSurfaceOn(POLY_XLU_DISP++);
     }
 
     // SOH [Enhancement] Toon lighting: end the actor bracket before effects/lens/UI are drawn.

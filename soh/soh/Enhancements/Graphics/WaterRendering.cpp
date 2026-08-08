@@ -84,6 +84,10 @@ extern "C" int WaterRendering_Enabled(void) {
 // which runs long after ShipInit. Calling the whole hook at registration dereferenced a null pointer before
 // the title screen. ToonLighting already draws this line -- RefreshFrameParams reads settings,
 // OnToonFrameUpdate touches game state -- and it is worth stating why rather than just copying the shape.
+// Tracks whether the water-surface veto is currently lifted in the stream, so markers are emitted only on a
+// change. Almost every actor is not a water surface, so almost every frame this costs nothing.
+static bool sWaterActorLifted = false;
+
 static void RefreshWaterParams() {
     const bool wanted = CVarGetInteger(CVAR_ENHANCEMENT("Graphics.Water.Enabled"), 0) != 0;
 
@@ -91,8 +95,6 @@ static void RefreshWaterParams() {
     if (quality < WATER_QUALITY_OFF || quality >= WATER_QUALITY_COUNT) {
         quality = WATER_DEFAULT_QUALITY;
     }
-    sParams.coverageGain =
-        CVarGetFloat(CVAR_ENHANCEMENT("Graphics.Water.CoverageGain"), WATER_DEFAULT_COVERAGE_GAIN);
     int debugView = CVarGetInteger(CVAR_DEVELOPER_TOOLS("Water.DebugView"), WATER_DEBUG_OFF);
     if (debugView < WATER_DEBUG_OFF || debugView >= WATER_DEBUG_COUNT) {
         debugView = WATER_DEBUG_OFF;
@@ -113,6 +115,8 @@ static void RefreshWaterParams() {
     if (!sParams.enabled) {
         sParams.time = 0.0f; // a re-enable starts the surface from a defined phase rather than mid-scroll
     }
+    // The actor loop reopens the veto every frame, so the tracker has to start each frame agreeing with it.
+    sWaterActorLifted = false;
 
     if (auto interp = GetInterpreter()) {
         // `enabled` already folds in the backend capability, so the interpreter can trust it and does not
@@ -246,6 +250,52 @@ extern "C" const char* WaterRendering_Census(void) {
     return sCensusText.c_str();
 }
 
+// The actor draw loop is bracketed against water identification wholesale (see z_actor.c): an actor at the
+// water's height is normally something ON the water -- ripples, mist, spray -- and no geometric test can
+// tell those from the surface, because they genuinely sit on it.
+//
+// These two are the exception, and they are the reason the veto is a bracket with a hole in it rather than
+// a blanket: both draw a real water surface as an actor because their water MOVES, which the room mesh
+// cannot express.
+// Per-actor hook. The whole actor loop is bracketed OFF in z_actor.c; this lifts the veto around the two
+// actors that genuinely draw a water surface and puts it back for the next one.
+//
+// Its own hook rather than a branch inside ToonLighting's, because that one returns early when both cel
+// shading and shadows are off -- and the water feature has to work whether or not those are on.
+static void HandleWaterActorDraw(void* actorPtr) {
+    if (!sParams.enabled) {
+        return;
+    }
+    Actor* actor = (Actor*)actorPtr;
+    const bool lift = WaterRendering_ActorDrawsWater(actor) != 0;
+    if (lift == sWaterActorLifted || gPlayState == NULL) {
+        return;
+    }
+    sWaterActorLifted = lift;
+    OPEN_DISPS(gPlayState->state.gfxCtx);
+    if (lift) {
+        gSPWaterSurfaceOn(POLY_OPA_DISP++);
+        gSPWaterSurfaceOn(POLY_XLU_DISP++);
+    } else {
+        gSPWaterSurfaceOff(POLY_OPA_DISP++);
+        gSPWaterSurfaceOff(POLY_XLU_DISP++);
+    }
+    CLOSE_DISPS(gPlayState->state.gfxCtx);
+}
+
+extern "C" int WaterRendering_ActorDrawsWater(Actor* actor) {
+    if (actor == NULL) {
+        return 0;
+    }
+    switch (actor->id) {
+        case ACTOR_BG_MIZU_WATER:  // Water Temple: the level that rises and falls
+        case ACTOR_BG_HAKA_WATER:  // Shadow Temple
+            return 1;
+        default:
+            return 0;
+    }
+}
+
 extern "C" void WaterRendering_EmitCapture(GraphicsContext* gfxCtx) {
     if (!sParams.enabled || gfxCtx == NULL) {
         return;
@@ -266,6 +316,7 @@ void RegisterWaterRendering() {
     // Registered unconditionally, like the toon module: the per-frame snapshot gates all the work, which is
     // what lets a console `set` of the CVar take effect without this having to re-run.
     COND_HOOK(OnGameFrameUpdate, true, OnWaterFrameUpdate);
+    COND_HOOK(OnActorDraw, true, HandleWaterActorDraw);
     // The settings half only. This runs during InitOTR, where the game's own state does not exist yet.
     RefreshWaterParams();
 }

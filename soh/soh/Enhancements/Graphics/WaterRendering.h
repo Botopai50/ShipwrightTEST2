@@ -34,6 +34,12 @@ void WaterRendering_EmitCapture(struct GraphicsContext* gfxCtx);
 // caster census taught.
 const char* WaterRendering_Census(void);
 
+// Whether this actor draws a genuine water SURFACE, and so must be exempt from the veto that covers the
+// actor draw loop. Two of them: the Water Temple's rising water and the Shadow Temple's. Everything else an
+// actor puts at water height is on the water rather than being it.
+struct Actor;
+int WaterRendering_ActorDrawsWater(struct Actor* actor);
+
 #ifdef __cplusplus
 }
 #endif

@@ -870,25 +870,6 @@ void SohMenu::AddMenuWindWakerStyle() {
                               "High: adds full reflection stepping and caustics.\n\n"
                               "Each level is a superset of the one below it."));
 
-    AddWidget(path, "Surface Strength: %.2f", WIDGET_CVAR_SLIDER_FLOAT)
-        .CVar(CVAR_ENHANCEMENT("Graphics.Water.CoverageGain"))
-        .PreFunc(hideUnlessWater)
-        .Options(FloatSliderOptions()
-                     .Format("%.2f")
-                     .Min(0.5f)
-                     .Max(12.0f)
-                     .DefaultValue(2.2f) // WATER_DEFAULT_COVERAGE_GAIN
-                     .Tooltip("How strongly the new material replaces the original water surface.\n\n"
-                              "The identification is geometric, so anything flat and translucent at the "
-                              "water's height gets claimed -- the ripples around a swimming player, the mist "
-                              "at the foot of a waterfall. Those are genuinely at the water surface, so no "
-                              "geometric test can turn them away; what separates them is that they barely "
-                              "cover anything, and this scales the material by how much the original draw "
-                              "covered.\n\n"
-                              "Turn it UP until the water looks right. Turn it DOWN if mist, spray or "
-                              "ripples start showing up as solid coloured slabs -- that is the same control "
-                              "from the other end."));
-
     AddWidget(path, "Water Debug", WIDGET_SEPARATOR_TEXT).PreFunc(hideUnlessWater);
     static const std::map<int32_t, const char*> waterDebugLabels = {
         { 0, "Off" },            // WATER_DEBUG_OFF

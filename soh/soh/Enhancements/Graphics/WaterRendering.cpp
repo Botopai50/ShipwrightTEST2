@@ -249,14 +249,19 @@ extern "C" void WaterRendering_EmitCapture(GraphicsContext* gfxCtx) {
         return;
     }
     OPEN_DISPS(gfxCtx);
-    // Into the OPAQUE list. Every command in POLY_OPA runs before the first one in POLY_XLU, so a marker at
-    // the end of the opaque stream is guaranteed to see a complete opaque scene -- the terrain, the walls,
-    // the lake bed, the actors' solid geometry -- and nothing translucent yet. That is precisely the image
-    // the water has to refract and reflect.
+    // Into the TRANSLUCENT list, at the point the caller emits it -- immediately before the room's own
+    // translucent pass, which is where the water surface is drawn.
     //
-    // Which is also why this cannot simply be "once per frame at the top": the capture has to sit at a
-    // position in the stream, not at a position in the renderer's frame.
-    gSPWaterCapture(POLY_OPA_DISP++);
+    // It was in POLY_OPA, which looks equivalent (all of that stream runs before any of this one) and is
+    // not. The material composes its colour from the capture and writes the result, so anything drawn
+    // BETWEEN the capture and the water is overwritten rather than composited over. A marker at the end of
+    // the opaque stream therefore erased every translucent thing queued ahead of the water -- Navi, drawn
+    // translucent and queued ahead of the room by the caster-first order, disappeared wherever there was
+    // water behind her.
+    //
+    // The capture has to sit as close in front of the water as the stream allows. That is what design
+    // document 4.2 item 8 means by taking the copy immediately before the water group.
+    gSPWaterCapture(POLY_XLU_DISP++);
     CLOSE_DISPS(gfxCtx);
 }
 

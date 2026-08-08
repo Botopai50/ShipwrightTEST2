@@ -11,6 +11,7 @@
 #include <libultraship/bridge/gfxbridge.h>
 #include "soh/OTRGlobals.h"
 #include "soh/Enhancements/Graphics/ToonLighting.h"
+#include "soh/Enhancements/Graphics/WaterRendering.h"
 #include "soh/ResourceManagerHelpers.h"
 
 void func_80095AB4(PlayState* play, Room* room, u32 flags);
@@ -667,6 +668,17 @@ void Room_Draw(PlayState* play, Room* room, u32 flags) {
         // zmode and the renderer turns them away on exactly the grounds it did before; the room's
         // translucent pass is set up with G_RM_AA_ZB_OPA_SURF2, an opaque zmode, so what actually passes is
         // solid geometry that was merely queued late.
+        // SOH [Enhancement] Breath of the Wild-style water: take the scene capture the water material reads,
+        // HERE, immediately before the room's own translucent list -- which is where the water surface is.
+        //
+        // It used to sit at the end of POLY_OPA, which looked equivalent and is not. The material composes
+        // its colour out of the capture and writes the result, so anything drawn between the capture and the
+        // water is simply overwritten: Navi, drawn translucent and (with the caster-first order) queued
+        // ahead of the room, vanished wherever water was behind her. Design document 4.2 item 8 says the
+        // copy belongs immediately before the water group for exactly this reason; taking it a whole display
+        // list earlier is what made it wrong.
+        WaterRendering_EmitCapture(play->state.gfxCtx);
+
         s32 shadowMapWorldCasters = ToonLighting_ShadowMapEnabled();
         if (shadowMapWorldCasters) {
             OPEN_DISPS(play->state.gfxCtx);

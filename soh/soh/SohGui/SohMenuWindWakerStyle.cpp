@@ -538,7 +538,6 @@ void SohMenu::AddMenuWindWakerStyle() {
             CVarClear(CVAR_ENHANCEMENT("Graphics.ShadowMap.Split0"));
             CVarClear(CVAR_ENHANCEMENT("Graphics.ShadowMap.Split1"));
             CVarClear(CVAR_ENHANCEMENT("Graphics.ShadowMap.Split2"));
-            CVarClear(CVAR_ENHANCEMENT("Graphics.ShadowMap.Split3"));
             CVarClear(CVAR_ENHANCEMENT("Graphics.ShadowMap.FilterWidth"));
             CVarClear(CVAR_ENHANCEMENT("Graphics.ShadowMap.EdgeHardness"));
             CVarClear(CVAR_ENHANCEMENT("Graphics.ShadowMap.EdgeHardnessFar"));
@@ -599,13 +598,13 @@ void SohMenu::AddMenuWindWakerStyle() {
         .RaceDisable(false)
         .PreFunc(hideUnlessShadowMap)
         .Options(IntSliderOptions()
-                     .Tooltip("How many of the four distance bands below are actually built.\n\n"
+                     .Tooltip("How many of the three distance bands below are actually built.\n\n"
                               "This is not a quality setting: the distances are absolute, so lowering the count "
                               "does not spread the same range over fewer maps -- it CUTS the range short at the "
                               "last active band, and shadows simply stop beyond it. Lower it to buy frames, "
                               "knowing distant shadows go with it.")
                      .Min(1)
-                     .Max(4)
+                     .Max(3))
                      .DefaultValue(3) // SHADOW_MAP_DEFAULT_CASCADES
                      .ShowButtons(true)
                      .Format("%d"));
@@ -633,7 +632,7 @@ void SohMenu::AddMenuWindWakerStyle() {
                      .Tooltip("Where the second cascade stops. Keep the distances in increasing order; if one "
                               "lands below the band before it, the renderer pushes it back up and that band "
                               "ends up covering nothing.\n\n"
-                              "At the default of three cascades this is the sharpness control for the middle "
+                              "This is the sharpness control for the middle distance. "
                               "distance. A cascade's map is stretched over the frustum's width at its FAR edge, "
                               "so the last band is coarse whatever it starts at -- pushing this one further out "
                               "hands more of the scene to a band that is still fine, at the cost of the last "
@@ -641,7 +640,7 @@ void SohMenu::AddMenuWindWakerStyle() {
                      .Format("%.0f")
                      .Min(100.0f)
                      .Max(3000.0f)
-                     .DefaultValue(1500.0f)); // SHADOW_MAP_DEFAULT_SPLIT_1
+                     .DefaultValue(1200.0f)); // SHADOW_MAP_DEFAULT_SPLIT_1
     AddWidget(path, "Far Band Ends At: %.0f", WIDGET_CVAR_SLIDER_FLOAT)
         .CVar(CVAR_ENHANCEMENT("Graphics.ShadowMap.Split2"))
         .RaceDisable(false)
@@ -649,30 +648,15 @@ void SohMenu::AddMenuWindWakerStyle() {
         .Options(FloatSliderOptions()
                      .Tooltip("Where the third cascade stops. This is usually the band a building's shadow "
                               "falls in, so it is worth tightening if mid-distance shadows look coarse.\n\n"
-                              "With Cascade Count set to 3 this is ALSO where every shadow ends -- the "
-                              "last active band is the draw distance, whichever one that is -- which is "
-                              "why it reaches as far as the fourth band does.")
+                              "This is also where every shadow ENDS: the last active band is the draw "
+                              "distance, and with the default three cascades that is this one. Raising it "
+                              "stretches the same map over more ground, so distant shadows get blockier "
+                              "rather than better; lowering it sharpens everything inside the new range and "
+                              "simply ends shadows sooner.")
                      .Format("%.0f")
                      .Min(300.0f)
                      .Max(12000.0f)
                      .DefaultValue(6000.0f)); // SHADOW_MAP_DEFAULT_SPLIT_2
-    AddWidget(path, "Shadow Draw Distance: %.0f", WIDGET_CVAR_SLIDER_FLOAT)
-        .CVar(CVAR_ENHANCEMENT("Graphics.ShadowMap.Split3"))
-        .RaceDisable(false)
-        .PreFunc(hideUnlessShadowMap)
-        .Options(FloatSliderOptions()
-                     .Tooltip("Where the last cascade stops, and with it every shadow: past this distance "
-                              "nothing is shadowed at all.\n\n"
-                              "Raising it stretches the same map over more ground, so distant shadows get "
-                              "blockier rather than better. Lowering it sharpens everything inside the new "
-                              "range and simply ends shadows sooner.\n\n"
-                              "UNUSED unless Cascade Count is 4. Below that the range ends at the last active "
-                              "band, and this value is ignored -- so if you do raise the count, raise this "
-                              "past the band before it or the fourth cascade is handed no range at all.")
-                     .Format("%.0f")
-                     .Min(1000.0f)
-                     .Max(12000.0f)
-                     .DefaultValue(6000.0f)); // SHADOW_MAP_DEFAULT_SPLIT_3
 
     AddWidget(path, "Edges", WIDGET_SEPARATOR_TEXT).PreFunc(hideUnlessShadowMap);
     AddWidget(path, "Blur", WIDGET_CVAR_SLIDER_FLOAT)

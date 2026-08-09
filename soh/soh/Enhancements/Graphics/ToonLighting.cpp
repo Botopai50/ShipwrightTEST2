@@ -81,7 +81,7 @@ static struct {
     bool shadowMapSupported = false; // the running backend implements the depth pass (D3D11 only)
     // Radial distance from the camera past which an actor is not worth capturing as a shadow caster: the
     // furthest active cascade, since beyond that there is no depth map left to record it in.
-    f32 shadowMapReach = SHADOW_MAP_DEFAULT_SPLIT_3;
+    f32 shadowMapReach = SHADOW_MAP_DEFAULT_SPLIT_2;
     f32 shadowMapCasterDrawRadius = 0.0f;
     // The direction the key light TRAVELS, world space, normalised -- the same vector the cascades are
     // built from, kept here so the caster-reach test can follow a shadow along it. Straight down until the
@@ -185,14 +185,12 @@ static void RefreshFrameParams() {
         Fast::GfxRenderingAPI* rapi = GetRenderingApi();
         sParams.shadowMapSupported = rapi != nullptr && rapi->SupportsShadowMap();
         // Caster reach = the last active cascade's far split (see shadowMapReach).
-        static const char* kSplitCVars[SHADOW_MAP_MAX_CASCADES] = {
-            CVAR_ENHANCEMENT("Graphics.ShadowMap.Split0"), CVAR_ENHANCEMENT("Graphics.ShadowMap.Split1"),
-            CVAR_ENHANCEMENT("Graphics.ShadowMap.Split2"), CVAR_ENHANCEMENT("Graphics.ShadowMap.Split3")
-        };
+        static const char* kSplitCVars[SHADOW_MAP_MAX_CASCADES] = { CVAR_ENHANCEMENT("Graphics.ShadowMap.Split0"),
+                                                                    CVAR_ENHANCEMENT("Graphics.ShadowMap.Split1"),
+                                                                    CVAR_ENHANCEMENT("Graphics.ShadowMap.Split2") };
         static const f32 kSplitDefaults[SHADOW_MAP_MAX_CASCADES] = { SHADOW_MAP_DEFAULT_SPLIT_0,
                                                                      SHADOW_MAP_DEFAULT_SPLIT_1,
-                                                                     SHADOW_MAP_DEFAULT_SPLIT_2,
-                                                                     SHADOW_MAP_DEFAULT_SPLIT_3 };
+                                                                     SHADOW_MAP_DEFAULT_SPLIT_2 };
         s32 count = CVarGetInteger(CVAR_ENHANCEMENT("Graphics.ShadowMap.CascadeCount"), SHADOW_MAP_DEFAULT_CASCADES);
         count = count < 1 ? 1 : (count > SHADOW_MAP_MAX_CASCADES ? SHADOW_MAP_MAX_CASCADES : count);
         sParams.shadowMapReach = CVarGetFloat(kSplitCVars[count - 1], kSplitDefaults[count - 1]);
@@ -636,10 +634,11 @@ static void OnToonFrameUpdate() {
         // picks, negated: the toon uniform points from the surface toward the light, while a shadow
         // projection needs the direction the light travels.
         const bool shadowMapOn = ToonLighting_ShadowMapEnabled() != 0;
-        f32 splits[4] = { CVarGetFloat(CVAR_ENHANCEMENT("Graphics.ShadowMap.Split0"), SHADOW_MAP_DEFAULT_SPLIT_0),
-                          CVarGetFloat(CVAR_ENHANCEMENT("Graphics.ShadowMap.Split1"), SHADOW_MAP_DEFAULT_SPLIT_1),
-                          CVarGetFloat(CVAR_ENHANCEMENT("Graphics.ShadowMap.Split2"), SHADOW_MAP_DEFAULT_SPLIT_2),
-                          CVarGetFloat(CVAR_ENHANCEMENT("Graphics.ShadowMap.Split3"), SHADOW_MAP_DEFAULT_SPLIT_3) };
+        f32 splits[SHADOW_MAP_MAX_CASCADES] = {
+            CVarGetFloat(CVAR_ENHANCEMENT("Graphics.ShadowMap.Split0"), SHADOW_MAP_DEFAULT_SPLIT_0),
+            CVarGetFloat(CVAR_ENHANCEMENT("Graphics.ShadowMap.Split1"), SHADOW_MAP_DEFAULT_SPLIT_1),
+            CVarGetFloat(CVAR_ENHANCEMENT("Graphics.ShadowMap.Split2"), SHADOW_MAP_DEFAULT_SPLIT_2)
+        };
         // One sun (or moon) for the whole frame, straight from the environment directionals. This used to
         // take the last actor key emitted, which looked right until Navi walked on screen: Navi IS a light,
         // so her key became "the frame's light" and every shadow in the scene swung to point away from her.

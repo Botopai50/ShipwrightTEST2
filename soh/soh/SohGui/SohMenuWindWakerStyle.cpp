@@ -643,10 +643,13 @@ void SohMenu::AddMenuWindWakerStyle() {
         .PreFunc(hideUnlessShadowMap)
         .Options(FloatSliderOptions()
                      .Tooltip("Where the third cascade stops. This is usually the band a building's shadow "
-                              "falls in, so it is worth tightening if mid-distance shadows look coarse.")
+                              "falls in, so it is worth tightening if mid-distance shadows look coarse.\n\n"
+                              "With Cascade Count set to 3 this is ALSO where every shadow ends -- the "
+                              "last active band is the draw distance, whichever one that is -- which is "
+                              "why it reaches as far as the fourth band does.")
                      .Format("%.0f")
                      .Min(300.0f)
-                     .Max(4000.0f)
+                     .Max(6000.0f)
                      .DefaultValue(2500.0f)); // SHADOW_MAP_DEFAULT_SPLIT_2
     AddWidget(path, "Shadow Draw Distance: %.0f", WIDGET_CVAR_SLIDER_FLOAT)
         .CVar(CVAR_ENHANCEMENT("Graphics.ShadowMap.Split3"))

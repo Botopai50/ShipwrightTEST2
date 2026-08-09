@@ -604,7 +604,7 @@ void SohMenu::AddMenuWindWakerStyle() {
                               "last active band, and shadows simply stop beyond it. Lower it to buy frames, "
                               "knowing distant shadows go with it.")
                      .Min(1)
-                     .Max(3))
+                     .Max(3)
                      .DefaultValue(3) // SHADOW_MAP_DEFAULT_CASCADES
                      .ShowButtons(true)
                      .Format("%d"));
@@ -632,8 +632,8 @@ void SohMenu::AddMenuWindWakerStyle() {
                      .Tooltip("Where the second cascade stops. Keep the distances in increasing order; if one "
                               "lands below the band before it, the renderer pushes it back up and that band "
                               "ends up covering nothing.\n\n"
-                              "This is the sharpness control for the middle distance. "
-                              "distance. A cascade's map is stretched over the frustum's width at its FAR edge, "
+                              "This is the sharpness control for the middle distance. A cascade's map is "
+                              "stretched over the frustum's width at its FAR edge, "
                               "so the last band is coarse whatever it starts at -- pushing this one further out "
                               "hands more of the scene to a band that is still fine, at the cost of the last "
                               "one starting later.")

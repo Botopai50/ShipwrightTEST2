@@ -508,7 +508,7 @@ void SohMenu::AddMenuWindWakerStyle() {
                               "more than they're worth). Lower to gain frames in crowded scenes; raise for "
                               "shadows that stay visible into the distance.")
                      .Min(300)
-                     .Max(5000)
+                     .Max(6000)
                      .DefaultValue(550)
                      .ShowButtons(true)
                      .Format("%d"));
@@ -623,7 +623,7 @@ void SohMenu::AddMenuWindWakerStyle() {
                               "shadow looks. Pull it in for sharper close-up shadows.")
                      .Format("%.0f")
                      .Min(50.0f)
-                     .Max(600.0f)
+                     .Max(6000.0f)
                      .DefaultValue(150.0f)); // SHADOW_MAP_DEFAULT_SPLIT_0
     AddWidget(path, "Mid Band Ends At: %.0f", WIDGET_CVAR_SLIDER_FLOAT)
         .CVar(CVAR_ENHANCEMENT("Graphics.ShadowMap.Split1"))
@@ -635,7 +635,7 @@ void SohMenu::AddMenuWindWakerStyle() {
                               "ends up covering nothing.")
                      .Format("%.0f")
                      .Min(100.0f)
-                     .Max(1500.0f)
+                     .Max(6000.0f)
                      .DefaultValue(500.0f)); // SHADOW_MAP_DEFAULT_SPLIT_1
     AddWidget(path, "Far Band Ends At: %.0f", WIDGET_CVAR_SLIDER_FLOAT)
         .CVar(CVAR_ENHANCEMENT("Graphics.ShadowMap.Split2"))
@@ -646,7 +646,7 @@ void SohMenu::AddMenuWindWakerStyle() {
                               "falls in, so it is worth tightening if mid-distance shadows look coarse.")
                      .Format("%.0f")
                      .Min(300.0f)
-                     .Max(4000.0f)
+                     .Max(6000.0f)
                      .DefaultValue(2500.0f)); // SHADOW_MAP_DEFAULT_SPLIT_2
     AddWidget(path, "Shadow Draw Distance: %.0f", WIDGET_CVAR_SLIDER_FLOAT)
         .CVar(CVAR_ENHANCEMENT("Graphics.ShadowMap.Split3"))

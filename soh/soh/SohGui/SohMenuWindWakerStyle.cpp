@@ -606,7 +606,7 @@ void SohMenu::AddMenuWindWakerStyle() {
                               "knowing distant shadows go with it.")
                      .Min(1)
                      .Max(4)
-                     .DefaultValue(4) // SHADOW_MAP_DEFAULT_CASCADES
+                     .DefaultValue(3) // SHADOW_MAP_DEFAULT_CASCADES
                      .ShowButtons(true)
                      .Format("%d"));
 
@@ -630,13 +630,18 @@ void SohMenu::AddMenuWindWakerStyle() {
         .RaceDisable(false)
         .PreFunc(hideUnlessShadowMap)
         .Options(FloatSliderOptions()
-                     .Tooltip("Where the second cascade stops. Keep the four distances in increasing order; if "
-                              "one lands below the band before it, the renderer pushes it back up and that band "
-                              "ends up covering nothing.")
+                     .Tooltip("Where the second cascade stops. Keep the distances in increasing order; if one "
+                              "lands below the band before it, the renderer pushes it back up and that band "
+                              "ends up covering nothing.\n\n"
+                              "At the default of three cascades this is the sharpness control for the middle "
+                              "distance. A cascade's map is stretched over the frustum's width at its FAR edge, "
+                              "so the last band is coarse whatever it starts at -- pushing this one further out "
+                              "hands more of the scene to a band that is still fine, at the cost of the last "
+                              "one starting later.")
                      .Format("%.0f")
                      .Min(100.0f)
-                     .Max(1500.0f)
-                     .DefaultValue(500.0f)); // SHADOW_MAP_DEFAULT_SPLIT_1
+                     .Max(3000.0f)
+                     .DefaultValue(1500.0f)); // SHADOW_MAP_DEFAULT_SPLIT_1
     AddWidget(path, "Far Band Ends At: %.0f", WIDGET_CVAR_SLIDER_FLOAT)
         .CVar(CVAR_ENHANCEMENT("Graphics.ShadowMap.Split2"))
         .RaceDisable(false)
@@ -649,8 +654,8 @@ void SohMenu::AddMenuWindWakerStyle() {
                               "why it reaches as far as the fourth band does.")
                      .Format("%.0f")
                      .Min(300.0f)
-                     .Max(6000.0f)
-                     .DefaultValue(2500.0f)); // SHADOW_MAP_DEFAULT_SPLIT_2
+                     .Max(12000.0f)
+                     .DefaultValue(6000.0f)); // SHADOW_MAP_DEFAULT_SPLIT_2
     AddWidget(path, "Shadow Draw Distance: %.0f", WIDGET_CVAR_SLIDER_FLOAT)
         .CVar(CVAR_ENHANCEMENT("Graphics.ShadowMap.Split3"))
         .RaceDisable(false)
@@ -660,7 +665,10 @@ void SohMenu::AddMenuWindWakerStyle() {
                               "nothing is shadowed at all.\n\n"
                               "Raising it stretches the same map over more ground, so distant shadows get "
                               "blockier rather than better. Lowering it sharpens everything inside the new "
-                              "range and simply ends shadows sooner.")
+                              "range and simply ends shadows sooner.\n\n"
+                              "UNUSED unless Cascade Count is 4. Below that the range ends at the last active "
+                              "band, and this value is ignored -- so if you do raise the count, raise this "
+                              "past the band before it or the fourth cascade is handed no range at all.")
                      .Format("%.0f")
                      .Min(1000.0f)
                      .Max(12000.0f)

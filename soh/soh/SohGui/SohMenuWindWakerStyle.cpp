@@ -551,6 +551,9 @@ void SohMenu::AddMenuWindWakerStyle() {
             CVarClear(CVAR_ENHANCEMENT("Graphics.ShadowMap.TorchAuthority"));
             CVarClear(CVAR_ENHANCEMENT("Graphics.ShadowMap.NaviAuthority"));
             CVarClear(CVAR_ENHANCEMENT("Graphics.ShadowMap.KeyTravelTime"));
+            CVarClear(CVAR_ENHANCEMENT("Graphics.ShadowMap.PointBrighten"));
+            CVarClear(CVAR_ENHANCEMENT("Graphics.ShadowMap.PointShadow"));
+            CVarClear(CVAR_ENHANCEMENT("Graphics.ShadowMap.PointOrbitDamping"));
             Ship::Context::GetInstance()->GetWindow()->GetGui()->SaveConsoleVariablesNextFrame();
         })
         .Options(ButtonOptions().Tooltip("Devolve todas as opções do Shadow Map abaixo aos valores padrão."));
@@ -896,6 +899,63 @@ void SohMenu::AddMenuWindWakerStyle() {
                      .Min(0.1f)
                      .Max(6.0f)
                      .DefaultValue(1.5f)); // kDefaultKeyTravelTime
+
+    // The SECOND light. The cascades have one direction, so exactly one light casts the scene -- but the
+    // runner-up is still lighting the ground around the player, and these three decide how much of that is
+    // drawn. Brightening is arithmetic and free; the shadow is what costs an extra map.
+    AddWidget(path, "Segunda Luz", WIDGET_SEPARATOR_TEXT).PreFunc(hideUnlessShadowMap);
+    AddWidget(path, "Clareado da Segunda Luz", WIDGET_CVAR_SLIDER_FLOAT)
+        .CVar(CVAR_ENHANCEMENT("Graphics.ShadowMap.PointBrighten"))
+        .RaceDisable(false)
+        .PreFunc(hideUnlessShadowMap)
+        .Options(FloatSliderOptions()
+                     .Tooltip("Quanta luz a segunda luz da cena acrescenta em volta dela.\n\n"
+                              "A luz que projeta as sombras do quadro é uma só. Mas a segunda colocada da "
+                              "disputa (a tocha ao lado, ou a Navi quando uma tocha ficou com o quadro) "
+                              "continua iluminando o chão à sua volta. Isto é o quanto dela aparece: dentro "
+                              "do alcance dela, a sombra da primeira luz CLAREIA.\n\n"
+                              "É luz somada, não sombra removida, então ela nunca deixa nada mais escuro do "
+                              "que já estava. Zero desliga a segunda luz por completo, inclusive a sombra "
+                              "abaixo.")
+                     .Format("%.2f")
+                     .Min(0.0f)
+                     .Max(1.0f)
+                     .DefaultValue(0.35f)); // SHADOW_MAP_DEFAULT_POINT_BRIGHTEN
+    AddWidget(path, "Sombra da Segunda Luz", WIDGET_CVAR_SLIDER_FLOAT)
+        .CVar(CVAR_ENHANCEMENT("Graphics.ShadowMap.PointShadow"))
+        .RaceDisable(false)
+        .PreFunc(hideUnlessShadowMap)
+        .Options(FloatSliderOptions()
+                     .Tooltip("O quanto o clareado acima é BLOQUEADO por objetos: a sombra dentro da "
+                              "sombra.\n\n"
+                              "Em zero a segunda luz atravessa tudo -- ela clareia a área e mais nada, e não "
+                              "custa nenhum mapa. Acima de zero ela ganha um mapa próprio, e aí a sua "
+                              "silhueta aparece dentro daquela área clareada, projetada a partir dela.\n\n"
+                              "Isso não é um truque: duas luzes fazem duas sombras. Como a luz é somada, a "
+                              "sombra de dentro só pode escurecer até onde a primeira luz já tinha deixado, "
+                              "nunca além.\n\n"
+                              "Custo: um mapa extra, pequeno (o alcance da luz, não da cena) e desenhado só "
+                              "quando há algo dentro dele.")
+                     .Format("%.2f")
+                     .Min(0.0f)
+                     .Max(1.0f)
+                     .DefaultValue(1.0f)); // SHADOW_MAP_DEFAULT_POINT_SHADOW
+    AddWidget(path, "Suavizar Órbita: %.1fs", WIDGET_CVAR_SLIDER_FLOAT)
+        .CVar(CVAR_ENHANCEMENT("Graphics.ShadowMap.PointOrbitDamping"))
+        .RaceDisable(false)
+        .PreFunc(hideUnlessShadowMap)
+        .Options(FloatSliderOptions()
+                     .Tooltip("Desligado por padrão.\n\n"
+                              "A Navi gira em volta do Link, então a sombra que ela projeta gira junto. Isso "
+                              "é o certo, e você vê a fada se mexendo na tela, então o olho liga uma coisa à "
+                              "outra.\n\n"
+                              "Se ainda assim for movimento demais, este controle atrasa a POSIÇÃO da luz. "
+                              "Uma órbita se cancela na média, então o giro some enquanto o deslocamento "
+                              "real dela pela sala continua passando. Não afeta tochas, que não orbitam.")
+                     .Format("%.1f")
+                     .Min(0.0f)
+                     .Max(4.0f)
+                     .DefaultValue(0.0f)); // kDefaultPointOrbitDamping
 
     AddWidget(path, "Depuração", WIDGET_SEPARATOR_TEXT).PreFunc(hideUnlessShadowMap);
     // Live readout of which light won the frame. A lot of policy decides the single direction the cascades

@@ -92,6 +92,14 @@ static constexpr float kKeyIncumbentBonus = 1.35f;
 // themselves: a torch at head height should read as lighting from the side, not from straight above.
 static constexpr float kKeyFocusRise = 40.0f;
 
+// The second light. Brighten is how much light it adds where it reaches; shadow is how strongly that added
+// light is blocked by geometry, and it is the half that costs a slice. Orbit damping low-passes its position
+// and is off by default -- the light really does move, and a shadow that tracks a light the player can watch
+// moving reads as lighting rather than as a glitch.
+static constexpr float kDefaultPointBrighten = 0.35f;  // SHADOW_MAP_DEFAULT_POINT_BRIGHTEN
+static constexpr float kDefaultPointShadow = 1.0f;     // SHADOW_MAP_DEFAULT_POINT_SHADOW
+static constexpr float kDefaultPointOrbitDamping = 0.0f;
+
 // Actor-shadow defaults (the "Actor Shadows" page; CVar prefix Graphics.WorldShadows.*). Opacity is the
 // core blend strength; length maps (inversely) to how far a low-angle key may stretch the shadow (higher =
 // longer); slab depth/rise bound the ground band below/above the feet. All are game-side policy pushed once
@@ -138,6 +146,13 @@ static struct {
     f32 keyTorchAuthority = kDefaultKeyTorchAuthority;
     f32 keyNaviAuthority = kDefaultKeyNaviAuthority;
     f32 keyTravelTime = kDefaultKeyTravelTime;
+    // The second light (see the runner-up selection in ToonShadowKeySelect).
+    f32 pointBrighten = kDefaultPointBrighten;
+    f32 pointShadow = kDefaultPointShadow;
+    f32 pointOrbitDamping = kDefaultPointOrbitDamping;
+    // How far the key light is lifted off the horizon before anything is cast from it. Read once a frame
+    // because both lights now apply it, and they must apply the same one.
+    f32 shadowMinElevation = SHADOW_MAP_DEFAULT_MIN_ELEVATION;
 } sParams;
 
 static Fast::GfxRenderingAPI* GetRenderingApi(); // defined with the other Fast3D accessors below
@@ -145,6 +160,12 @@ static Fast::GfxRenderingAPI* GetRenderingApi(); // defined with the other Fast3
 static void ToonEnvKey(PlayState* play, f32 dirOut[3], f32 colOut[3]);
 // The frame-global shadow key: which of the scene's lights the cascades are built from; defined below.
 static void ToonShadowKeySelect(PlayState* play, f32 dirOut[3], f32 colOut[3]);
+// Lifts a light off the horizon and converts it to the direction the light travels; defined below. Both
+// lights apply it, which is why it is a function and not two copies of the same eight lines.
+static void ToonApplyElevationFloor(const f32 toward[3], f32 travelOut[3]);
+// The frame's SECOND light -- the best point light the key did not take. False when there isn't one, which
+// is most frames outdoors. Chosen by ToonShadowKeySelect, so this only reports what that already decided.
+static bool ToonShadowSecondLight(f32 posOut[3], f32 dirOut[3], f32* reachOut);
 
 // ===================================================================================================
 // Scenery-caster census.
@@ -266,6 +287,13 @@ static void RefreshFrameParams() {
         CVarGetFloat(CVAR_ENHANCEMENT("Graphics.ShadowMap.NaviAuthority"), kDefaultKeyNaviAuthority);
     sParams.keyTravelTime =
         CVarGetFloat(CVAR_ENHANCEMENT("Graphics.ShadowMap.KeyTravelTime"), kDefaultKeyTravelTime);
+    sParams.pointBrighten =
+        CVarGetFloat(CVAR_ENHANCEMENT("Graphics.ShadowMap.PointBrighten"), kDefaultPointBrighten);
+    sParams.pointShadow = CVarGetFloat(CVAR_ENHANCEMENT("Graphics.ShadowMap.PointShadow"), kDefaultPointShadow);
+    sParams.pointOrbitDamping =
+        CVarGetFloat(CVAR_ENHANCEMENT("Graphics.ShadowMap.PointOrbitDamping"), kDefaultPointOrbitDamping);
+    sParams.shadowMinElevation =
+        CVarGetFloat(CVAR_ENHANCEMENT("Graphics.ShadowMap.MinElevation"), SHADOW_MAP_DEFAULT_MIN_ELEVATION);
 }
 
 // Frame-constant easing terms (they depend only on R_UPDATE_RATE and the transition-time CVar, so
@@ -721,30 +749,30 @@ static void OnToonFrameUpdate() {
         // below it, so that is what this does.
         // Same shape as the stencil volumes' Length control, but with its own value: a depth map can afford
         // longer shadows than a flattened silhouette can.
-        f32 minElev = CVarGetFloat(CVAR_ENHANCEMENT("Graphics.ShadowMap.MinElevation"),
-                                   SHADOW_MAP_DEFAULT_MIN_ELEVATION);
-        minElev = CLAMP(minElev, 0.05f, 0.99f);
-        // Negated on the way out: the toon convention points from the surface toward the light, while a
-        // shadow projection needs the direction the light travels.
         f32 lightDir[3] = { 0.0f, -1.0f, 0.0f };
-        {
-            const f32 up = envDir[1] < 0.0f ? 0.0f : envDir[1]; // below the horizon reads as "on it"
-            const f32 elev = up < minElev ? minElev : up;
-            const f32 hLen = sqrtf((envDir[0] * envDir[0]) + (envDir[2] * envDir[2]));
-            if (hLen >= 0.001f) {
-                const f32 hScale = sqrtf(1.0f - (elev * elev)) / hLen;
-                lightDir[0] = -hScale * envDir[0];
-                lightDir[1] = -elev;
-                lightDir[2] = -hScale * envDir[2];
-            }
-            // hLen ~ 0 means the light is straight overhead: the default straight-down vector is right.
-        }
+        ToonApplyElevationFloor(envDir, lightDir);
         // Keep it for the caster-reach test, which follows a shadow along this ray (see
         // ToonLighting_ShadowCasterInReach). Stored after the elevation floor, so it is the same light the
         // cascades are actually built from and not the raw environment one.
         sParams.shadowMapLightDir[0] = lightDir[0];
         sParams.shadowMapLightDir[1] = lightDir[1];
         sParams.shadowMapLightDir[2] = lightDir[2];
+        // The second light, chosen by the same hierarchy (see the runner-up block in ToonShadowKeySelect).
+        // Pushed before SetShadowMapParams because that call is what copies it into the constant buffer.
+        if (Fast::GfxRenderingAPI* pointRapi = GetRenderingApi()) {
+            f32 pointPos[3], pointDir[3], pointReach = 0.0f;
+            if (shadowMapOn && sParams.pointBrighten > 0.0f &&
+                ToonShadowSecondLight(pointPos, pointDir, &pointReach)) {
+                pointRapi->SetShadowMapPointLight(pointPos, pointDir, pointReach, sParams.pointBrighten,
+                                                  sParams.pointShadow);
+            } else {
+                // Reach zero reads as "there is no second light" everywhere it is tested, so no flag is
+                // needed and every frame outdoors costs exactly nothing.
+                const f32 none[3] = { 0.0f, 0.0f, 0.0f };
+                const f32 down[3] = { 0.0f, -1.0f, 0.0f };
+                pointRapi->SetShadowMapPointLight(none, down, 0.0f, 0.0f, 0.0f);
+            }
+        }
         interp->SetShadowMapParams(
             shadowMapOn,
             CVarGetInteger(CVAR_ENHANCEMENT("Graphics.ShadowMap.CascadeCount"), SHADOW_MAP_DEFAULT_CASCADES),
@@ -1012,7 +1040,41 @@ static const LightInfo* sShadowKeyLight = NULL;     // identity of the winning p
 static f32 sShadowKeyDir[3] = { 0.0f, 1.0f, 0.0f }; // eased, points TOWARD the light (toon convention)
 static bool sShadowKeyValid = false;
 static s16 sShadowKeyScene = -1;
+// The frame's SECOND light: the best point light that did NOT take the key. That is the whole selection
+// rule, and it falls straight out of the hierarchy already being computed -- if a torch took the frame, the
+// runner-up is Navi or the next torch; if the sun took it, the runner-up is simply the best point light
+// present. Pushed to the renderer as the light that gets its own slice (see SHADOW_MAP_POINT_SLICES).
+static bool sShadowPointValid = false;
+static f32 sShadowPointPos[3] = {};   // eased position, world space
+static f32 sShadowPointDir[3] = { 0.0f, -1.0f, 0.0f }; // direction its light TRAVELS, elevation-floored
+static f32 sShadowPointReach = 0.0f;
+static const LightInfo* sShadowPointLight = NULL;
 static char sShadowKeyText[160] = ""; // pt-BR readout; sized for the longest line plus the vector
+
+// Lift a light off the horizon before anything is cast from it, and turn it from the toon convention
+// (pointing TOWARD the light) into the one a shadow projection needs (the direction the light travels).
+//
+// A light on the horizon stretches every shadow towards infinity, which reads as wrong well before it is
+// geometrically wrong, and wastes the map on a footprint far longer than the scene. The compass bearing is
+// kept; only the height is raised, and only when it is actually too low -- a floor, not a remap.
+//
+// Shared by both lights on purpose. The sun needs it because the game walks it down to the horizon at dusk;
+// a torch needs it more, because a torch on the floor beside the player is very nearly level with him.
+static void ToonApplyElevationFloor(const f32 toward[3], f32 travelOut[3]) {
+    const f32 minElev = CLAMP(sParams.shadowMinElevation, 0.05f, 0.99f);
+    const f32 up = toward[1] < 0.0f ? 0.0f : toward[1]; // below the horizon reads as "on it"
+    const f32 elev = up < minElev ? minElev : up;
+    const f32 hLen = sqrtf((toward[0] * toward[0]) + (toward[2] * toward[2]));
+
+    travelOut[0] = 0.0f, travelOut[1] = -1.0f, travelOut[2] = 0.0f;
+    if (hLen >= 0.001f) {
+        const f32 hScale = sqrtf(1.0f - (elev * elev)) / hLen;
+        travelOut[0] = -hScale * toward[0];
+        travelOut[1] = -elev;
+        travelOut[2] = -hScale * toward[2];
+    }
+    // hLen ~ 0 means the light is straight overhead: the default straight-down vector is already right.
+}
 
 static f32 ToonLuminance(f32 r, f32 g, f32 b) {
     return (0.299f * r) + (0.587f * g) + (0.114f * b);
@@ -1038,6 +1100,15 @@ static void ToonShadowKeySelect(PlayState* play, f32 dirOut[3], f32 colOut[3]) {
         sShadowKeySource = TOON_KEY_OVERHEAD;
         sShadowKeyLight = NULL;
     }
+
+    // Best and second-best POINT lights, tracked alongside the contest rather than inside it. The winner
+    // above may be the sun, in which case the best point light is the frame's second light; or it may be a
+    // torch, in which case the second light is the one behind it. Both cases are the same two variables.
+    const LightInfo* bestPointLight = NULL;
+    const LightInfo* secondPointLight = NULL;
+    f32 bestPointScore = 0.0f, secondPointScore = 0.0f;
+    f32 bestPointPos[3] = {}, secondPointPos[3] = {};
+    f32 bestPointReach = 0.0f, secondPointReach = 0.0f;
 
     // The synthetic overhead light is the starting bid: it always exists and everything real outranks it.
     ToonKeySource bestSource = TOON_KEY_OVERHEAD;
@@ -1074,10 +1145,11 @@ static void ToonShadowKeySelect(PlayState* play, f32 dirOut[3], f32 colOut[3]) {
     // rather than the camera: the camera can be anywhere (including inside a wall during a cutscene), and
     // it is the player's surroundings that decide what is lighting the scene.
     Player* player = GET_PLAYER(play);
+    f32 focus[3] = { 0.0f, 0.0f, 0.0f };
     if (player != NULL) {
-        const f32 fx = player->actor.world.pos.x;
-        const f32 fy = player->actor.world.pos.y + kKeyFocusRise;
-        const f32 fz = player->actor.world.pos.z;
+        const f32 fx = focus[0] = player->actor.world.pos.x;
+        const f32 fy = focus[1] = player->actor.world.pos.y + kKeyFocusRise;
+        const f32 fz = focus[2] = player->actor.world.pos.z;
         const f32 range = sParams.pointRange;
 
         for (LightNode* node = play->lightCtx.listHead; node != NULL; node = node->next) {
@@ -1128,6 +1200,21 @@ static void ToonShadowKeySelect(PlayState* play, f32 dirOut[3], f32 colOut[3]) {
             if ((sShadowKeySource == TOON_KEY_POINT) && (info == sShadowKeyLight)) {
                 score *= kKeyIncumbentBonus;
             }
+            // Rank for the second-light slot. Scored the same way as the key, so "which light matters most
+            // here" means one thing in this module and not two.
+            if (score > bestPointScore) {
+                secondPointScore = bestPointScore, secondPointLight = bestPointLight;
+                secondPointReach = bestPointReach;
+                secondPointPos[0] = bestPointPos[0], secondPointPos[1] = bestPointPos[1],
+                secondPointPos[2] = bestPointPos[2];
+                bestPointScore = score, bestPointLight = info, bestPointReach = reach;
+                bestPointPos[0] = (f32)info->params.point.x, bestPointPos[1] = (f32)info->params.point.y,
+                bestPointPos[2] = (f32)info->params.point.z;
+            } else if (score > secondPointScore) {
+                secondPointScore = score, secondPointLight = info, secondPointReach = reach;
+                secondPointPos[0] = (f32)info->params.point.x, secondPointPos[1] = (f32)info->params.point.y,
+                secondPointPos[2] = (f32)info->params.point.z;
+            }
             if (score > bestScore) {
                 bestScore = score, bestSource = TOON_KEY_POINT, bestLight = info, bestDist = dist;
                 bestDir[0] = dx / dist, bestDir[1] = dy / dist, bestDir[2] = dz / dist;
@@ -1158,6 +1245,56 @@ static void ToonShadowKeySelect(PlayState* play, f32 dirOut[3], f32 colOut[3]) {
     sShadowKeySource = bestSource;
     sShadowKeyLight = bestLight;
 
+    // The second light is the best point light the key did not already take.
+    {
+        const LightInfo* runnerUp = (bestSource == TOON_KEY_POINT && bestLight == bestPointLight)
+                                        ? secondPointLight
+                                        : bestPointLight;
+        const f32* runnerPos = (runnerUp == secondPointLight) ? secondPointPos : bestPointPos;
+        const f32 runnerReach = (runnerUp == secondPointLight) ? secondPointReach : bestPointReach;
+
+        if (runnerUp == NULL || runnerReach <= 0.0f) {
+            sShadowPointValid = false;
+            sShadowPointLight = NULL;
+            sShadowPointReach = 0.0f;
+        } else {
+            // Ease the position, but only if asked. At the default this is a straight copy: the light really
+            // does orbit the player, the player can SEE it orbiting, and a shadow that tracks a light you can
+            // watch moving reads as lighting rather than as a glitch. The damping exists for the case where
+            // that turns out to be too much motion on screen, and it works by low-passing the position rather
+            // than the direction -- an orbit averages out to a point, so the circling cancels while the
+            // light's real travel across a room survives.
+            const bool sameLight = sShadowPointValid && (runnerUp == sShadowPointLight);
+            const f32 damp = sParams.pointOrbitDamping;
+            if (!sameLight || damp <= 0.01f) {
+                sShadowPointPos[0] = runnerPos[0], sShadowPointPos[1] = runnerPos[1],
+                sShadowPointPos[2] = runnerPos[2];
+            } else {
+                const f32 alpha = 1.0f - expf(-4.6f * sToonKeyDt / damp);
+                for (s32 i = 0; i < 3; i++) {
+                    sShadowPointPos[i] += (runnerPos[i] - sShadowPointPos[i]) * alpha;
+                }
+            }
+            // The direction its light travels: from the lamp toward what it is lighting, then lifted off the
+            // horizon by the same floor the sun gets. A torch sitting on the floor beside the player is very
+            // nearly level with him, and without the floor it would throw his shadow at the horizon.
+            f32 toward[3] = { sShadowPointPos[0] - focus[0], sShadowPointPos[1] - focus[1],
+                              sShadowPointPos[2] - focus[2] };
+            const f32 len = sqrtf((toward[0] * toward[0]) + (toward[1] * toward[1]) + (toward[2] * toward[2]));
+            if (len > 0.001f) {
+                for (s32 i = 0; i < 3; i++) {
+                    toward[i] /= len;
+                }
+                ToonApplyElevationFloor(toward, sShadowPointDir);
+                sShadowPointReach = runnerReach;
+                sShadowPointLight = runnerUp;
+                sShadowPointValid = true;
+            } else {
+                sShadowPointValid = false;
+            }
+        }
+    }
+
     dirOut[0] = sShadowKeyDir[0], dirOut[1] = sShadowKeyDir[1], dirOut[2] = sShadowKeyDir[2];
     colOut[0] = bestCol[0], colOut[1] = bestCol[1], colOut[2] = bestCol[2];
 
@@ -1169,13 +1306,33 @@ static void ToonShadowKeySelect(PlayState* play, f32 dirOut[3], f32 colOut[3]) {
     } else if (bestSource == TOON_KEY_POINT) {
         what = (bestLight == sNaviLight1) ? "Navi" : "Luz pontual (tocha)";
     }
-    if (bestSource == TOON_KEY_POINT) {
-        snprintf(sShadowKeyText, sizeof(sShadowKeyText), "%s, a %.0f unidades  [%s]  dir %.2f %.2f %.2f", what,
-                 bestDist, indoors ? "fechado" : "aberto", sShadowKeyDir[0], sShadowKeyDir[1], sShadowKeyDir[2]);
-    } else {
-        snprintf(sShadowKeyText, sizeof(sShadowKeyText), "%s  [%s]  dir %.2f %.2f %.2f", what,
-                 indoors ? "fechado" : "aberto", sShadowKeyDir[0], sShadowKeyDir[1], sShadowKeyDir[2]);
+    // Which light is second matters as much as which is first: it is the one that gets its own slice, so a
+    // second shadow that is missing is either "no runner-up was found" or "the runner-up is not the light
+    // you thought", and those need telling apart.
+    const char* second = "nenhuma";
+    if (sShadowPointValid) {
+        second = (sShadowPointLight == sNaviLight1) ? "Navi" : "luz pontual";
     }
+    if (bestSource == TOON_KEY_POINT) {
+        snprintf(sShadowKeyText, sizeof(sShadowKeyText),
+                 "%s, a %.0f unidades  [%s]  dir %.2f %.2f %.2f  2a luz: %s", what, bestDist,
+                 indoors ? "fechado" : "aberto", sShadowKeyDir[0], sShadowKeyDir[1], sShadowKeyDir[2], second);
+    } else {
+        snprintf(sShadowKeyText, sizeof(sShadowKeyText), "%s  [%s]  dir %.2f %.2f %.2f  2a luz: %s", what,
+                 indoors ? "fechado" : "aberto", sShadowKeyDir[0], sShadowKeyDir[1], sShadowKeyDir[2], second);
+    }
+}
+
+static bool ToonShadowSecondLight(f32 posOut[3], f32 dirOut[3], f32* reachOut) {
+    if (!sShadowPointValid || sShadowPointReach <= 0.0f) {
+        return false;
+    }
+    for (s32 i = 0; i < 3; i++) {
+        posOut[i] = sShadowPointPos[i];
+        dirOut[i] = sShadowPointDir[i];
+    }
+    *reachOut = sShadowPointReach;
+    return true;
 }
 
 extern "C" const char* ToonLighting_ShadowKeyLight(void) {

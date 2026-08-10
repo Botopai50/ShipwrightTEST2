@@ -384,6 +384,37 @@ void SohMenu::AddMenuSettings() {
                 .Min(1)
                 .Max(8)
                 .DefaultValue(1));
+    // FXAA, as an alternative to the slider above rather than an addition to it. The two attack different
+    // things and cost differently, so turning one on turns the other off -- running both would pay twice and
+    // soften the result for no gain.
+    AddWidget(path, "FXAA (instead of MSAA)", WIDGET_CVAR_CHECKBOX)
+        .CVar(CVAR_FXAA)
+        .RaceDisable(false)
+        .Callback([](WidgetInfo& info) {
+            const bool on = CVarGetInteger(CVAR_FXAA, 0) != 0;
+            if (on) {
+                CVarSetInteger(CVAR_MSAA_VALUE, 1);
+                Ship::Context::GetInstance()->GetWindow()->SetMsaaLevel(1);
+            }
+            auto wnd = std::dynamic_pointer_cast<Fast::Fast3dWindow>(Ship::Context::GetInstance()->GetWindow());
+            if (wnd != nullptr) {
+                wnd->SetFxaaEnabled(on);
+            }
+        })
+        .Options(CheckboxOptions()
+                     .DefaultValue(false)
+                     .Tooltip("Smooths jagged edges by filtering the FINISHED image instead of by sampling the "
+                              "geometry several times.\n\n"
+                              "The difference from MSAA is what it costs and what it catches. MSAA takes several "
+                              "samples per pixel wherever two polygons meet, so it costs more the more geometry "
+                              "and the more resolution there is, and it cannot see an edge that lives inside a "
+                              "texture. FXAA is one pass over the frame at a fixed cost no matter how busy the "
+                              "scene is, and it catches texture and cutout edges -- foliage, railings, the "
+                              "lettering on signs -- that MSAA leaves jagged.\n\n"
+                              "The price is that it works from the image alone and cannot tell a jagged edge "
+                              "from a detail that is meant to be sharp, so it softens the picture slightly.\n\n"
+                              "Turning this on sets MSAA back to 1x: paying for both would soften the result "
+                              "and cost twice. Direct3D 11 only; elsewhere the frame is shown unfiltered."));
 #endif
     auto fps = CVarGetInteger(CVAR_SETTING("InterpolationFPS"), 20);
     const char* fpsFormat = fps == 20 ? "Original (%d)" : "%d";

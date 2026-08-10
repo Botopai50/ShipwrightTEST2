@@ -848,42 +848,36 @@ void SohMenu::AddMenuWindWakerStyle() {
         .RaceDisable(false)
         .PreFunc(hideUnlessShadowMap)
         .Options(FloatSliderOptions()
-                     .Tooltip("O quanto tochas, braseiros e outras luzes pontuais disputam a direção das "
-                              "sombras.\n\n"
-                              "A pontuação de cada luz já cai com a distância e sobe com o raio dela, então "
-                              "um braseiro grande do seu lado já ganha de um pequeno do outro lado da sala "
-                              "sem precisar de ajuda. Este controle multiplica todas de uma vez. Zero impede "
-                              "as luzes pontuais de projetarem, deixando o sol (ou a luz de cima) no comando "
-                              "em todo lugar.\n\n"
-                              "O alcance de cada luz é a opção Point Light Range, na página Cel Shading. É o "
-                              "mesmo alcance que o cel shading usa, então a luz que ilumina um personagem e "
-                              "a luz que projeta a sombra dele continuam sendo a mesma.\n\n"
-                              "No padrão, o fogo domina em interiores e cavernas; ao ar livre, só numa noite "
-                              "escura e com a tocha quase ao alcance da mão, porque a lua ganha dela em todo "
-                              "o resto. Aumente se quiser que tochas projetem a cena ao ar livre também, e "
-                              "espere ver as sombras do campo inteiro girarem conforme você se aproxima de "
-                              "uma.")
+                     .Tooltip("Se tochas e braseiros podem mandar na direção das sombras da CENA INTEIRA.\n\n"
+                              "Zero por padrão, e isso NÃO tira a sombra das tochas: elas projetam pela "
+                              "Segunda Luz, logo abaixo. O que fica desligado é elas apontarem a sala toda.\n\n"
+                              "Motivo: uma tocha gira a direção na velocidade em que você anda. As cascatas "
+                              "só se realinham depois de uns 2 graus de giro, um limite feito para o sol, que "
+                              "leva 8 segundos para cruzar isso. Uma tocha cruza em 99% dos frames enquanto "
+                              "você corre perto dela: tudo é redesenhado todo frame e o campo de sombras "
+                              "inteiro anda aos pulos de 2 graus.\n\n"
+                              "E tem um problema que nenhum ajuste resolve: a tocha é uma luz pontual dentro "
+                              "da sala. Com uma direção só para o quadro, tudo que está do lado oposto a ela "
+                              "projeta sombra EM DIREÇÃO à chama em vez de para longe.\n\n"
+                              "Aumente se quiser o comportamento antigo mesmo assim.")
                      .Format("%.2f")
                      .Min(0.0f)
                      .Max(8.0f)
-                     .DefaultValue(1.0f)); // kDefaultKeyTorchAuthority
+                     .DefaultValue(0.0f)); // kDefaultKeyTorchAuthority
     AddWidget(path, "Peso da Navi", WIDGET_CVAR_SLIDER_FLOAT)
         .CVar(CVAR_ENHANCEMENT("Graphics.ShadowMap.NaviAuthority"))
         .RaceDisable(false)
         .PreFunc(hideUnlessShadowMap)
         .Options(FloatSliderOptions()
-                     .Tooltip("A Navi é uma luz, e ela fica girando em volta de você.\n\n"
-                              "Isso a torna um caso especial: na força total ela seria a luz mais próxima em "
-                              "quase toda cena, e todas as sombras de Hyrule girariam conforme ela se "
-                              "mexesse. O padrão a mantém baixa o bastante para ela iluminar uma caverna ou "
-                              "uma sala sem luz, onde ela realmente é a coisa mais brilhante presente, e "
-                              "nunca competir com o sol nem com uma tocha acesa.\n\n"
-                              "Zero tira a Navi da disputa; aumentar faz as sombras começarem a seguir a sua "
-                              "fada.")
+                     .Tooltip("O mesmo, para a Navi.\n\n"
+                              "Zero por padrão, e pelo mesmo motivo da tocha, só que pior: ela ORBITA você, "
+                              "então a direção nunca se assenta. Ela continua projetando sombra pela Segunda "
+                              "Luz abaixo; o que está desligado é ela apontar a cena inteira.\n\n"
+                              "Aumente e as sombras de Hyrule passam a girar conforme a sua fada se mexe.")
                      .Format("%.2f")
                      .Min(0.0f)
                      .Max(2.0f)
-                     .DefaultValue(0.25f)); // kDefaultKeyNaviAuthority
+                     .DefaultValue(0.0f)); // kDefaultKeyNaviAuthority
     AddWidget(path, "Tempo de Transição: %.1fs", WIDGET_CVAR_SLIDER_FLOAT)
         .CVar(CVAR_ENHANCEMENT("Graphics.ShadowMap.KeyTravelTime"))
         .RaceDisable(false)

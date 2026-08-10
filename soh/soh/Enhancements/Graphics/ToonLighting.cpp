@@ -75,8 +75,15 @@ static constexpr float kDefaultTransitionTime = 1.0f;
 // brightness rather than ranking by it.
 static constexpr float kDefaultKeySunAuthority = 8.0f;
 static constexpr float kDefaultKeyIndoorSunAuthority = 0.0f;
-static constexpr float kDefaultKeyTorchAuthority = 1.0f;
-static constexpr float kDefaultKeyNaviAuthority = 0.25f;
+// Both zero: a lamp near the player does not get to aim the WHOLE scene's shadows. See the header
+// comment on ToonShadowKeySelect for why -- measured, not preference. Raise either to put that light back
+// in the running for the frame's key.
+static constexpr float kDefaultKeyTorchAuthority = 0.0f;
+static constexpr float kDefaultKeyNaviAuthority = 0.0f;
+// Navi's handicap for the SECOND-light slot, which is a different contest from the key. There is one point
+// slice, so a lit torch should take it over the fairy who happens to be closer: at this weight a torch wins
+// out to about 230 units and she takes it beyond that, or whenever there is no torch at all.
+static constexpr float kPointNaviWeight = 0.3f;
 static constexpr float kDefaultKeyTravelTime = 1.5f; // seconds for the global direction to ease across
 // A point light of this radius counts as "one torch"; bigger ones carry proportionally more authority, so
 // a room's brazier outranks a stray firefly standing at the same distance. 200 is not a round number
@@ -1004,22 +1011,33 @@ static void ToonEnvKey(PlayState* play, f32 dirOut[3], f32 colOut[3]) {
 //                 the moon and its luminance is a fraction of the day's, so a torch you are standing
 //                 next to CAN take the frame -- which is the situation where it should.
 //
-//   point light   geometry, not brightness: (1 - d/reach)^2 scaled by the light's own radius, measured
-//                 from the player. Torches flicker their colour every few frames, and ranking on that
-//                 would make the frame's key jitter; brightness is used only as an on/off gate, and a
-//                 smooth one, so a lit torch is perfectly stable and a dying one fades out of contention
-//                 instead of popping. Distance decides between two torches, radius decides between a
-//                 brazier and a firefly at the same distance.
+//   point light   OFF by default, and the reason is measured rather than a preference. A lamp near the
+//                 player swings its direction at the speed the player WALKS, and two things break when
+//                 the frame's one direction does that.
 //
-//   Navi          a point light like any other, but with her own (small) authority. She lights the scene
-//                 when there is nothing else to light it -- a dark interior, a cave -- and never argues
-//                 with something that should win. This is the hierarchy the sun case describes, applied
-//                 to the one light that follows the camera around.
+//                 First, the cascades are pinned to the light's axes and only re-align once it has turned
+//                 about two degrees -- a threshold sized for the sun, which crosses it once every eight
+//                 seconds. A torch crosses it on 99% of frames while the player runs past it, so every
+//                 slice is cleared and redrawn every frame and the whole parking scheme (which took the
+//                 depth pass from 3.5 ms to 1.1 ms) is defeated exactly where interiors need it. Each
+//                 crossing is also a visible two-degree step of the entire shadow field.
 //
-//   overhead      a synthetic straight-down light with a floor score, so an interior with NO lights at
-//                 all still has somewhere to cast from. Without it those rooms fall back to the scene's
-//                 own directional, which points wherever the original light settings happened to aim --
-//                 frequently near-horizontal, which the elevation floor then has to rescue.
+//                 Second, and not fixable by tuning: a torch is a POINT light standing inside the room it
+//                 lights. Given one direction for the whole frame, everything on the far side of it casts
+//                 its shadow towards the flame instead of away. Outdoors the sun really is directional so
+//                 this never shows; indoors the room wraps around the lamp and it is the common case.
+//
+//                 So lamps do not aim the scene. They light it, and cast, through the SECOND-light slice
+//                 further down -- which is where a point light belongs, and where being wrong is confined
+//                 to its own radius. The authority sliders put them back in this contest for anyone who
+//                 wants the old behaviour and will pay for it.
+//
+//   Navi          the same, and more so: she orbits the player, so her direction never settles at all.
+//
+//   overhead      a synthetic straight-down light with a floor score, so an interior still has somewhere
+//                 to cast from. With lamps out of this contest and the indoor directional worth nothing by
+//                 default, this is what interiors normally use: stable, never stepping, and honest about
+//                 being an approximation. The room's own torches then add their real shadows locally.
 //
 // A point light is a point and these cascades are orthographic, so its direction is taken from the light
 // toward the player: shadows radiate correctly where the player is standing, which is where a torch's
@@ -1027,10 +1045,14 @@ static void ToonEnvKey(PlayState* play, f32 dirOut[3], f32 colOut[3]) {
 // everywhere would need a perspective (or cube) projection per light, which is a different shadow system,
 // not a setting.
 //
-// Two stabilisers on top. The current winner is re-scored with a bonus, so two near-equal torches settle
-// on one instead of trading the frame back and forth. And the direction EASES toward the winner rather
-// than snapping -- except across a scene change, where there is no continuity to preserve and easing
-// would just swing every shadow in the room for a second after each door.
+// Two stabilisers on top. The current winner is re-scored with a bonus, so two near-equal candidates
+// settle on one instead of trading the frame back and forth. And the direction EASES toward the winner
+// rather than snapping -- except across a scene change, where there is no continuity to preserve and
+// easing would just swing every shadow in the room for a second after each door.
+//
+// Each light is scored ONCE, geometrically, and that score then feeds two separate contests: this one, and
+// the second-light slot below. Keeping them separate is what lets a torch be barred from aiming the frame
+// without also being barred from casting a shadow.
 // ---------------------------------------------------------------------------------------------------
 
 typedef enum { TOON_KEY_OVERHEAD = 0, TOON_KEY_ENV, TOON_KEY_POINT } ToonKeySource;
@@ -1171,10 +1193,6 @@ static void ToonShadowKeySelect(PlayState* play, f32 dirOut[3], f32 colOut[3]) {
             if (isNavi && !sParams.useNaviLight) {
                 continue; // opted out of lighting actors, so she does not get to move the world's shadows
             }
-            const f32 authority = isNavi ? sParams.keyNaviAuthority : sParams.keyTorchAuthority;
-            if (authority <= 0.0f) {
-                continue;
-            }
             const f32 radius = (f32)info->params.point.radius;
             const f32 reach = radius * range;
             if (reach <= 0.0f) {
@@ -1196,29 +1214,45 @@ static void ToonShadowKeySelect(PlayState* play, f32 dirOut[3], f32 colOut[3]) {
             const f32 cg = info->params.point.color[1] / 255.0f;
             const f32 cb = info->params.point.color[2] / 255.0f;
 
-            f32 score = atten * atten * sizeFactor * ToonKeyBrightnessGate(ToonLuminance(cr, cg, cb)) * authority;
-            if ((sShadowKeySource == TOON_KEY_POINT) && (info == sShadowKeyLight)) {
-                score *= kKeyIncumbentBonus;
+            // How strong this light actually is where the player is standing. Pure geometry and an on/off
+            // brightness gate -- no policy at all, which is what lets the two contests below disagree about
+            // what to do with it without disagreeing about what it is.
+            const f32 lightScore = atten * atten * sizeFactor * ToonKeyBrightnessGate(ToonLuminance(cr, cg, cb));
+            if (lightScore <= 0.0f) {
+                continue;
             }
-            // Rank for the second-light slot. Scored the same way as the key, so "which light matters most
-            // here" means one thing in this module and not two.
-            if (score > bestPointScore) {
+
+            // Contest one: may this light aim the whole frame? Off by default for lamps, so this is usually
+            // skipped outright.
+            const f32 authority = isNavi ? sParams.keyNaviAuthority : sParams.keyTorchAuthority;
+            if (authority > 0.0f) {
+                f32 score = lightScore * authority;
+                if ((sShadowKeySource == TOON_KEY_POINT) && (info == sShadowKeyLight)) {
+                    score *= kKeyIncumbentBonus;
+                }
+                if (score > bestScore) {
+                    bestScore = score, bestSource = TOON_KEY_POINT, bestLight = info, bestDist = dist;
+                    bestDir[0] = dx / dist, bestDir[1] = dy / dist, bestDir[2] = dz / dist;
+                    bestCol[0] = cr, bestCol[1] = cg, bestCol[2] = cb;
+                }
+            }
+
+            // Contest two: which light gets the single point slice. Ranked on the light itself rather than on
+            // the key authority, so turning a lamp out of the key contest does not also delete its shadow --
+            // that separation is the whole point of having two contests.
+            const f32 pointRank = lightScore * (isNavi ? kPointNaviWeight : 1.0f);
+            if (pointRank > bestPointScore) {
                 secondPointScore = bestPointScore, secondPointLight = bestPointLight;
                 secondPointReach = bestPointReach;
                 secondPointPos[0] = bestPointPos[0], secondPointPos[1] = bestPointPos[1],
                 secondPointPos[2] = bestPointPos[2];
-                bestPointScore = score, bestPointLight = info, bestPointReach = reach;
+                bestPointScore = pointRank, bestPointLight = info, bestPointReach = reach;
                 bestPointPos[0] = (f32)info->params.point.x, bestPointPos[1] = (f32)info->params.point.y,
                 bestPointPos[2] = (f32)info->params.point.z;
-            } else if (score > secondPointScore) {
-                secondPointScore = score, secondPointLight = info, secondPointReach = reach;
+            } else if (pointRank > secondPointScore) {
+                secondPointScore = pointRank, secondPointLight = info, secondPointReach = reach;
                 secondPointPos[0] = (f32)info->params.point.x, secondPointPos[1] = (f32)info->params.point.y,
                 secondPointPos[2] = (f32)info->params.point.z;
-            }
-            if (score > bestScore) {
-                bestScore = score, bestSource = TOON_KEY_POINT, bestLight = info, bestDist = dist;
-                bestDir[0] = dx / dist, bestDir[1] = dy / dist, bestDir[2] = dz / dist;
-                bestCol[0] = cr, bestCol[1] = cg, bestCol[2] = cb;
             }
         }
     }

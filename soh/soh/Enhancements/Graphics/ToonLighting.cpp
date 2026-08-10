@@ -4,8 +4,6 @@
 // one dominant light (gSPToonKey) and a generic ramp (SetToonRamp). This module owns the OoT-specific
 // policy that the framework must never know about:
 //   - which light is the key (closest in-range point light, else the day/night sun/moon),
-//   - which single light the shadow-map cascades are built from -- a scored hierarchy over the whole
-//     scene's lights, since the cascades have exactly one direction to give away (ToonShadowKeySelect),
 //   - how the key eases from one source to another (per-actor persistent state),
 //   - the look tuning (ramp parameters), pushed once per frame.
 // The framework never reads SoH's CVars; everything it needs is pushed from here.
@@ -58,55 +56,6 @@ static constexpr float kDefaultShadowIntensity = 0.6f;
 static constexpr float kDefaultPointLightRange = 1.5f;
 static constexpr float kDefaultTransitionTime = 1.0f;
 
-// Shadow key light: how much authority each kind of light has over the ONE direction the cascades are
-// built from (see ToonShadowKeySelect). These are ratios in a shared currency, so only their relative
-// sizes matter, and they are calibrated against the values the game actually uses rather than guesses:
-// a lit torch (Obj_Syokudai) is radius 200 with colour (b, b, 0) for a random b in 128..255, and Navi's
-// glow (En_Elf) is radius 100 at her own orbiting position. Which gives:
-//   - a full daylight sun scores 8.0, eight times what any torch can reach, so daylight is never taken;
-//   - a torch scores 1.0 against your face, 0.44 at 100 units and 0.03 at 250, dropping below the
-//     overhead fallback at 275 -- just short of the 300 its light actually carries;
-//   - Navi's glow scores 0.09 right beside you and falls under the overhead fallback past 115 units, so
-//     she lights an unlit room and nothing else: a torch outranks her out to 236 units, the sun always;
-//   - indoors the scene directional is worth nothing by default, so a torch (or, failing that, the
-//     synthetic overhead light) always takes the frame.
-// A lit torch's colour flickers between (128,128,0) and (255,255,0) every frame; both ends clear the
-// brightness gate outright, so its score is exactly constant while lit. That is the point of gating on
-// brightness rather than ranking by it.
-static constexpr float kDefaultKeySunAuthority = 8.0f;
-static constexpr float kDefaultKeyIndoorSunAuthority = 0.0f;
-// Both zero: a lamp near the player does not get to aim the WHOLE scene's shadows. See the header
-// comment on ToonShadowKeySelect for why -- measured, not preference. Raise either to put that light back
-// in the running for the frame's key.
-static constexpr float kDefaultKeyTorchAuthority = 0.0f;
-static constexpr float kDefaultKeyNaviAuthority = 0.0f;
-// Navi's handicap for the SECOND-light slot, which is a different contest from the key. There is one point
-// slice, so a lit torch should take it over the fairy who happens to be closer: at this weight a torch wins
-// out to about 230 units and she takes it beyond that, or whenever there is no torch at all.
-static constexpr float kPointNaviWeight = 0.3f;
-static constexpr float kDefaultKeyTravelTime = 1.5f; // seconds for the global direction to ease across
-// A point light of this radius counts as "one torch"; bigger ones carry proportionally more authority, so
-// a room's brazier outranks a stray firefly standing at the same distance. 200 is not a round number
-// picked to feel right -- it is the radius the game gives a lit torch.
-static constexpr float kKeyReferenceRadius = 200.0f;
-// Floor score of the synthetic overhead light. Deliberately far below anything real, including Navi at
-// the far edge of her orbit: this is the "there is nothing at all" case, not a contender.
-static constexpr float kKeySyntheticScore = 0.005f;
-// The frame's current winner scores this much higher when it is re-scored, so two near-equal candidates
-// settle on one instead of trading the frame back and forth every update.
-static constexpr float kKeyIncumbentBonus = 1.35f;
-// Point lights are measured against a point this far above the player's feet rather than the feet
-// themselves: a torch at head height should read as lighting from the side, not from straight above.
-static constexpr float kKeyFocusRise = 40.0f;
-
-// The second light. Brighten is how much light it adds where it reaches; shadow is how strongly that added
-// light is blocked by geometry, and it is the half that costs a slice. Orbit damping low-passes its position
-// and is off by default -- the light really does move, and a shadow that tracks a light the player can watch
-// moving reads as lighting rather than as a glitch.
-static constexpr float kDefaultPointBrighten = 0.35f;  // SHADOW_MAP_DEFAULT_POINT_BRIGHTEN
-static constexpr float kDefaultPointShadow = 1.0f;     // SHADOW_MAP_DEFAULT_POINT_SHADOW
-static constexpr float kDefaultPointOrbitDamping = 0.0f;
-
 // Actor-shadow defaults (the "Actor Shadows" page; CVar prefix Graphics.WorldShadows.*). Opacity is the
 // core blend strength; length maps (inversely) to how far a low-angle key may stretch the shadow (higher =
 // longer); slab depth/rise bound the ground band below/above the feet. All are game-side policy pushed once
@@ -147,32 +96,11 @@ static struct {
     f32 pointRange = kDefaultPointLightRange;
     f32 transitionTime = kDefaultTransitionTime;
     f32 maxDist = (f32)kDefaultShadowMaxDistance;
-    // Shadow key light authorities (see ToonShadowKeySelect).
-    f32 keySunAuthority = kDefaultKeySunAuthority;
-    f32 keyIndoorSunAuthority = kDefaultKeyIndoorSunAuthority;
-    f32 keyTorchAuthority = kDefaultKeyTorchAuthority;
-    f32 keyNaviAuthority = kDefaultKeyNaviAuthority;
-    f32 keyTravelTime = kDefaultKeyTravelTime;
-    // The second light (see the runner-up selection in ToonShadowKeySelect).
-    f32 pointBrighten = kDefaultPointBrighten;
-    f32 pointShadow = kDefaultPointShadow;
-    f32 pointOrbitDamping = kDefaultPointOrbitDamping;
-    // How far the key light is lifted off the horizon before anything is cast from it. Read once a frame
-    // because both lights now apply it, and they must apply the same one.
-    f32 shadowMinElevation = SHADOW_MAP_DEFAULT_MIN_ELEVATION;
 } sParams;
 
 static Fast::GfxRenderingAPI* GetRenderingApi(); // defined with the other Fast3D accessors below
 // Key light from the environment directionals (sun or moon, whichever is brighter); defined below.
 static void ToonEnvKey(PlayState* play, f32 dirOut[3], f32 colOut[3]);
-// The frame-global shadow key: which of the scene's lights the cascades are built from; defined below.
-static void ToonShadowKeySelect(PlayState* play, f32 dirOut[3], f32 colOut[3]);
-// Lifts a light off the horizon and converts it to the direction the light travels; defined below. Both
-// lights apply it, which is why it is a function and not two copies of the same eight lines.
-static void ToonApplyElevationFloor(const f32 toward[3], f32 travelOut[3]);
-// The frame's SECOND light -- the best point light the key did not take. False when there isn't one, which
-// is most frames outdoors. Chosen by ToonShadowKeySelect, so this only reports what that already decided.
-static bool ToonShadowSecondLight(f32 posOut[3], f32 dirOut[3], f32* reachOut);
 
 // ===================================================================================================
 // Scenery-caster census.
@@ -284,23 +212,6 @@ static void RefreshFrameParams() {
         CVarGetFloat(CVAR_ENHANCEMENT("Graphics.ToonLighting.TransitionTime"), kDefaultTransitionTime);
     sParams.maxDist =
         (f32)CVarGetInteger(CVAR_ENHANCEMENT("Graphics.WorldShadows.MaxDistance"), kDefaultShadowMaxDistance);
-    sParams.keySunAuthority =
-        CVarGetFloat(CVAR_ENHANCEMENT("Graphics.ShadowMap.SunAuthority"), kDefaultKeySunAuthority);
-    sParams.keyIndoorSunAuthority =
-        CVarGetFloat(CVAR_ENHANCEMENT("Graphics.ShadowMap.IndoorSunAuthority"), kDefaultKeyIndoorSunAuthority);
-    sParams.keyTorchAuthority =
-        CVarGetFloat(CVAR_ENHANCEMENT("Graphics.ShadowMap.TorchAuthority"), kDefaultKeyTorchAuthority);
-    sParams.keyNaviAuthority =
-        CVarGetFloat(CVAR_ENHANCEMENT("Graphics.ShadowMap.NaviAuthority"), kDefaultKeyNaviAuthority);
-    sParams.keyTravelTime =
-        CVarGetFloat(CVAR_ENHANCEMENT("Graphics.ShadowMap.KeyTravelTime"), kDefaultKeyTravelTime);
-    sParams.pointBrighten =
-        CVarGetFloat(CVAR_ENHANCEMENT("Graphics.ShadowMap.PointBrighten"), kDefaultPointBrighten);
-    sParams.pointShadow = CVarGetFloat(CVAR_ENHANCEMENT("Graphics.ShadowMap.PointShadow"), kDefaultPointShadow);
-    sParams.pointOrbitDamping =
-        CVarGetFloat(CVAR_ENHANCEMENT("Graphics.ShadowMap.PointOrbitDamping"), kDefaultPointOrbitDamping);
-    sParams.shadowMinElevation =
-        CVarGetFloat(CVAR_ENHANCEMENT("Graphics.ShadowMap.MinElevation"), SHADOW_MAP_DEFAULT_MIN_ELEVATION);
 }
 
 // Frame-constant easing terms (they depend only on R_UPDATE_RATE and the transition-time CVar, so
@@ -309,15 +220,10 @@ static void RefreshFrameParams() {
 static f32 sToonKeyDt = 3.0f / 60.0f; // seconds per game draw
 static f32 sToonKeyAlpha = 0.2f;      // per-draw slerp fraction; reaches ~99% in transitionTime seconds
 
-// Navi's two emitted lights, resolved once per frame (identical for every actor, so resolving them here
-// keeps the per-actor path free of the lookup). Compared by address only, never dereferenced.
-//
-// Both consumers need her identified, for opposite reasons: the per-actor key EXCLUDES her when the
-// player opts out (ToonClosestPointLight), while the frame-global shadow key always needs to know it is
-// her so it can apply her own, deliberately small authority (ToonShadowKeySelect). So they are resolved
-// unconditionally and each consumer decides what to do about it.
-static LightInfo* sNaviLight1 = NULL;
-static LightInfo* sNaviLight2 = NULL;
+// Navi's two emitted lights, resolved once per frame when the player opted her out of key selection
+// (identical for every actor; see ToonClosestPointLight). Compared by address only, never dereferenced.
+static LightInfo* sNaviGlow = NULL;
+static LightInfo* sNaviNoGlow = NULL;
 
 // C-callable getters (see ToonLighting.h): the decompiled draw code asks these instead of doing its own
 // per-actor CVar lookups, and they keep the bracket/hook decisions consistent within a frame.
@@ -692,16 +598,16 @@ static void OnToonFrameUpdate() {
         sToonKeyAlpha = 1.0f - expf(-4.6f * sToonKeyDt / tt);
     }
 
-    // Navi's lights (see the statics above). Identification matches the light-casting feature:
+    // Navi's opt-out lights (see the statics above). Identification matches the light-casting feature:
     // player->naviActor, an En_Elf with FAIRY_NAVI params.
-    sNaviLight1 = sNaviLight2 = NULL;
-    if (gPlayState != NULL) {
+    sNaviGlow = sNaviNoGlow = NULL;
+    if (!sParams.useNaviLight && gPlayState != NULL) {
         Player* player = GET_PLAYER(gPlayState);
         if ((player != NULL) && (player->naviActor != NULL) && (player->naviActor->id == ACTOR_EN_ELF) &&
             (player->naviActor->params == FAIRY_NAVI)) {
             EnElf* navi = (EnElf*)player->naviActor;
-            sNaviLight1 = &navi->lightInfoGlow;
-            sNaviLight2 = &navi->lightInfoNoGlow;
+            sNaviGlow = &navi->lightInfoGlow;
+            sNaviNoGlow = &navi->lightInfoNoGlow;
         }
     }
 
@@ -733,19 +639,15 @@ static void OnToonFrameUpdate() {
             CVarGetFloat(CVAR_ENHANCEMENT("Graphics.ShadowMap.Split1"), SHADOW_MAP_DEFAULT_SPLIT_1),
             CVarGetFloat(CVAR_ENHANCEMENT("Graphics.ShadowMap.Split2"), SHADOW_MAP_DEFAULT_SPLIT_2)
         };
-        // One light for the whole frame, chosen by the hierarchy in ToonShadowKeySelect: the sun outdoors,
-        // a torch when a torch is genuinely what is lighting the player, Navi only when nothing else is,
-        // and a synthetic overhead light in an interior with no lights at all.
-        //
-        // The hierarchy is the load-bearing part. This used to take the last actor key emitted, which
-        // looked right until Navi walked on screen: Navi IS a light, so her key became "the frame's light"
-        // and every shadow in the scene swung to point away from her. A single set of cascades can only
-        // have one direction, so the selector scores the candidates against each other rather than letting
-        // whichever one is nearest win outright.
+        // One sun (or moon) for the whole frame, straight from the environment directionals. This used to
+        // take the last actor key emitted, which looked right until Navi walked on screen: Navi IS a light,
+        // so her key became "the frame's light" and every shadow in the scene swung to point away from her.
+        // A single set of cascades can only have one direction, and it has to be the one that is actually
+        // global.
         f32 envDir[3] = { 0.0f, 1.0f, 0.0f };
         f32 envCol[3] = { 1.0f, 1.0f, 1.0f };
         if (gPlayState != NULL) {
-            ToonShadowKeySelect(gPlayState, envDir, envCol);
+            ToonEnvKey(gPlayState, envDir, envCol);
         }
         // Lift the light off the horizon before using it. A near-horizontal sun stretches every shadow
         // towards infinity, which looks wrong well before it is geometrically wrong, and it also wastes the
@@ -756,30 +658,30 @@ static void OnToonFrameUpdate() {
         // below it, so that is what this does.
         // Same shape as the stencil volumes' Length control, but with its own value: a depth map can afford
         // longer shadows than a flattened silhouette can.
+        f32 minElev = CVarGetFloat(CVAR_ENHANCEMENT("Graphics.ShadowMap.MinElevation"),
+                                   SHADOW_MAP_DEFAULT_MIN_ELEVATION);
+        minElev = CLAMP(minElev, 0.05f, 0.99f);
+        // Negated on the way out: the toon convention points from the surface toward the light, while a
+        // shadow projection needs the direction the light travels.
         f32 lightDir[3] = { 0.0f, -1.0f, 0.0f };
-        ToonApplyElevationFloor(envDir, lightDir);
+        {
+            const f32 up = envDir[1] < 0.0f ? 0.0f : envDir[1]; // below the horizon reads as "on it"
+            const f32 elev = up < minElev ? minElev : up;
+            const f32 hLen = sqrtf((envDir[0] * envDir[0]) + (envDir[2] * envDir[2]));
+            if (hLen >= 0.001f) {
+                const f32 hScale = sqrtf(1.0f - (elev * elev)) / hLen;
+                lightDir[0] = -hScale * envDir[0];
+                lightDir[1] = -elev;
+                lightDir[2] = -hScale * envDir[2];
+            }
+            // hLen ~ 0 means the light is straight overhead: the default straight-down vector is right.
+        }
         // Keep it for the caster-reach test, which follows a shadow along this ray (see
         // ToonLighting_ShadowCasterInReach). Stored after the elevation floor, so it is the same light the
         // cascades are actually built from and not the raw environment one.
         sParams.shadowMapLightDir[0] = lightDir[0];
         sParams.shadowMapLightDir[1] = lightDir[1];
         sParams.shadowMapLightDir[2] = lightDir[2];
-        // The second light, chosen by the same hierarchy (see the runner-up block in ToonShadowKeySelect).
-        // Pushed before SetShadowMapParams because that call is what copies it into the constant buffer.
-        if (Fast::GfxRenderingAPI* pointRapi = GetRenderingApi()) {
-            f32 pointPos[3], pointDir[3], pointReach = 0.0f;
-            if (shadowMapOn && sParams.pointBrighten > 0.0f &&
-                ToonShadowSecondLight(pointPos, pointDir, &pointReach)) {
-                pointRapi->SetShadowMapPointLight(pointPos, pointDir, pointReach, sParams.pointBrighten,
-                                                  sParams.pointShadow);
-            } else {
-                // Reach zero reads as "there is no second light" everywhere it is tested, so no flag is
-                // needed and every frame outdoors costs exactly nothing.
-                const f32 none[3] = { 0.0f, 0.0f, 0.0f };
-                const f32 down[3] = { 0.0f, -1.0f, 0.0f };
-                pointRapi->SetShadowMapPointLight(none, down, 0.0f, 0.0f, 0.0f);
-            }
-        }
         interp->SetShadowMapParams(
             shadowMapOn,
             CVarGetInteger(CVAR_ENHANCEMENT("Graphics.ShadowMap.CascadeCount"), SHADOW_MAP_DEFAULT_CASCADES),
@@ -943,10 +845,9 @@ static void ToonSlerp(f32 from[3], f32 to[3], f32 t, f32 out[3]) {
 static bool ToonClosestPointLight(PlayState* play, Actor* actor, f32 pointRange, f32 dirOut[3], f32 colOut[3]) {
     // When the player opts Navi out, her two emitted lights are skipped by address (she blinks on/off
     // and orbits Link, so she'd constantly steal the key light). Resolved once per frame in
-    // OnToonFrameUpdate -- identical for every actor -- and only turned into a skip here, since the
-    // shadow key wants her identified even when she is allowed to light actors.
-    LightInfo* naviGlow = sParams.useNaviLight ? NULL : sNaviLight1;
-    LightInfo* naviNoGlow = sParams.useNaviLight ? NULL : sNaviLight2;
+    // OnToonFrameUpdate -- identical for every actor.
+    LightInfo* naviGlow = sNaviGlow;
+    LightInfo* naviNoGlow = sNaviNoGlow;
 
     LightNode* node = play->lightCtx.listHead;
     f32 bestDistSq = -1.0f;
@@ -994,383 +895,6 @@ static void ToonEnvKey(PlayState* play, f32 dirOut[3], f32 colOut[3]) {
         colOut[1] = env->params.dir.color[1] / 255.0f;
         colOut[2] = env->params.dir.color[2] / 255.0f;
     }
-}
-
-// ---------------------------------------------------------------------------------------------------
-// Shadow key light -- which of the scene's lights the cascades are built from
-//
-// The cascades are ONE set of orthographic slices, so the whole frame gets exactly one light direction.
-// That single slot is what makes this a hierarchy rather than a sum: every light in the scene competes
-// for it, and the winner has to be the one a player would say the scene is lit by. Candidates are scored
-// in a shared currency and the highest takes the frame:
-//
-//   sun / moon    luminance x authority, where the authority is large outdoors and (by default) zero
-//                 indoors. Outdoors by day this sits far above anything a point light can reach, which
-//                 is the entire point: Navi orbits the player, so if she could ever outscore the sun,
-//                 every shadow in Hyrule Field would swing around as she drifted. At night the "sun" is
-//                 the moon and its luminance is a fraction of the day's, so a torch you are standing
-//                 next to CAN take the frame -- which is the situation where it should.
-//
-//   point light   OFF by default, and the reason is measured rather than a preference. A lamp near the
-//                 player swings its direction at the speed the player WALKS, and two things break when
-//                 the frame's one direction does that.
-//
-//                 First, the cascades are pinned to the light's axes and only re-align once it has turned
-//                 about two degrees -- a threshold sized for the sun, which crosses it once every eight
-//                 seconds. A torch crosses it on 99% of frames while the player runs past it, so every
-//                 slice is cleared and redrawn every frame and the whole parking scheme (which took the
-//                 depth pass from 3.5 ms to 1.1 ms) is defeated exactly where interiors need it. Each
-//                 crossing is also a visible two-degree step of the entire shadow field.
-//
-//                 Second, and not fixable by tuning: a torch is a POINT light standing inside the room it
-//                 lights. Given one direction for the whole frame, everything on the far side of it casts
-//                 its shadow towards the flame instead of away. Outdoors the sun really is directional so
-//                 this never shows; indoors the room wraps around the lamp and it is the common case.
-//
-//                 So lamps do not aim the scene. They light it, and cast, through the SECOND-light slice
-//                 further down -- which is where a point light belongs, and where being wrong is confined
-//                 to its own radius. The authority sliders put them back in this contest for anyone who
-//                 wants the old behaviour and will pay for it.
-//
-//   Navi          the same, and more so: she orbits the player, so her direction never settles at all.
-//
-//   overhead      a synthetic straight-down light with a floor score, so an interior still has somewhere
-//                 to cast from. With lamps out of this contest and the indoor directional worth nothing by
-//                 default, this is what interiors normally use: stable, never stepping, and honest about
-//                 being an approximation. The room's own torches then add their real shadows locally.
-//
-// A point light is a point and these cascades are orthographic, so its direction is taken from the light
-// toward the player: shadows radiate correctly where the player is standing, which is where a torch's
-// shadows are actually looked at, and go progressively more parallel with distance. Making them radiate
-// everywhere would need a perspective (or cube) projection per light, which is a different shadow system,
-// not a setting.
-//
-// Two stabilisers on top. The current winner is re-scored with a bonus, so two near-equal candidates
-// settle on one instead of trading the frame back and forth. And the direction EASES toward the winner
-// rather than snapping -- except across a scene change, where there is no continuity to preserve and
-// easing would just swing every shadow in the room for a second after each door.
-//
-// Each light is scored ONCE, geometrically, and that score then feeds two separate contests: this one, and
-// the second-light slot below. Keeping them separate is what lets a torch be barred from aiming the frame
-// without also being barred from casting a shadow.
-// ---------------------------------------------------------------------------------------------------
-
-typedef enum { TOON_KEY_OVERHEAD = 0, TOON_KEY_ENV, TOON_KEY_POINT } ToonKeySource;
-
-static ToonKeySource sShadowKeySource = TOON_KEY_OVERHEAD;
-static const LightInfo* sShadowKeyLight = NULL;     // identity of the winning point light; address only
-static f32 sShadowKeyDir[3] = { 0.0f, 1.0f, 0.0f }; // eased, points TOWARD the light (toon convention)
-static bool sShadowKeyValid = false;
-static s16 sShadowKeyScene = -1;
-// The frame's SECOND light: the best point light that did NOT take the key. That is the whole selection
-// rule, and it falls straight out of the hierarchy already being computed -- if a torch took the frame, the
-// runner-up is Navi or the next torch; if the sun took it, the runner-up is simply the best point light
-// present. Pushed to the renderer as the light that gets its own slice (see SHADOW_MAP_POINT_SLICES).
-static bool sShadowPointValid = false;
-static f32 sShadowPointPos[3] = {};   // eased position, world space
-static f32 sShadowPointDir[3] = { 0.0f, -1.0f, 0.0f }; // direction its light TRAVELS, elevation-floored
-static f32 sShadowPointReach = 0.0f;
-static const LightInfo* sShadowPointLight = NULL;
-static char sShadowKeyText[160] = ""; // pt-BR readout; sized for the longest line plus the vector
-
-// Lift a light off the horizon before anything is cast from it, and turn it from the toon convention
-// (pointing TOWARD the light) into the one a shadow projection needs (the direction the light travels).
-//
-// A light on the horizon stretches every shadow towards infinity, which reads as wrong well before it is
-// geometrically wrong, and wastes the map on a footprint far longer than the scene. The compass bearing is
-// kept; only the height is raised, and only when it is actually too low -- a floor, not a remap.
-//
-// Shared by both lights on purpose. The sun needs it because the game walks it down to the horizon at dusk;
-// a torch needs it more, because a torch on the floor beside the player is very nearly level with him.
-static void ToonApplyElevationFloor(const f32 toward[3], f32 travelOut[3]) {
-    const f32 minElev = CLAMP(sParams.shadowMinElevation, 0.05f, 0.99f);
-    const f32 up = toward[1] < 0.0f ? 0.0f : toward[1]; // below the horizon reads as "on it"
-    const f32 elev = up < minElev ? minElev : up;
-    const f32 hLen = sqrtf((toward[0] * toward[0]) + (toward[2] * toward[2]));
-
-    travelOut[0] = 0.0f, travelOut[1] = -1.0f, travelOut[2] = 0.0f;
-    if (hLen >= 0.001f) {
-        const f32 hScale = sqrtf(1.0f - (elev * elev)) / hLen;
-        travelOut[0] = -hScale * toward[0];
-        travelOut[1] = -elev;
-        travelOut[2] = -hScale * toward[2];
-    }
-    // hLen ~ 0 means the light is straight overhead: the default straight-down vector is already right.
-}
-
-static f32 ToonLuminance(f32 r, f32 g, f32 b) {
-    return (0.299f * r) + (0.587f * g) + (0.114f * b);
-}
-
-// Brightness as an on/off gate rather than a rank (see the header comment). Smooth, so a light being put
-// out hands the frame over instead of dropping it.
-static f32 ToonKeyBrightnessGate(f32 lum) {
-    const f32 off = 0.03f, on = 0.12f;
-    f32 t = CLAMP((lum - off) / (on - off), 0.0f, 1.0f);
-    return t * t * (3.0f - (2.0f * t));
-}
-
-static void ToonShadowKeySelect(PlayState* play, f32 dirOut[3], f32 colOut[3]) {
-    const bool indoors = play->envCtx.indoors != 0;
-
-    // A scene change invalidates the incumbent before it can be scored: the light list has been rebuilt,
-    // so the remembered address is either dangling or -- worse, because it is silent -- reused by an
-    // unrelated light that would then collect a bonus it never earned.
-    const bool sceneChanged = play->sceneNum != sShadowKeyScene;
-    sShadowKeyScene = play->sceneNum;
-    if (sceneChanged) {
-        sShadowKeySource = TOON_KEY_OVERHEAD;
-        sShadowKeyLight = NULL;
-    }
-
-    // Best and second-best POINT lights, tracked alongside the contest rather than inside it. The winner
-    // above may be the sun, in which case the best point light is the frame's second light; or it may be a
-    // torch, in which case the second light is the one behind it. Both cases are the same two variables.
-    const LightInfo* bestPointLight = NULL;
-    const LightInfo* secondPointLight = NULL;
-    f32 bestPointScore = 0.0f, secondPointScore = 0.0f;
-    f32 bestPointPos[3] = {}, secondPointPos[3] = {};
-    f32 bestPointReach = 0.0f, secondPointReach = 0.0f;
-
-    // The synthetic overhead light is the starting bid: it always exists and everything real outranks it.
-    ToonKeySource bestSource = TOON_KEY_OVERHEAD;
-    const LightInfo* bestLight = NULL;
-    f32 bestScore = kKeySyntheticScore * ((sShadowKeySource == TOON_KEY_OVERHEAD) ? kKeyIncumbentBonus : 1.0f);
-    f32 bestDir[3] = { 0.0f, 1.0f, 0.0f };
-    f32 bestCol[3] = { 1.0f, 1.0f, 1.0f };
-    f32 bestDist = 0.0f;
-
-    // Sun or moon.
-    {
-        f32 dir[3] = { 0.0f, 1.0f, 0.0f };
-        f32 col[3] = { 1.0f, 1.0f, 1.0f };
-
-        ToonEnvKey(play, dir, col);
-        // Squared luminance, not luminance. The sky light has to do two opposite things: dominate
-        // absolutely at midday (nothing should ever take the frame from the sun) and step far enough
-        // aside at night that firelight can matter. A linear term cannot do both -- the moon still scores
-        // a quarter of the sun, which no torch can reach -- so the falloff between the two states is
-        // steepened instead of lowering the daytime ceiling.
-        const f32 lum = ToonLuminance(col[0], col[1], col[2]);
-        f32 score = lum * lum * (indoors ? sParams.keyIndoorSunAuthority : sParams.keySunAuthority);
-        if (sShadowKeySource == TOON_KEY_ENV) {
-            score *= kKeyIncumbentBonus;
-        }
-        if (score > bestScore) {
-            bestScore = score, bestSource = TOON_KEY_ENV, bestLight = NULL;
-            bestDir[0] = dir[0], bestDir[1] = dir[1], bestDir[2] = dir[2];
-            bestCol[0] = col[0], bestCol[1] = col[1], bestCol[2] = col[2];
-        }
-    }
-
-    // Torches, braziers, Navi, and everything else in the scene's light list. Measured against the player
-    // rather than the camera: the camera can be anywhere (including inside a wall during a cutscene), and
-    // it is the player's surroundings that decide what is lighting the scene.
-    Player* player = GET_PLAYER(play);
-    f32 focus[3] = { 0.0f, 0.0f, 0.0f };
-    if (player != NULL) {
-        const f32 fx = focus[0] = player->actor.world.pos.x;
-        const f32 fy = focus[1] = player->actor.world.pos.y + kKeyFocusRise;
-        const f32 fz = focus[2] = player->actor.world.pos.z;
-        const f32 range = sParams.pointRange;
-
-        for (LightNode* node = play->lightCtx.listHead; node != NULL; node = node->next) {
-            LightInfo* info = node->info;
-
-            if ((info == NULL) || (info->type == LIGHT_DIRECTIONAL)) {
-                continue;
-            }
-            // Navi emits TWO lights and only one of them means anything here. The glow light sits at her
-            // own position, orbiting the player -- that is a real direction and it is the one that should
-            // move shadows. The other is a fill light pinned to the player's own position (En_Elf parks
-            // it at player.pos + 60 while she is following), so the "direction" from it is a fixed
-            // straight-up vector that says nothing about where she is; it also carries twice the radius,
-            // so left in the contest it would win and freeze the frame's shadows pointing down.
-            if (info == sNaviLight2) {
-                continue;
-            }
-            const bool isNavi = (info == sNaviLight1);
-            if (isNavi && !sParams.useNaviLight) {
-                continue; // opted out of lighting actors, so she does not get to move the world's shadows
-            }
-            const f32 radius = (f32)info->params.point.radius;
-            const f32 reach = radius * range;
-            if (reach <= 0.0f) {
-                continue;
-            }
-            const f32 dx = (f32)info->params.point.x - fx;
-            const f32 dy = (f32)info->params.point.y - fy;
-            const f32 dz = (f32)info->params.point.z - fz;
-            const f32 distSq = (dx * dx) + (dy * dy) + (dz * dz);
-            if ((distSq >= (reach * reach)) || (distSq < 0.0001f)) {
-                continue;
-            }
-            const f32 dist = sqrtf(distSq);
-            const f32 atten = 1.0f - (dist / reach);
-            // A light of the reference radius counts as one torch; scale the rest by their own size, but
-            // bounded, so a scene with one enormous ambient light does not swamp the whole hierarchy.
-            const f32 sizeFactor = CLAMP(radius / kKeyReferenceRadius, 0.25f, 4.0f);
-            const f32 cr = info->params.point.color[0] / 255.0f;
-            const f32 cg = info->params.point.color[1] / 255.0f;
-            const f32 cb = info->params.point.color[2] / 255.0f;
-
-            // How strong this light actually is where the player is standing. Pure geometry and an on/off
-            // brightness gate -- no policy at all, which is what lets the two contests below disagree about
-            // what to do with it without disagreeing about what it is.
-            const f32 lightScore = atten * atten * sizeFactor * ToonKeyBrightnessGate(ToonLuminance(cr, cg, cb));
-            if (lightScore <= 0.0f) {
-                continue;
-            }
-
-            // Contest one: may this light aim the whole frame? Off by default for lamps, so this is usually
-            // skipped outright.
-            const f32 authority = isNavi ? sParams.keyNaviAuthority : sParams.keyTorchAuthority;
-            if (authority > 0.0f) {
-                f32 score = lightScore * authority;
-                if ((sShadowKeySource == TOON_KEY_POINT) && (info == sShadowKeyLight)) {
-                    score *= kKeyIncumbentBonus;
-                }
-                if (score > bestScore) {
-                    bestScore = score, bestSource = TOON_KEY_POINT, bestLight = info, bestDist = dist;
-                    bestDir[0] = dx / dist, bestDir[1] = dy / dist, bestDir[2] = dz / dist;
-                    bestCol[0] = cr, bestCol[1] = cg, bestCol[2] = cb;
-                }
-            }
-
-            // Contest two: which light gets the single point slice. Ranked on the light itself rather than on
-            // the key authority, so turning a lamp out of the key contest does not also delete its shadow --
-            // that separation is the whole point of having two contests.
-            const f32 pointRank = lightScore * (isNavi ? kPointNaviWeight : 1.0f);
-            if (pointRank > bestPointScore) {
-                secondPointScore = bestPointScore, secondPointLight = bestPointLight;
-                secondPointReach = bestPointReach;
-                secondPointPos[0] = bestPointPos[0], secondPointPos[1] = bestPointPos[1],
-                secondPointPos[2] = bestPointPos[2];
-                bestPointScore = pointRank, bestPointLight = info, bestPointReach = reach;
-                bestPointPos[0] = (f32)info->params.point.x, bestPointPos[1] = (f32)info->params.point.y,
-                bestPointPos[2] = (f32)info->params.point.z;
-            } else if (pointRank > secondPointScore) {
-                secondPointScore = pointRank, secondPointLight = info, secondPointReach = reach;
-                secondPointPos[0] = (f32)info->params.point.x, secondPointPos[1] = (f32)info->params.point.y,
-                secondPointPos[2] = (f32)info->params.point.z;
-            }
-        }
-    }
-
-    // Ease toward the winner. A scene change snaps instead: the player has been teleported, so there is no
-    // previous direction worth travelling from.
-    if (!sShadowKeyValid || sceneChanged) {
-        sShadowKeyDir[0] = bestDir[0], sShadowKeyDir[1] = bestDir[1], sShadowKeyDir[2] = bestDir[2];
-        sShadowKeyValid = true;
-    } else {
-        const f32 tt = sParams.keyTravelTime < 0.05f ? 0.05f : sParams.keyTravelTime;
-        const f32 alpha = 1.0f - expf(-4.6f * sToonKeyDt / tt);
-        f32 eased[3];
-
-        ToonSlerp(sShadowKeyDir, bestDir, alpha, eased);
-        // Renormalise: the slerp result is unit for unit inputs, but this feeds back into itself every
-        // frame and the drift would otherwise accumulate for as long as the scene is loaded.
-        const f32 len = sqrtf((eased[0] * eased[0]) + (eased[1] * eased[1]) + (eased[2] * eased[2]));
-        if (len > 0.0001f) {
-            sShadowKeyDir[0] = eased[0] / len, sShadowKeyDir[1] = eased[1] / len, sShadowKeyDir[2] = eased[2] / len;
-        }
-    }
-
-    sShadowKeySource = bestSource;
-    sShadowKeyLight = bestLight;
-
-    // The second light is the best point light the key did not already take.
-    {
-        const LightInfo* runnerUp = (bestSource == TOON_KEY_POINT && bestLight == bestPointLight)
-                                        ? secondPointLight
-                                        : bestPointLight;
-        const f32* runnerPos = (runnerUp == secondPointLight) ? secondPointPos : bestPointPos;
-        const f32 runnerReach = (runnerUp == secondPointLight) ? secondPointReach : bestPointReach;
-
-        if (runnerUp == NULL || runnerReach <= 0.0f) {
-            sShadowPointValid = false;
-            sShadowPointLight = NULL;
-            sShadowPointReach = 0.0f;
-        } else {
-            // Ease the position, but only if asked. At the default this is a straight copy: the light really
-            // does orbit the player, the player can SEE it orbiting, and a shadow that tracks a light you can
-            // watch moving reads as lighting rather than as a glitch. The damping exists for the case where
-            // that turns out to be too much motion on screen, and it works by low-passing the position rather
-            // than the direction -- an orbit averages out to a point, so the circling cancels while the
-            // light's real travel across a room survives.
-            const bool sameLight = sShadowPointValid && (runnerUp == sShadowPointLight);
-            const f32 damp = sParams.pointOrbitDamping;
-            if (!sameLight || damp <= 0.01f) {
-                sShadowPointPos[0] = runnerPos[0], sShadowPointPos[1] = runnerPos[1],
-                sShadowPointPos[2] = runnerPos[2];
-            } else {
-                const f32 alpha = 1.0f - expf(-4.6f * sToonKeyDt / damp);
-                for (s32 i = 0; i < 3; i++) {
-                    sShadowPointPos[i] += (runnerPos[i] - sShadowPointPos[i]) * alpha;
-                }
-            }
-            // The direction its light travels: from the lamp toward what it is lighting, then lifted off the
-            // horizon by the same floor the sun gets. A torch sitting on the floor beside the player is very
-            // nearly level with him, and without the floor it would throw his shadow at the horizon.
-            f32 toward[3] = { sShadowPointPos[0] - focus[0], sShadowPointPos[1] - focus[1],
-                              sShadowPointPos[2] - focus[2] };
-            const f32 len = sqrtf((toward[0] * toward[0]) + (toward[1] * toward[1]) + (toward[2] * toward[2]));
-            if (len > 0.001f) {
-                for (s32 i = 0; i < 3; i++) {
-                    toward[i] /= len;
-                }
-                ToonApplyElevationFloor(toward, sShadowPointDir);
-                sShadowPointReach = runnerReach;
-                sShadowPointLight = runnerUp;
-                sShadowPointValid = true;
-            } else {
-                sShadowPointValid = false;
-            }
-        }
-    }
-
-    dirOut[0] = sShadowKeyDir[0], dirOut[1] = sShadowKeyDir[1], dirOut[2] = sShadowKeyDir[2];
-    colOut[0] = bestCol[0], colOut[1] = bestCol[1], colOut[2] = bestCol[2];
-
-    // Published for the menu readout. One snprintf per frame into a fixed buffer -- no allocation, and it
-    // is the only way to see WHY the shadows are pointing where they are.
-    const char* what = "Luz de cima (nenhuma luz por perto)";
-    if (bestSource == TOON_KEY_ENV) {
-        what = indoors ? "Luz direcional do cenário" : "Sol / lua";
-    } else if (bestSource == TOON_KEY_POINT) {
-        what = (bestLight == sNaviLight1) ? "Navi" : "Luz pontual (tocha)";
-    }
-    // Which light is second matters as much as which is first: it is the one that gets its own slice, so a
-    // second shadow that is missing is either "no runner-up was found" or "the runner-up is not the light
-    // you thought", and those need telling apart.
-    const char* second = "nenhuma";
-    if (sShadowPointValid) {
-        second = (sShadowPointLight == sNaviLight1) ? "Navi" : "luz pontual";
-    }
-    if (bestSource == TOON_KEY_POINT) {
-        snprintf(sShadowKeyText, sizeof(sShadowKeyText),
-                 "%s, a %.0f unidades  [%s]  dir %.2f %.2f %.2f  2a luz: %s", what, bestDist,
-                 indoors ? "fechado" : "aberto", sShadowKeyDir[0], sShadowKeyDir[1], sShadowKeyDir[2], second);
-    } else {
-        snprintf(sShadowKeyText, sizeof(sShadowKeyText), "%s  [%s]  dir %.2f %.2f %.2f  2a luz: %s", what,
-                 indoors ? "fechado" : "aberto", sShadowKeyDir[0], sShadowKeyDir[1], sShadowKeyDir[2], second);
-    }
-}
-
-static bool ToonShadowSecondLight(f32 posOut[3], f32 dirOut[3], f32* reachOut) {
-    if (!sShadowPointValid || sShadowPointReach <= 0.0f) {
-        return false;
-    }
-    for (s32 i = 0; i < 3; i++) {
-        posOut[i] = sShadowPointPos[i];
-        dirOut[i] = sShadowPointDir[i];
-    }
-    *reachOut = sShadowPointReach;
-    return true;
-}
-
-extern "C" const char* ToonLighting_ShadowKeyLight(void) {
-    return sShadowKeyText;
 }
 
 // ---------------------------------------------------------------------------------------------------
@@ -1616,7 +1140,7 @@ static void HandleActorDraw(void* actorPtr) {
     //
     // The stencil volumes still stop: that technique casts the silhouette along the actor's OWN key light,
     // and an actor excluded from the relight never gets one. Shadow maps have no such dependency -- their
-    // light direction is frame-global (see ToonShadowKeySelect in the pusher).
+    // light direction is frame-global (see ToonEnvKey in the pusher).
     const bool relightExcluded = !wantToon;
     const bool castWithoutRelight = relightExcluded && shadowsEnabled && ToonLighting_ShadowMapEnabled() != 0;
     if (relightExcluded && !castWithoutRelight) {

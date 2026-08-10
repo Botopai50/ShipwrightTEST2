@@ -65,14 +65,6 @@ void ToonLighting_ShadowMapSceneryCasterClose(struct GraphicsContext* gfxCtx);
 // or the exclusion list is what needs changing.
 const char* ToonLighting_ShadowMapCasterCensus(void);
 
-// Which light the shadow-map cascades are currently built from, as a printable line ("Sun / moon",
-// "Point light (torch), 210 units away", "Navi", "Overhead (no light in range)") plus whether the scene
-// reads as indoor and the direction itself. The cascades have exactly one direction for the whole frame
-// and a lot of policy decides it, so this is the only way to tell a hierarchy that picked the wrong
-// light from one that picked the right light and aimed it badly. Never null; empty before the first
-// frame. Refreshed once per game frame.
-const char* ToonLighting_ShadowKeyLight(void);
-
 #ifdef __cplusplus
 }
 #endif

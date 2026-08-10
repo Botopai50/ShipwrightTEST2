@@ -113,7 +113,7 @@ void SohMenu::AddMenuWindWakerStyle() {
         .PreFunc(hideUnlessCelEnabled)
         .Options(FloatSliderOptions()
                      .Tooltip("Extends how far a point light can remain an object's key light, as a "
-                              "multiplier on its actual radius (key selection only — the game's real "
+                              "multiplier on its actual radius (key selection only -- the game's real "
                               "lighting is unchanged). Raise it so an orbiting fairy keeps lighting nearby "
                               "objects even when it swings to its far side. 1x = the light's literal range.")
                      .Format("%.1fx")
@@ -152,7 +152,7 @@ void SohMenu::AddMenuWindWakerStyle() {
         .PreFunc(hideUnlessCelEnabled)
         .Options(CheckboxOptions().Tooltip(
             "Renders every cel-shaded object as flat white on the lit side and flat black in shadow (the "
-            "texture is discarded), so it is obvious which draws are being relit — handy for confirming "
+            "texture is discarded), so it is obvious which draws are being relit -- handy for confirming "
             "whether large surfaces like water or lava are getting relit."));
 
     // ===========================================================================================
@@ -304,9 +304,9 @@ void SohMenu::AddMenuWindWakerStyle() {
         .RaceDisable(false)
         .PreFunc(hideUnlessCustomMovement)
         .Options(FloatSliderOptions()
-                     .Tooltip("Depth of the Wind Waker size pulse — the pool's dominant flicker. The orb "
+                     .Tooltip("Depth of the Wind Waker size pulse -- the pool's dominant flicker. The orb "
                               "gently grows/shrinks on a slow random walk (re-rolled every ~0.2 s, eased). "
-                              "1.0 = authentic (~5%); 0 = steady. (Navi is excluded — she isn't a flame.)")
+                              "1.0 = authentic (~5%); 0 = steady. (Navi is excluded -- she isn't a flame.)")
                      .Format("%.2f")
                      .Min(0.0f)
                      .Max(3.0f)
@@ -358,8 +358,8 @@ void SohMenu::AddMenuWindWakerStyle() {
         .CVar(CVAR_DEVELOPER_TOOLS("WorldLighting.ShowLightSpheres"))
         .PreFunc(hideUnlessLightCastEnabled)
         .Options(CheckboxOptions().Tooltip(
-            "Overlays a translucent faceted shell of each light's icosphere — the volume used for its cast "
-            "pool — tinted by the light, so you can see where the pools are, their size, and their spin. "
+            "Overlays a translucent faceted shell of each light's icosphere -- the volume used for its cast "
+            "pool -- tinted by the light, so you can see where the pools are, their size, and their spin. "
             "(The renderer has no line primitive, so this is a shell rather than a true wireframe.)"));
 
     // Held Deku stick — its own light source. Unlike the casting groups above it feeds Cel Shading + Actor
@@ -372,8 +372,8 @@ void SohMenu::AddMenuWindWakerStyle() {
         .RaceDisable(false)
         .Options(CheckboxOptions().DefaultValue(true).Tooltip(
             "Makes a lit, held Deku stick a real light source at its burning tip (it isn't in vanilla). Like a "
-            "torch it lights nearby objects via Cel Shading and casts their shadows, and — with Light Casting "
-            "on — casts its own pool on the world. This one toggle controls all three."));
+            "torch it lights nearby objects via Cel Shading and casts their shadows, and -- with Light Casting "
+            "on -- casts its own pool on the world. This one toggle controls all three."));
     addSliderWithReset("Deku Stick Cast Size", CVAR_ENHANCEMENT("Graphics.WorldLighting.DekuStickSphereSize"),
                        0.1f, 4.0f, 0.5f, "%.2fx", false, hideUnlessDekuStickCast,
                        "The held Deku stick's pool size, separate from torches, so you can size the stick's "
@@ -528,8 +528,8 @@ void SohMenu::AddMenuWindWakerStyle() {
         info.isHidden = CVarGetInteger(CVAR_ENHANCEMENT("Graphics.WorldShadows.Mode"), SHADOW_MODE_VANILLA) !=
                         SHADOW_MODE_SHADOW_MAP;
     };
-    AddWidget(path, "Options", WIDGET_SEPARATOR_TEXT).PreFunc(hideUnlessShadowMap);
-    AddWidget(path, "Reset All to Defaults", WIDGET_BUTTON)
+    AddWidget(path, "Opções", WIDGET_SEPARATOR_TEXT).PreFunc(hideUnlessShadowMap);
+    AddWidget(path, "Restaurar Tudo ao Padrão", WIDGET_BUTTON)
         .PreFunc(hideUnlessShadowMap)
         .Callback([](WidgetInfo& info) {
             CVarClear(CVAR_ENHANCEMENT("Graphics.ShadowMap.Strength"));
@@ -553,13 +553,13 @@ void SohMenu::AddMenuWindWakerStyle() {
             CVarClear(CVAR_ENHANCEMENT("Graphics.ShadowMap.KeyTravelTime"));
             Ship::Context::GetInstance()->GetWindow()->GetGui()->SaveConsoleVariablesNextFrame();
         })
-        .Options(ButtonOptions().Tooltip("Resets every Shadow Map setting below to its default value."));
-    AddWidget(path, "Strength", WIDGET_CVAR_SLIDER_FLOAT)
+        .Options(ButtonOptions().Tooltip("Devolve todas as opções do Shadow Map abaixo aos valores padrão."));
+    AddWidget(path, "Intensidade", WIDGET_CVAR_SLIDER_FLOAT)
         .CVar(CVAR_ENHANCEMENT("Graphics.ShadowMap.Strength"))
         .RaceDisable(false)
         .PreFunc(hideUnlessShadowMap)
         .Options(FloatSliderOptions()
-                     .Tooltip("How dark a fully shadowed surface gets. 0 = no visible shadow at all; 1 = black.")
+                     .Tooltip("O quão escura fica uma superfície totalmente na sombra.\n\n0% = nenhuma sombra visível; 100% = preto.")
                      .Min(0.0f)
                      .Max(1.0f)
                      .DefaultValue(0.5f) // SHADOW_MAP_DEFAULT_STRENGTH
@@ -567,7 +567,7 @@ void SohMenu::AddMenuWindWakerStyle() {
     // Snapped to the offered sizes before the widget draws. The combobox looks its current value up with
     // map::at and throws on anything not in the list, and this CVar is reachable from the console and was a
     // free slider in an earlier build -- so a stray value is a crash on opening the menu, not a stray value.
-    AddWidget(path, "Resolution", WIDGET_CVAR_COMBOBOX)
+    AddWidget(path, "Resolução", WIDGET_CVAR_COMBOBOX)
         .CVar(CVAR_ENHANCEMENT("Graphics.ShadowMap.Resolution"))
         .RaceDisable(false)
         .PreFunc([](WidgetInfo& info) {
@@ -591,198 +591,211 @@ void SohMenu::AddMenuWindWakerStyle() {
         .Options(ComboboxOptions()
                      .DefaultIndex(4096) // SHADOW_MAP_DEFAULT_RESOLUTION
                      .ComboMap(shadowMapResolutionLabels)
-                     .Tooltip("Size of each cascade's depth map, per side. This is the single biggest quality "
-                              "control: every shadow edge is drawn on this grid, so doubling it halves the "
-                              "size of the steps along a shadow's outline.\n\n"
-                              "It is also the biggest cost, and it grows with the SQUARE of the number. Each "
-                              "cascade gets its own map at this size and there are two sets of them, one for "
-                              "scenery and one for characters -- eight in all, so 4096 is around 268 MB of "
-                              "video memory against 17 MB at 1024. Drop it here first on modest hardware."));
-    AddWidget(path, "Cascade Count: %d", WIDGET_CVAR_SLIDER_INT)
+                     .Tooltip("Tamanho do mapa de cada faixa, por lado. É o maior controle de qualidade "
+                              "que existe aqui: toda borda de sombra é desenhada nessa grade, então dobrar "
+                              "esse número reduz à metade o tamanho dos degraus no contorno da sombra.\n\n"
+                              "Também é o maior custo, e ele cresce com o QUADRADO do número. Cada faixa "
+                              "ganha o próprio mapa nesse tamanho, e existem dois conjuntos, um para o "
+                              "cenário e outro para os personagens: cinco mapas no total. Em 4096 isso dá "
+                              "cerca de 168 MB de memória de vídeo, contra 10 MB em 1024. Se o jogo estiver "
+                              "pesado, baixe esta opção primeiro."));
+    AddWidget(path, "Quantidade de Faixas: %d", WIDGET_CVAR_SLIDER_INT)
         .CVar(CVAR_ENHANCEMENT("Graphics.ShadowMap.CascadeCount"))
         .RaceDisable(false)
         .PreFunc(hideUnlessShadowMap)
         .Options(IntSliderOptions()
-                     .Tooltip("How many of the three distance bands below are actually built.\n\n"
-                              "This is not a quality setting: the distances are absolute, so lowering the count "
-                              "does not spread the same range over fewer maps -- it CUTS the range short at the "
-                              "last active band, and shadows simply stop beyond it. Lower it to buy frames, "
-                              "knowing distant shadows go with it.")
+                     .Tooltip("Quantas das três faixas de distância abaixo são realmente construídas.\n\n"
+                              "Isto NÃO é um ajuste de qualidade. As distâncias são absolutas, então "
+                              "diminuir a quantidade não espalha o mesmo alcance por menos mapas: ele CORTA o "
+                              "alcance na última faixa ativa, e as sombras simplesmente somem dali para "
+                              "frente. Diminua para ganhar FPS, sabendo que as sombras distantes vão junto.")
                      .Min(1)
                      .Max(3)
                      .DefaultValue(3) // SHADOW_MAP_DEFAULT_CASCADES
                      .ShowButtons(true)
                      .Format("%d"));
 
-    AddWidget(path, "Distances", WIDGET_SEPARATOR_TEXT).PreFunc(hideUnlessShadowMap);
-    AddWidget(path, "Near Band Ends At: %.0f", WIDGET_CVAR_SLIDER_FLOAT)
+    AddWidget(path, "Distâncias", WIDGET_SEPARATOR_TEXT).PreFunc(hideUnlessShadowMap);
+    AddWidget(path, "Faixa Próxima Termina Em: %.0f", WIDGET_CVAR_SLIDER_FLOAT)
         .CVar(CVAR_ENHANCEMENT("Graphics.ShadowMap.Split0"))
         .RaceDisable(false)
         .PreFunc(hideUnlessShadowMap)
         .Options(FloatSliderOptions()
-                     .Tooltip("Where the first cascade stops, in world units (the player is about 60 tall).\n\n"
-                              "Each band gets a map of the same resolution, so a SHORTER band spends that map "
-                              "on less ground and its shadows come out sharper. This first one covers whatever "
-                              "is right around the player, so it is the one that decides how crisp his own "
-                              "shadow looks. Pull it in for sharper close-up shadows.")
+                     .Tooltip("Onde a primeira faixa termina, em unidades do mundo (o Link tem cerca de "
+                              "60 de altura).\n\n"
+                              "Todas as faixas recebem um mapa da mesma resolução, então uma faixa mais "
+                              "CURTA gasta esse mapa em menos chão e as sombras dela saem mais nítidas. Esta "
+                              "primeira cobre o que está em volta do Link, então é ela que decide o quanto a "
+                              "sombra dele fica definida. Diminua para sombras mais nítidas de perto.")
                      .Format("%.0f")
                      .Min(50.0f)
                      .Max(600.0f)
                      .DefaultValue(150.0f)); // SHADOW_MAP_DEFAULT_SPLIT_0
-    AddWidget(path, "Mid Band Ends At: %.0f", WIDGET_CVAR_SLIDER_FLOAT)
+    AddWidget(path, "Faixa Média Termina Em: %.0f", WIDGET_CVAR_SLIDER_FLOAT)
         .CVar(CVAR_ENHANCEMENT("Graphics.ShadowMap.Split1"))
         .RaceDisable(false)
         .PreFunc(hideUnlessShadowMap)
         .Options(FloatSliderOptions()
-                     .Tooltip("Where the second cascade stops. Keep the distances in increasing order; if one "
-                              "lands below the band before it, the renderer pushes it back up and that band "
-                              "ends up covering nothing.\n\n"
-                              "This is the sharpness control for the middle distance. A cascade's map is "
-                              "stretched over the frustum's width at its FAR edge, "
-                              "so the last band is coarse whatever it starts at -- pushing this one further out "
-                              "hands more of the scene to a band that is still fine, at the cost of the last "
-                              "one starting later.")
+                     .Tooltip("Onde a segunda faixa termina. Mantenha as distâncias em ordem crescente: se "
+                              "uma ficar abaixo da faixa anterior, o renderizador a empurra de volta para cima "
+                              "e aquela faixa acaba não cobrindo nada.\n\n"
+                              "Este é o controle de nitidez da distância média. O mapa de uma faixa é "
+                              "esticado sobre a largura da visão na borda MAIS DISTANTE dela, então a última "
+                              "faixa fica grosseira independentemente de onde comece. Empurrar esta para mais "
+                              "longe entrega mais da cena para uma faixa que ainda está boa, ao custo de a "
+                              "última começar mais tarde.")
                      .Format("%.0f")
                      .Min(100.0f)
                      .Max(3000.0f)
                      .DefaultValue(1200.0f)); // SHADOW_MAP_DEFAULT_SPLIT_1
-    AddWidget(path, "Far Band Ends At: %.0f", WIDGET_CVAR_SLIDER_FLOAT)
+    AddWidget(path, "Faixa Distante Termina Em: %.0f", WIDGET_CVAR_SLIDER_FLOAT)
         .CVar(CVAR_ENHANCEMENT("Graphics.ShadowMap.Split2"))
         .RaceDisable(false)
         .PreFunc(hideUnlessShadowMap)
         .Options(FloatSliderOptions()
-                     .Tooltip("Where the third cascade stops. This is usually the band a building's shadow "
-                              "falls in, so it is worth tightening if mid-distance shadows look coarse.\n\n"
-                              "This is also where every shadow ENDS: the last active band is the draw "
-                              "distance, and with the default three cascades that is this one. Raising it "
-                              "stretches the same map over more ground, so distant shadows get blockier "
-                              "rather than better; lowering it sharpens everything inside the new range and "
-                              "simply ends shadows sooner.")
+                     .Tooltip("Onde a terceira faixa termina. Normalmente é nela que cai a sombra de um "
+                              "prédio, então vale apertar se as sombras de média distância estiverem "
+                              "grosseiras.\n\n"
+                              "É também onde TODA sombra acaba: a última faixa ativa é a distância de "
+                              "desenho, e com as três faixas padrão é esta. Aumentar estica o mesmo mapa "
+                              "sobre mais chão, então as sombras distantes ficam mais quadriculadas em vez "
+                              "de melhores. Diminuir deixa tudo dentro do novo alcance mais nítido e "
+                              "simplesmente termina as sombras mais cedo.")
                      .Format("%.0f")
                      .Min(300.0f)
                      .Max(12000.0f)
                      .DefaultValue(6000.0f)); // SHADOW_MAP_DEFAULT_SPLIT_2
 
-    AddWidget(path, "Edges", WIDGET_SEPARATOR_TEXT).PreFunc(hideUnlessShadowMap);
-    AddWidget(path, "Blur", WIDGET_CVAR_SLIDER_FLOAT)
+    AddWidget(path, "Bordas", WIDGET_SEPARATOR_TEXT).PreFunc(hideUnlessShadowMap);
+    AddWidget(path, "Desfoque", WIDGET_CVAR_SLIDER_FLOAT)
         .CVar(CVAR_ENHANCEMENT("Graphics.ShadowMap.FilterWidth"))
         .RaceDisable(false)
         .PreFunc(hideUnlessShadowMap)
         .Options(FloatSliderOptions()
-                     .Tooltip("How wide the softening filter reaches around each shadow edge, in map cells.\n\n"
-                              "This is what hides the steps along an outline, and it is not free: what it "
-                              "actually softens is the whole edge, so too much reads as a shadow with no shape. "
-                              "Raise it only until the steps stop showing, then use Hardness below to win the "
-                              "definition back.")
+                     .Tooltip("O quanto o filtro de suavização se espalha em volta de cada borda de "
+                              "sombra, em células do mapa.\n\n"
+                              "É isto que esconde os degraus do contorno, e não sai de graça: o que ele "
+                              "suaviza é a borda inteira, então exagerar deixa a sombra sem forma nenhuma. "
+                              "Aumente só até os degraus sumirem, e depois use a Nitidez abaixo para "
+                              "recuperar a definição.")
                      .Format("%.2f")
                      .Min(0.0f)
                      .Max(1.5f)
                      .DefaultValue(0.6f)); // SHADOW_MAP_DEFAULT_FILTER_WIDTH
-    AddWidget(path, "Hardness (Near)", WIDGET_CVAR_SLIDER_FLOAT)
+    AddWidget(path, "Nitidez (Perto)", WIDGET_CVAR_SLIDER_FLOAT)
         .CVar(CVAR_ENHANCEMENT("Graphics.ShadowMap.EdgeHardness"))
         .RaceDisable(false)
         .PreFunc(hideUnlessShadowMap)
         .Options(FloatSliderOptions()
-                     .Tooltip("Snaps the blurred edge back into a defined outline, close to the camera.\n\n"
-                              "It works on the result of the blur rather than undoing it: the filter's soft "
-                              "gradient is remapped so the middle of it becomes an edge again. That keeps the "
-                              "blur's sub-cell placement -- which is what stops the outline looking like stair "
-                              "steps -- while giving back a shadow with a shape. 0 leaves the blur as it is; 1 "
-                              "is a nearly hard edge.")
+                     .Tooltip("Devolve à borda desfocada um contorno definido, perto da câmera.\n\n"
+                              "Ele trabalha sobre o resultado do desfoque em vez de desfazê-lo: o degradê "
+                              "suave do filtro é remapeado de modo que o meio dele volte a ser uma borda. "
+                              "Isso mantém o posicionamento em fração de célula que o desfoque deu, que é o "
+                              "que impede o contorno de parecer uma escada, e ao mesmo tempo devolve uma "
+                              "sombra com forma.\n\n"
+                              "0 deixa o desfoque como está; 1 deixa a borda quase dura.")
                      .Format("%.2f")
                      .Min(0.0f)
                      .Max(1.0f)
                      .DefaultValue(0.6f)); // SHADOW_MAP_DEFAULT_EDGE_HARDNESS
-    AddWidget(path, "Hardness (Far)", WIDGET_CVAR_SLIDER_FLOAT)
+    AddWidget(path, "Nitidez (Longe)", WIDGET_CVAR_SLIDER_FLOAT)
         .CVar(CVAR_ENHANCEMENT("Graphics.ShadowMap.EdgeHardnessFar"))
         .RaceDisable(false)
         .PreFunc(hideUnlessShadowMap)
         .Options(FloatSliderOptions()
-                     .Tooltip("The same control for the furthest band, ramped between the two across the "
-                              "distance bands. Distant cells are much larger, so the blur covers far more "
-                              "ground out there and a distant shadow washes out long before a near one does -- "
-                              "which is why this is usually set higher than the near value.")
+                     .Tooltip("O mesmo controle, só que para a faixa mais distante. O valor é interpolado "
+                              "entre os dois ao longo das faixas.\n\n"
+                              "As células distantes são bem maiores, então lá longe o desfoque cobre muito "
+                              "mais chão e uma sombra distante some bem antes de uma sombra perto sumir. Por "
+                              "isso este valor costuma ficar mais alto que o de perto.")
                      .Format("%.2f")
                      .Min(0.0f)
                      .Max(1.0f)
                      .DefaultValue(0.6f)); // SHADOW_MAP_DEFAULT_EDGE_HARDNESS_FAR
-    AddWidget(path, "Bias", WIDGET_SEPARATOR_TEXT).PreFunc(hideUnlessShadowMap);
-    AddWidget(path, "Constant Bias", WIDGET_CVAR_SLIDER_FLOAT)
+    AddWidget(path, "Ajuste de Profundidade", WIDGET_SEPARATOR_TEXT).PreFunc(hideUnlessShadowMap);
+    AddWidget(path, "Ajuste Fixo", WIDGET_CVAR_SLIDER_FLOAT)
         .CVar(CVAR_ENHANCEMENT("Graphics.ShadowMap.DepthBias"))
         .RaceDisable(false)
         .PreFunc(hideUnlessShadowMap)
         .Options(FloatSliderOptions()
-                     .Tooltip("A flat push of the shadow comparison, in world units (the player is about 60 "
-                              "tall). The same physical distance in every band, whatever their sizes.\n\n"
-                              "This is the bluntest of the three: it slides the comparison along the light "
-                              "ray, so every unit of it is also a unit of the shadow detaching from whatever "
-                              "casts it. Raise it until acne stops, then stop -- past that you are buying a "
-                              "gap under the caster's feet.")
+                     .Tooltip("Um empurrão fixo na comparação de sombra, em unidades do mundo (o Link tem "
+                              "cerca de 60 de altura). A mesma distância física em todas as faixas, "
+                              "independentemente do tamanho delas.\n\n"
+                              "É o mais grosseiro dos três: ele desliza a comparação ao longo do raio de "
+                              "luz, então cada unidade daqui é também uma unidade de sombra se descolando de "
+                              "quem a projeta. Aumente até as listras de sombra pararem, e pare aí: dali "
+                              "para frente você só está comprando um vão embaixo dos pés do objeto.")
                      .Format("%.2f")
                      .Min(0.0f)
                      .Max(8.0f)
                      .DefaultValue(0.05f)); // SHADOW_MAP_DEFAULT_DEPTH_BIAS_WORLD
-    AddWidget(path, "Slope Bias", WIDGET_CVAR_SLIDER_FLOAT)
+    AddWidget(path, "Ajuste por Inclinação", WIDGET_CVAR_SLIDER_FLOAT)
         .CVar(CVAR_ENHANCEMENT("Graphics.ShadowMap.SlopeBias"))
         .RaceDisable(false)
         .PreFunc(hideUnlessShadowMap)
         .Options(FloatSliderOptions()
-                     .Tooltip("A multiple of how fast the surface's own depth changes across one map cell.\n\n"
-                              "This is the one that actually targets acne, because it costs nothing where "
-                              "nothing is wrong: a surface facing the light has almost no gradient and gets "
-                              "almost no push, while one edge-on to it -- where depth runs away across a cell "
-                              "and the stripes appear -- gets a lot. Reach for this before the constant one. "
-                              "Each band caps it separately so a distant cell, several world units across, "
-                              "cannot run away with it.")
+                     .Tooltip("Um multiplicador de o quanto a profundidade da própria superfície muda ao "
+                              "longo de uma célula do mapa.\n\n"
+                              "Este é o que realmente ataca as listras de sombra, porque não custa nada onde "
+                              "não há problema: uma superfície virada para a luz quase não tem inclinação e "
+                              "quase não recebe empurrão, enquanto uma de lado para a luz, onde a "
+                              "profundidade dispara dentro de uma célula e as listras aparecem, recebe "
+                              "bastante. Use este antes do Ajuste Fixo.\n\n"
+                              "Cada faixa tem seu próprio limite, para que uma célula distante, com várias "
+                              "unidades de largura, não saia do controle.")
                      .Format("%.2f")
                      .Min(0.0f)
                      .Max(16.0f)
                      .DefaultValue(1.0f)); // SHADOW_MAP_DEFAULT_SLOPE_BIAS
-    AddWidget(path, "Normal Offset", WIDGET_CVAR_SLIDER_FLOAT)
+    AddWidget(path, "Afastamento pela Normal", WIDGET_CVAR_SLIDER_FLOAT)
         .CVar(CVAR_ENHANCEMENT("Graphics.ShadowMap.NormalOffset"))
         .RaceDisable(false)
         .PreFunc(hideUnlessShadowMap)
         .Options(FloatSliderOptions()
-                     .Tooltip("How far the surface is nudged along its own normal before the comparison, in "
-                              "map cells, scaled by how edge-on it is to the light.\n\n"
-                              "The other two slide the sample ALONG the light ray, which keeps it inside the "
-                              "same polygon; this one moves it sideways, off the surface causing the problem. "
-                              "That is why it fixes curved and grazing surfaces the others cannot, and why it "
-                              "costs the least detachment for what it removes. Too much and shadows start to "
-                              "creep away from corners.")
+                     .Tooltip("O quanto a superfície é empurrada na direção da própria normal antes da "
+                              "comparação, em células do mapa, proporcional ao quanto ela está de lado para "
+                              "a luz.\n\n"
+                              "Os outros dois deslizam a amostra AO LONGO do raio de luz, o que a mantém "
+                              "dentro do mesmo polígono. Este a move para o lado, para fora da superfície que "
+                              "está causando o problema. É por isso que ele resolve superfícies curvas e "
+                              "rasantes que os outros não resolvem, e por isso que descola menos a sombra "
+                              "pelo que corrige.\n\n"
+                              "Exagerar faz as sombras começarem a fugir dos cantos.")
                      .Format("%.2f")
                      .Min(0.0f)
                      .Max(8.0f)
                      .DefaultValue(0.0f)); // SHADOW_MAP_DEFAULT_NORMAL_OFFSET
 
-    AddWidget(path, "Light and Casters", WIDGET_SEPARATOR_TEXT).PreFunc(hideUnlessShadowMap);
-    AddWidget(path, "Minimum Sun Height", WIDGET_CVAR_SLIDER_FLOAT)
+    AddWidget(path, "Luz e Alcance", WIDGET_SEPARATOR_TEXT).PreFunc(hideUnlessShadowMap);
+    AddWidget(path, "Altura Mínima do Sol", WIDGET_CVAR_SLIDER_FLOAT)
         .CVar(CVAR_ENHANCEMENT("Graphics.ShadowMap.MinElevation"))
         .RaceDisable(false)
         .PreFunc(hideUnlessShadowMap)
         .Options(FloatSliderOptions()
-                     .Tooltip("How low the sun is allowed to sit before shadows are cast from it, as the sine "
-                              "of its angle above the horizon (0.5 is thirty degrees).\n\n"
-                              "A sun on the horizon stretches every shadow towards infinity, which reads as "
-                              "wrong long before it is geometrically wrong, and wastes the maps on a footprint "
-                              "far longer than the scene. Only the height is lifted; the compass direction the "
-                              "shadows point is left alone.")
+                     .Tooltip("Quão baixo o sol pode ficar antes de as sombras serem projetadas a partir "
+                              "dele, medido como o seno do ângulo acima do horizonte (0,5 é trinta graus).\n\n"
+                              "Um sol na linha do horizonte estica toda sombra até o infinito, o que parece "
+                              "errado bem antes de ser geometricamente errado, e ainda desperdiça os mapas "
+                              "numa área muito maior que a cena. Só a altura é levantada: a direção para "
+                              "onde as sombras apontam continua a mesma.")
                      .Format("%.2f")
                      .Min(0.1f)
                      .Max(0.95f)
                      .DefaultValue(0.5f)); // SHADOW_MAP_DEFAULT_MIN_ELEVATION
-    AddWidget(path, "Off-Screen Caster Reach: %.0f", WIDGET_CVAR_SLIDER_FLOAT)
+    AddWidget(path, "Alcance Fora da Tela: %.0f", WIDGET_CVAR_SLIDER_FLOAT)
         .CVar(CVAR_ENHANCEMENT("Graphics.ShadowMap.CasterDrawRadius"))
         .RaceDisable(false)
         .PreFunc(hideUnlessShadowMap)
         .Options(FloatSliderOptions()
-                     .Tooltip("How far outside the view something is still drawn purely so it can cast.\n\n"
-                              "The game normally stops drawing what the camera cannot see, but a tree behind "
-                              "you still throws its shadow in front of you -- so without this, shadows blink "
-                              "out as you turn. The test follows the light rather than a plain circle, so this "
-                              "is the margin around the shadow's path, not around the object. Lower it to gain "
-                              "frames in open areas; the cost is distant landmarks losing their shadows when "
-                              "they leave the screen.")
+                     .Tooltip("Até que distância fora da tela um objeto continua sendo desenhado apenas "
+                              "para poder projetar sombra.\n\n"
+                              "Normalmente o jogo para de desenhar o que a câmera não vê, mas uma árvore "
+                              "atrás de você ainda joga a sombra dela na sua frente. Sem isso, as sombras "
+                              "piscariam a cada vez que você virasse a câmera. O teste segue a luz em vez de "
+                              "usar um círculo simples, então esta é a margem em volta do caminho da sombra, "
+                              "não em volta do objeto.\n\n"
+                              "Diminua para ganhar FPS em áreas abertas; o preço é pontos de referência "
+                              "distantes perderem a sombra ao sair da tela.")
                      .Format("%.0f")
                      .Min(400.0f)
                      .Max(4000.0f)
@@ -792,117 +805,126 @@ void SohMenu::AddMenuWindWakerStyle() {
     // for it and these sliders are the weights of that competition, not brightness controls. Raising one
     // does not make that kind of light brighter -- it makes it more likely to be the light the frame's
     // shadows are cast from.
-    AddWidget(path, "Which Light Casts", WIDGET_SEPARATOR_TEXT).PreFunc(hideUnlessShadowMap);
-    AddWidget(path, "Sun Authority", WIDGET_CVAR_SLIDER_FLOAT)
+    AddWidget(path, "Qual Luz Projeta a Sombra", WIDGET_SEPARATOR_TEXT).PreFunc(hideUnlessShadowMap);
+    AddWidget(path, "Peso do Sol", WIDGET_CVAR_SLIDER_FLOAT)
         .CVar(CVAR_ENHANCEMENT("Graphics.ShadowMap.SunAuthority"))
         .RaceDisable(false)
         .PreFunc(hideUnlessShadowMap)
         .Options(FloatSliderOptions()
-                     .Tooltip("How strongly the sun (or, at night, the moon) holds the frame's shadow "
-                              "direction outdoors.\n\n"
-                              "The default is far above anything a torch can reach, so daylight is never "
-                              "taken over. It is scaled by how bright the sky light actually is, which is "
-                              "what lets a torch you are standing next to win at night and never at noon. "
-                              "Drop this to let firelight matter outdoors; raise it to make the sky the only "
-                              "thing that ever casts.")
+                     .Tooltip("O quanto o sol (ou a lua, à noite) segura a direção das sombras em "
+                              "ambientes abertos.\n\n"
+                              "O padrão está muito acima de qualquer coisa que uma tocha alcance, então a "
+                              "luz do dia nunca é tomada. O valor é multiplicado pelo brilho real da luz do "
+                              "céu, e é isso que deixa uma tocha ao seu lado vencer à noite e nunca ao "
+                              "meio-dia.\n\n"
+                              "Diminua para o fogo importar ao ar livre; aumente para o céu ser a única "
+                              "coisa que projeta sombra.")
                      .Format("%.1f")
                      .Min(0.0f)
                      .Max(16.0f)
                      .DefaultValue(8.0f)); // kDefaultKeySunAuthority
-    AddWidget(path, "Indoor Sun Authority", WIDGET_CVAR_SLIDER_FLOAT)
+    AddWidget(path, "Peso do Sol em Interiores", WIDGET_CVAR_SLIDER_FLOAT)
         .CVar(CVAR_ENHANCEMENT("Graphics.ShadowMap.IndoorSunAuthority"))
         .RaceDisable(false)
         .PreFunc(hideUnlessShadowMap)
         .Options(FloatSliderOptions()
-                     .Tooltip("The same, for scenes the game marks as interiors.\n\n"
-                              "Zero by default: an interior's directional light points wherever the original "
-                              "light settings happened to aim, which is often near-horizontal and rarely "
-                              "matches anything visible in the room. With it off, a room's own torches cast, "
-                              "and a room with no torches falls back to a plain overhead light. Raise it if "
-                              "you would rather interiors keep casting from their scene light.")
+                     .Tooltip("O mesmo, para cenários que o jogo marca como fechados.\n\n"
+                              "Zero por padrão. A luz direcional de um interior aponta para onde as "
+                              "configurações originais da sala mandaram, o que costuma ser quase horizontal "
+                              "e quase nunca corresponde a algo visível no ambiente. Com isso desligado, as "
+                              "tochas da própria sala é que projetam, e uma sala sem tocha nenhuma cai numa "
+                              "luz vinda de cima.\n\n"
+                              "Aumente se preferir que os interiores continuem projetando a partir da luz "
+                              "original do cenário.")
                      .Format("%.1f")
                      .Min(0.0f)
                      .Max(8.0f)
                      .DefaultValue(0.0f)); // kDefaultKeyIndoorSunAuthority
-    AddWidget(path, "Torch Authority", WIDGET_CVAR_SLIDER_FLOAT)
+    AddWidget(path, "Peso das Tochas", WIDGET_CVAR_SLIDER_FLOAT)
         .CVar(CVAR_ENHANCEMENT("Graphics.ShadowMap.TorchAuthority"))
         .RaceDisable(false)
         .PreFunc(hideUnlessShadowMap)
         .Options(FloatSliderOptions()
-                     .Tooltip("How strongly torches, braziers and other point lights compete for the frame.\n\n"
-                              "A light's own score already falls off with distance and rises with its radius, "
-                              "so a big brazier beside you outranks a small one across the room without any "
-                              "help. This scales all of them at once. Zero stops point lights casting entirely "
-                              "and leaves the sun (or the overhead fallback) in charge everywhere.\n\n"
-                              "How far each light reaches is the Point Light Range slider on the Cel Shading "
-                              "page -- the same reach the cel shading uses, so what lights a character and "
-                              "what casts its shadow stay the same light.\n\n"
-                              "At the default, firelight takes the frame throughout interiors and caves, and "
-                              "outdoors only on a dark night with the torch almost within reach -- the moon "
-                              "outranks it everywhere else. Raise this if you want torches to cast the scene "
-                              "outdoors too, and expect the whole field's shadows to swing across as you walk "
-                              "up to one.")
+                     .Tooltip("O quanto tochas, braseiros e outras luzes pontuais disputam a direção das "
+                              "sombras.\n\n"
+                              "A pontuação de cada luz já cai com a distância e sobe com o raio dela, então "
+                              "um braseiro grande do seu lado já ganha de um pequeno do outro lado da sala "
+                              "sem precisar de ajuda. Este controle multiplica todas de uma vez. Zero impede "
+                              "as luzes pontuais de projetarem, deixando o sol (ou a luz de cima) no comando "
+                              "em todo lugar.\n\n"
+                              "O alcance de cada luz é a opção Point Light Range, na página Cel Shading. É o "
+                              "mesmo alcance que o cel shading usa, então a luz que ilumina um personagem e "
+                              "a luz que projeta a sombra dele continuam sendo a mesma.\n\n"
+                              "No padrão, o fogo domina em interiores e cavernas; ao ar livre, só numa noite "
+                              "escura e com a tocha quase ao alcance da mão, porque a lua ganha dela em todo "
+                              "o resto. Aumente se quiser que tochas projetem a cena ao ar livre também, e "
+                              "espere ver as sombras do campo inteiro girarem conforme você se aproxima de "
+                              "uma.")
                      .Format("%.2f")
                      .Min(0.0f)
                      .Max(8.0f)
                      .DefaultValue(1.0f)); // kDefaultKeyTorchAuthority
-    AddWidget(path, "Navi Authority", WIDGET_CVAR_SLIDER_FLOAT)
+    AddWidget(path, "Peso da Navi", WIDGET_CVAR_SLIDER_FLOAT)
         .CVar(CVAR_ENHANCEMENT("Graphics.ShadowMap.NaviAuthority"))
         .RaceDisable(false)
         .PreFunc(hideUnlessShadowMap)
         .Options(FloatSliderOptions()
-                     .Tooltip("Navi is a light, and she orbits you.\n\n"
-                              "That makes her a special case: at full strength she would be the closest light "
-                              "in nearly every scene, and every shadow in Hyrule would swing around as she "
-                              "drifted. The default keeps her low enough that she lights a cave or an unlit "
-                              "room -- where she really is the brightest thing present -- and never argues "
-                              "with the sun or with a lit torch. Zero removes her from the contest; raise it "
-                              "and shadows will start following your fairy.")
+                     .Tooltip("A Navi é uma luz, e ela fica girando em volta de você.\n\n"
+                              "Isso a torna um caso especial: na força total ela seria a luz mais próxima em "
+                              "quase toda cena, e todas as sombras de Hyrule girariam conforme ela se "
+                              "mexesse. O padrão a mantém baixa o bastante para ela iluminar uma caverna ou "
+                              "uma sala sem luz, onde ela realmente é a coisa mais brilhante presente, e "
+                              "nunca competir com o sol nem com uma tocha acesa.\n\n"
+                              "Zero tira a Navi da disputa; aumentar faz as sombras começarem a seguir a sua "
+                              "fada.")
                      .Format("%.2f")
                      .Min(0.0f)
                      .Max(2.0f)
                      .DefaultValue(0.25f)); // kDefaultKeyNaviAuthority
-    AddWidget(path, "Light Change Travel: %.1fs", WIDGET_CVAR_SLIDER_FLOAT)
+    AddWidget(path, "Tempo de Transição: %.1fs", WIDGET_CVAR_SLIDER_FLOAT)
         .CVar(CVAR_ENHANCEMENT("Graphics.ShadowMap.KeyTravelTime"))
         .RaceDisable(false)
         .PreFunc(hideUnlessShadowMap)
         .Options(FloatSliderOptions()
-                     .Tooltip("How long the world's shadows take to swing across when a different light takes "
-                              "over -- walking up to a torch, or leaving its range again.\n\n"
-                              "Every shadow in the scene moves together, so a snap is very visible; too slow "
-                              "and they lag behind you instead. Scene changes always snap, since there is no "
-                              "previous direction worth travelling from.")
+                     .Tooltip("Quanto tempo as sombras do mundo levam para girar quando outra luz assume, "
+                              "por exemplo ao chegar perto de uma tocha ou ao sair do alcance dela.\n\n"
+                              "Todas as sombras da cena se movem juntas, então uma virada instantânea fica "
+                              "muito visível; lento demais e elas ficam atrasadas em relação a você. Trocas "
+                              "de cenário sempre viram na hora, já que não há direção anterior que valha a "
+                              "pena percorrer.")
                      .Format("%.1f")
                      .Min(0.1f)
                      .Max(6.0f)
                      .DefaultValue(1.5f)); // kDefaultKeyTravelTime
 
-    AddWidget(path, "Debug", WIDGET_SEPARATOR_TEXT).PreFunc(hideUnlessShadowMap);
+    AddWidget(path, "Depuração", WIDGET_SEPARATOR_TEXT).PreFunc(hideUnlessShadowMap);
     // Live readout of which light won the frame. A lot of policy decides the single direction the cascades
     // get, so without this a hierarchy that picked the wrong light is indistinguishable from one that
     // picked the right light and aimed it badly. Same live-name trick as the caster census below.
-    AddWidget(path, "Casting from:", WIDGET_TEXT)
+    AddWidget(path, "Projetando a partir de:", WIDGET_TEXT)
         .RaceDisable(false)
         .PreFunc([](WidgetInfo& info) {
             info.isHidden = CVarGetInteger(CVAR_ENHANCEMENT("Graphics.WorldShadows.Mode"), SHADOW_MODE_VANILLA) !=
                             SHADOW_MODE_SHADOW_MAP;
             if (!info.isHidden) {
                 const char* key = ToonLighting_ShadowKeyLight();
-                info.name = std::string("Casting from: ") + ((key != nullptr && key[0] != '\0') ? key : "(none yet)");
+                info.name =
+                    std::string("Projetando a partir de: ") + ((key != nullptr && key[0] != '\0') ? key : "(ainda nada)");
             }
         });
-    AddWidget(path, "Show Cascade Bounds: %d", WIDGET_CVAR_SLIDER_INT)
+    AddWidget(path, "Mostrar Limites das Faixas: %d", WIDGET_CVAR_SLIDER_INT)
         .CVar(CVAR_DEVELOPER_TOOLS("ShadowMap.ShowCascadeBounds"))
         .PreFunc(hideUnlessShadowMap)
         .Options(IntSliderOptions()
-                     .Tooltip("0 = off.\n\n"
-                              "1 = paint everything OUTSIDE a cascade's footprint as fully shadowed. A surface "
-                              "outside one is silently reported lit, so a shadow that stops at a boundary looks "
-                              "exactly like one that was never cast; this is the only way to tell them apart.\n\n"
-                              "2 = colour the two caster layers instead of shading with them. GREEN where "
-                              "scenery blocks the light, RED where a character does. Use it to find out whether "
-                              "something is being captured at all, and into which layer.\n\n"
-                              "Any non-zero value also fills in the caster list below.")
+                     .Tooltip("0 = desligado.\n\n"
+                              "1 = pinta tudo que está FORA da área de uma faixa como totalmente sombreado. "
+                              "Uma superfície fora dela é silenciosamente considerada iluminada, então uma "
+                              "sombra que para no limite da faixa fica idêntica a uma que nunca foi "
+                              "projetada. Esta é a única forma de distinguir as duas.\n\n"
+                              "2 = colore as duas camadas de projeção em vez de sombrear com elas. VERDE "
+                              "onde o cenário bloqueia a luz, VERMELHO onde um personagem bloqueia. Use para "
+                              "descobrir se algo está sendo capturado e em qual camada.\n\n"
+                              "Qualquer valor diferente de zero também preenche a lista abaixo.")
                      .Min(0)
                      .Max(2)
                      .DefaultValue(0)
@@ -911,7 +933,7 @@ void SohMenu::AddMenuWindWakerStyle() {
     // Live list of what the world (green) caster layer is actually made of, so a stray green blob in the
     // debug view can be named instead of guessed at. WIDGET_TEXT draws widget.name, and PreFunc runs first,
     // so rewriting the name each frame is what makes it live.
-    AddWidget(path, "Scenery casters (avg/frame):", WIDGET_TEXT)
+    AddWidget(path, "Cenário projetando (média/frame):", WIDGET_TEXT)
         .RaceDisable(false)
         .PreFunc([](WidgetInfo& info) {
             info.isHidden = CVarGetInteger(CVAR_ENHANCEMENT("Graphics.WorldShadows.Mode"), SHADOW_MODE_VANILLA) !=
@@ -919,7 +941,7 @@ void SohMenu::AddMenuWindWakerStyle() {
                             CVarGetInteger(CVAR_DEVELOPER_TOOLS("ShadowMap.ShowCascadeBounds"), 0) == 0;
             if (!info.isHidden) {
                 const char* census = ToonLighting_ShadowMapCasterCensus();
-                info.name = std::string("Scenery casters (avg/frame):\n") + (census != nullptr ? census : "");
+                info.name = std::string("Cenário projetando (média/frame):\n") + (census != nullptr ? census : "");
             }
         });
 
@@ -957,7 +979,7 @@ void SohMenu::AddMenuWindWakerStyle() {
         .RaceDisable(false)
         .PreFunc(hideUnlessSky)
         .Options(FloatSliderOptions()
-                     .Tooltip("Raises or lowers the sky's horizon line — the gradient's haze boundary and "
+                     .Tooltip("Raises or lowers the sky's horizon line -- the gradient's haze boundary and "
                               "the horizon cloud band move together. Useful where the visible horizon sits "
                               "below eye level, like the middle of Hyrule Field.")
                      .Format("%.0f")
@@ -1020,7 +1042,7 @@ void SohMenu::AddMenuWindWakerStyle() {
         .RaceDisable(false)
         .PreFunc(hideUnlessSkyClouds)
         .Options(FloatSliderOptions()
-                     .Tooltip("How much of the sky the clouds fill — from a few scattered clouds up to "
+                     .Tooltip("How much of the sky the clouds fill -- from a few scattered clouds up to "
                               "fully overcast.")
                      .Min(0.0f)
                      .Max(1.0f)
@@ -1073,7 +1095,7 @@ void SohMenu::AddMenuWindWakerStyle() {
         .RaceDisable(false)
         .PreFunc(hideUnlessSkyStars)
         .Options(FloatSliderOptions()
-                     .Tooltip("How fast the stars pulse. 1x is Wind Waker's rate — about ten seconds per "
+                     .Tooltip("How fast the stars pulse. 1x is Wind Waker's rate -- about ten seconds per "
                               "cycle.")
                      .Format("%.1fx")
                      .Min(0.1f)
@@ -1086,7 +1108,7 @@ void SohMenu::AddMenuWindWakerStyle() {
         .RaceDisable(false)
         .PreFunc(hideUnlessSky)
         .Options(CheckboxOptions().DefaultValue(true).Tooltip(
-            "Wind Waker's white wind streaks curling through the sky — occasionally pulling a full "
+            "Wind Waker's white wind streaks curling through the sky -- occasionally pulling a full "
             "loop-de-loop. Their number follows the wind's strength."));
     AddWidget(path, "Wisp Amount", WIDGET_CVAR_SLIDER_FLOAT)
         .CVar(CVAR_ENHANCEMENT("Graphics.WWWindWisps.Amount"))
@@ -1125,7 +1147,7 @@ void SohMenu::AddMenuWindWakerStyle() {
         .PreFunc(hideUnlessSky)
         .Options(CheckboxOptions().DefaultValue(false).Tooltip(
             "Draws the Wind Waker sky only on the left half of the screen, leaving the original sky "
-            "visible on the right — a live side-by-side comparison."));
+            "visible on the right -- a live side-by-side comparison."));
 }
 
 } // namespace SohGui

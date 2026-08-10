@@ -185,7 +185,7 @@ static void ToonShadowCensusPublish() {
 
     sCensusText.clear();
     if (rows.empty()) {
-        sCensusText = "(no scenery casters)";
+        sCensusText = "(nenhum cenário projetando)";
     }
     // Only the busiest handful: a scattered particle is by definition many instances, so whatever is
     // wanted here is at the top. Averaged over the window, because an actor drawn every frame should read
@@ -1012,7 +1012,7 @@ static const LightInfo* sShadowKeyLight = NULL;     // identity of the winning p
 static f32 sShadowKeyDir[3] = { 0.0f, 1.0f, 0.0f }; // eased, points TOWARD the light (toon convention)
 static bool sShadowKeyValid = false;
 static s16 sShadowKeyScene = -1;
-static char sShadowKeyText[96] = "";
+static char sShadowKeyText[160] = ""; // pt-BR readout; sized for the longest line plus the vector
 
 static f32 ToonLuminance(f32 r, f32 g, f32 b) {
     return (0.299f * r) + (0.587f * g) + (0.114f * b);
@@ -1163,18 +1163,18 @@ static void ToonShadowKeySelect(PlayState* play, f32 dirOut[3], f32 colOut[3]) {
 
     // Published for the menu readout. One snprintf per frame into a fixed buffer -- no allocation, and it
     // is the only way to see WHY the shadows are pointing where they are.
-    const char* what = "Overhead (no light in range)";
+    const char* what = "Luz de cima (nenhuma luz por perto)";
     if (bestSource == TOON_KEY_ENV) {
-        what = indoors ? "Scene directional" : "Sun / moon";
+        what = indoors ? "Luz direcional do cenário" : "Sol / lua";
     } else if (bestSource == TOON_KEY_POINT) {
-        what = (bestLight == sNaviLight1) ? "Navi" : "Point light (torch)";
+        what = (bestLight == sNaviLight1) ? "Navi" : "Luz pontual (tocha)";
     }
     if (bestSource == TOON_KEY_POINT) {
-        snprintf(sShadowKeyText, sizeof(sShadowKeyText), "%s, %.0f units away  [%s]  dir %.2f %.2f %.2f", what,
-                 bestDist, indoors ? "indoor" : "outdoor", sShadowKeyDir[0], sShadowKeyDir[1], sShadowKeyDir[2]);
+        snprintf(sShadowKeyText, sizeof(sShadowKeyText), "%s, a %.0f unidades  [%s]  dir %.2f %.2f %.2f", what,
+                 bestDist, indoors ? "fechado" : "aberto", sShadowKeyDir[0], sShadowKeyDir[1], sShadowKeyDir[2]);
     } else {
         snprintf(sShadowKeyText, sizeof(sShadowKeyText), "%s  [%s]  dir %.2f %.2f %.2f", what,
-                 indoors ? "indoor" : "outdoor", sShadowKeyDir[0], sShadowKeyDir[1], sShadowKeyDir[2]);
+                 indoors ? "fechado" : "aberto", sShadowKeyDir[0], sShadowKeyDir[1], sShadowKeyDir[2]);
     }
 }
 

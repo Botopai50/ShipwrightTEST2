@@ -546,6 +546,11 @@ void SohMenu::AddMenuWindWakerStyle() {
             CVarClear(CVAR_ENHANCEMENT("Graphics.ShadowMap.NormalOffset"));
             CVarClear(CVAR_ENHANCEMENT("Graphics.ShadowMap.MinElevation"));
             CVarClear(CVAR_ENHANCEMENT("Graphics.ShadowMap.CasterDrawRadius"));
+            CVarClear(CVAR_ENHANCEMENT("Graphics.ShadowMap.SunAuthority"));
+            CVarClear(CVAR_ENHANCEMENT("Graphics.ShadowMap.IndoorSunAuthority"));
+            CVarClear(CVAR_ENHANCEMENT("Graphics.ShadowMap.TorchAuthority"));
+            CVarClear(CVAR_ENHANCEMENT("Graphics.ShadowMap.NaviAuthority"));
+            CVarClear(CVAR_ENHANCEMENT("Graphics.ShadowMap.KeyTravelTime"));
             Ship::Context::GetInstance()->GetWindow()->GetGui()->SaveConsoleVariablesNextFrame();
         })
         .Options(ButtonOptions().Tooltip("Resets every Shadow Map setting below to its default value."));
@@ -783,7 +788,109 @@ void SohMenu::AddMenuWindWakerStyle() {
                      .Max(4000.0f)
                      .DefaultValue(1500.0f)); // SHADOW_MAP_DEFAULT_CASTER_DRAW_RADIUS
 
+    // The cascades have exactly ONE direction for the whole frame, so every light in the scene competes
+    // for it and these sliders are the weights of that competition, not brightness controls. Raising one
+    // does not make that kind of light brighter -- it makes it more likely to be the light the frame's
+    // shadows are cast from.
+    AddWidget(path, "Which Light Casts", WIDGET_SEPARATOR_TEXT).PreFunc(hideUnlessShadowMap);
+    AddWidget(path, "Sun Authority", WIDGET_CVAR_SLIDER_FLOAT)
+        .CVar(CVAR_ENHANCEMENT("Graphics.ShadowMap.SunAuthority"))
+        .RaceDisable(false)
+        .PreFunc(hideUnlessShadowMap)
+        .Options(FloatSliderOptions()
+                     .Tooltip("How strongly the sun (or, at night, the moon) holds the frame's shadow "
+                              "direction outdoors.\n\n"
+                              "The default is far above anything a torch can reach, so daylight is never "
+                              "taken over. It is scaled by how bright the sky light actually is, which is "
+                              "what lets a torch you are standing next to win at night and never at noon. "
+                              "Drop this to let firelight matter outdoors; raise it to make the sky the only "
+                              "thing that ever casts.")
+                     .Format("%.1f")
+                     .Min(0.0f)
+                     .Max(16.0f)
+                     .DefaultValue(8.0f)); // kDefaultKeySunAuthority
+    AddWidget(path, "Indoor Sun Authority", WIDGET_CVAR_SLIDER_FLOAT)
+        .CVar(CVAR_ENHANCEMENT("Graphics.ShadowMap.IndoorSunAuthority"))
+        .RaceDisable(false)
+        .PreFunc(hideUnlessShadowMap)
+        .Options(FloatSliderOptions()
+                     .Tooltip("The same, for scenes the game marks as interiors.\n\n"
+                              "Zero by default: an interior's directional light points wherever the original "
+                              "light settings happened to aim, which is often near-horizontal and rarely "
+                              "matches anything visible in the room. With it off, a room's own torches cast, "
+                              "and a room with no torches falls back to a plain overhead light. Raise it if "
+                              "you would rather interiors keep casting from their scene light.")
+                     .Format("%.1f")
+                     .Min(0.0f)
+                     .Max(8.0f)
+                     .DefaultValue(0.0f)); // kDefaultKeyIndoorSunAuthority
+    AddWidget(path, "Torch Authority", WIDGET_CVAR_SLIDER_FLOAT)
+        .CVar(CVAR_ENHANCEMENT("Graphics.ShadowMap.TorchAuthority"))
+        .RaceDisable(false)
+        .PreFunc(hideUnlessShadowMap)
+        .Options(FloatSliderOptions()
+                     .Tooltip("How strongly torches, braziers and other point lights compete for the frame.\n\n"
+                              "A light's own score already falls off with distance and rises with its radius, "
+                              "so a big brazier beside you outranks a small one across the room without any "
+                              "help. This scales all of them at once. Zero stops point lights casting entirely "
+                              "and leaves the sun (or the overhead fallback) in charge everywhere.\n\n"
+                              "How far each light reaches is the Point Light Range slider on the Cel Shading "
+                              "page -- the same reach the cel shading uses, so what lights a character and "
+                              "what casts its shadow stay the same light.\n\n"
+                              "At the default, firelight takes the frame throughout interiors and caves, and "
+                              "outdoors only on a dark night with the torch almost within reach -- the moon "
+                              "outranks it everywhere else. Raise this if you want torches to cast the scene "
+                              "outdoors too, and expect the whole field's shadows to swing across as you walk "
+                              "up to one.")
+                     .Format("%.2f")
+                     .Min(0.0f)
+                     .Max(8.0f)
+                     .DefaultValue(1.0f)); // kDefaultKeyTorchAuthority
+    AddWidget(path, "Navi Authority", WIDGET_CVAR_SLIDER_FLOAT)
+        .CVar(CVAR_ENHANCEMENT("Graphics.ShadowMap.NaviAuthority"))
+        .RaceDisable(false)
+        .PreFunc(hideUnlessShadowMap)
+        .Options(FloatSliderOptions()
+                     .Tooltip("Navi is a light, and she orbits you.\n\n"
+                              "That makes her a special case: at full strength she would be the closest light "
+                              "in nearly every scene, and every shadow in Hyrule would swing around as she "
+                              "drifted. The default keeps her low enough that she lights a cave or an unlit "
+                              "room -- where she really is the brightest thing present -- and never argues "
+                              "with the sun or with a lit torch. Zero removes her from the contest; raise it "
+                              "and shadows will start following your fairy.")
+                     .Format("%.2f")
+                     .Min(0.0f)
+                     .Max(2.0f)
+                     .DefaultValue(0.25f)); // kDefaultKeyNaviAuthority
+    AddWidget(path, "Light Change Travel: %.1fs", WIDGET_CVAR_SLIDER_FLOAT)
+        .CVar(CVAR_ENHANCEMENT("Graphics.ShadowMap.KeyTravelTime"))
+        .RaceDisable(false)
+        .PreFunc(hideUnlessShadowMap)
+        .Options(FloatSliderOptions()
+                     .Tooltip("How long the world's shadows take to swing across when a different light takes "
+                              "over -- walking up to a torch, or leaving its range again.\n\n"
+                              "Every shadow in the scene moves together, so a snap is very visible; too slow "
+                              "and they lag behind you instead. Scene changes always snap, since there is no "
+                              "previous direction worth travelling from.")
+                     .Format("%.1f")
+                     .Min(0.1f)
+                     .Max(6.0f)
+                     .DefaultValue(1.5f)); // kDefaultKeyTravelTime
+
     AddWidget(path, "Debug", WIDGET_SEPARATOR_TEXT).PreFunc(hideUnlessShadowMap);
+    // Live readout of which light won the frame. A lot of policy decides the single direction the cascades
+    // get, so without this a hierarchy that picked the wrong light is indistinguishable from one that
+    // picked the right light and aimed it badly. Same live-name trick as the caster census below.
+    AddWidget(path, "Casting from:", WIDGET_TEXT)
+        .RaceDisable(false)
+        .PreFunc([](WidgetInfo& info) {
+            info.isHidden = CVarGetInteger(CVAR_ENHANCEMENT("Graphics.WorldShadows.Mode"), SHADOW_MODE_VANILLA) !=
+                            SHADOW_MODE_SHADOW_MAP;
+            if (!info.isHidden) {
+                const char* key = ToonLighting_ShadowKeyLight();
+                info.name = std::string("Casting from: ") + ((key != nullptr && key[0] != '\0') ? key : "(none yet)");
+            }
+        });
     AddWidget(path, "Show Cascade Bounds: %d", WIDGET_CVAR_SLIDER_INT)
         .CVar(CVAR_DEVELOPER_TOOLS("ShadowMap.ShowCascadeBounds"))
         .PreFunc(hideUnlessShadowMap)

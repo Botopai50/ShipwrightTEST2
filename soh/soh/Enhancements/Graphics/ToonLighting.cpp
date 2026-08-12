@@ -685,7 +685,10 @@ static void OnToonFrameUpdate() {
         interp->SetShadowMapParams(
             shadowMapOn,
             CVarGetInteger(CVAR_ENHANCEMENT("Graphics.ShadowMap.CascadeCount"), SHADOW_MAP_DEFAULT_CASCADES),
-            CVarGetInteger(CVAR_ENHANCEMENT("Graphics.ShadowMap.Resolution"), SHADOW_MAP_DEFAULT_RESOLUTION), splits,
+            CVarGetInteger(CVAR_ENHANCEMENT("Graphics.ShadowMap.Resolution"), SHADOW_MAP_DEFAULT_RESOLUTION),
+            CVarGetInteger(CVAR_ENHANCEMENT("Graphics.ShadowMap.ActorResolution"),
+                           SHADOW_MAP_DEFAULT_ACTOR_RESOLUTION),
+            splits,
             lightDir, CVarGetFloat(CVAR_ENHANCEMENT("Graphics.ShadowMap.BlendFraction"),
                                    SHADOW_MAP_DEFAULT_BLEND_FRACTION),
             CVarGetFloat(CVAR_ENHANCEMENT("Graphics.ShadowMap.NormalOffset"), SHADOW_MAP_DEFAULT_NORMAL_OFFSET),

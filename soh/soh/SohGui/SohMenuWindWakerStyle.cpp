@@ -534,6 +534,7 @@ void SohMenu::AddMenuWindWakerStyle() {
         .Callback([](WidgetInfo& info) {
             CVarClear(CVAR_ENHANCEMENT("Graphics.ShadowMap.Strength"));
             CVarClear(CVAR_ENHANCEMENT("Graphics.ShadowMap.Resolution"));
+            CVarClear(CVAR_ENHANCEMENT("Graphics.ShadowMap.ActorResolution"));
             CVarClear(CVAR_ENHANCEMENT("Graphics.ShadowMap.CascadeCount"));
             CVarClear(CVAR_ENHANCEMENT("Graphics.ShadowMap.Split0"));
             CVarClear(CVAR_ENHANCEMENT("Graphics.ShadowMap.Split1"));
@@ -594,6 +595,42 @@ void SohMenu::AddMenuWindWakerStyle() {
                               "cenário e outro para os personagens: cinco mapas no total. Em 4096 isso dá "
                               "cerca de 168 MB de memória de vídeo, contra 10 MB em 1024. Se o jogo estiver "
                               "pesado, baixe esta opção primeiro."));
+    // Same snapping guard as the world layer's, and for the same reason: the combobox throws on a value
+    // that is not in its map, and this CVar is reachable from the console.
+    AddWidget(path, "Resolução (Personagens)", WIDGET_CVAR_COMBOBOX)
+        .CVar(CVAR_ENHANCEMENT("Graphics.ShadowMap.ActorResolution"))
+        .RaceDisable(false)
+        .PreFunc([](WidgetInfo& info) {
+            info.isHidden = CVarGetInteger(CVAR_ENHANCEMENT("Graphics.WorldShadows.Mode"), SHADOW_MODE_VANILLA) !=
+                            SHADOW_MODE_SHADOW_MAP;
+            if (info.isHidden) {
+                return;
+            }
+            const int32_t offered[] = { 512, 1024, 2048, 4096 };
+            int32_t current = CVarGetInteger(CVAR_ENHANCEMENT("Graphics.ShadowMap.ActorResolution"),
+                                             SHADOW_MAP_DEFAULT_ACTOR_RESOLUTION);
+            int32_t nearest = offered[0];
+            for (int32_t candidate : offered) {
+                if (std::abs(candidate - current) < std::abs(nearest - current)) {
+                    nearest = candidate;
+                }
+            }
+            if (nearest != current) {
+                CVarSetInteger(CVAR_ENHANCEMENT("Graphics.ShadowMap.ActorResolution"), nearest);
+            }
+        })
+        .Options(ComboboxOptions()
+                     .DefaultIndex(SHADOW_MAP_DEFAULT_ACTOR_RESOLUTION)
+                     .ComboMap(shadowMapResolutionLabels)
+                     .Tooltip("Tamanho do mapa das sombras dos PERSONAGENS, escolhido à parte do cenário.\n\n"
+                              "Vale baixar esta antes da outra. Os mapas dos personagens são redesenhados "
+                              "todo quadro, porque os personagens se mexem, enquanto os do cenário são "
+                              "reaproveitados enquanto a câmera fica parada — e o custo de um mapa é o "
+                              "mesmo quer tenha muita coisa dentro ou pouca, porque limpá-lo já escreve a "
+                              "superfície inteira.\n\n"
+                              "O que se perde é pouco: personagens são pequenos, ficam perto e projetam no "
+                              "chão logo à frente, então o mapa deles já estava sobrando em 4096. Nunca "
+                              "passa da resolução do cenário; igualar as duas desliga a separação."));
     AddWidget(path, "Quantidade de Faixas: %d", WIDGET_CVAR_SLIDER_INT)
         .CVar(CVAR_ENHANCEMENT("Graphics.ShadowMap.CascadeCount"))
         .RaceDisable(false)

@@ -25,11 +25,17 @@ jobs:
     # by carrying one, and everything else stays free. `shadowmap` joins `celshade` because that work
     # lands in the renderer's Windows-only depth pass -- the one part of it no other job compiles, so
     # a push that is never built is a push that is never checked.
+    #
+    # `performance` joins them for the same reason. That work is in the Fast3D interpreter and the
+    # backends, which only build-windows compiles here -- generate-soh-otr builds the asset target and
+    # never touches them. A renderer change on such a branch was reaching the remote having been read
+    # but never compiled by anything.
     if: >-
       github.event_name == 'workflow_dispatch'
       || github.ref_name == github.event.repository.default_branch
       || contains(github.ref, 'celshade')
       || contains(github.ref, 'shadowmap')
+      || contains(github.ref, 'performance')
     runs-on: ubuntu-22.04
     steps:
     - name: Git Checkout

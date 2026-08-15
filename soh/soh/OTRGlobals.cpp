@@ -1701,7 +1701,10 @@ extern "C" void Graph_StartFrame() {
 #endif
 }
 
-void RunCommands(Gfx* Commands, const std::vector<std::unordered_map<Mtx*, MtxF>>& mtx_replacements) {
+// SOH [Enhancement] `count` rather than mtx_replacements.size(): the vector is kept alive between frames
+// so its maps hold on to their memory, which means it can be longer than the number of frames this call
+// actually produced.
+void RunCommands(Gfx* Commands, const std::vector<std::unordered_map<Mtx*, MtxF>>& mtx_replacements, size_t count) {
     auto wnd = std::dynamic_pointer_cast<Fast::Fast3dWindow>(OTRGlobals::Instance->context->GetWindow());
 
     if (wnd == nullptr) {
@@ -1717,8 +1720,8 @@ void RunCommands(Gfx* Commands, const std::vector<std::unordered_map<Mtx*, MtxF>
     UIWidgets::Colors themeColor =
         static_cast<UIWidgets::Colors>(CVarGetInteger(CVAR_SETTING("Menu.Theme"), UIWidgets::Colors::LightBlue));
     ImGui::PushStyleColor(ImGuiCol_TitleBgActive, UIWidgets::ColorValues.at(themeColor));
-    for (const auto& m : mtx_replacements) {
-        wnd->DrawAndRunGraphicsCommands(Commands, m);
+    for (size_t i = 0; i < count; i++) {
+        wnd->DrawAndRunGraphicsCommands(Commands, mtx_replacements[i]);
         intp->mInterpolationIndex++;
     }
     ImGui::PopStyleColor();
@@ -1732,7 +1735,21 @@ extern "C" void Graph_ProcessGfxCommands(Gfx* commands) {
     }
 
     audio.cv_to_thread.notify_one();
-    std::vector<std::unordered_map<Mtx*, MtxF>> mtx_replacements;
+    // SOH [Enhancement] Kept between frames, like the counters below it. Each interpolated frame used to
+    // build an unordered_map from nothing and throw it away microseconds later; reusing the maps keeps
+    // their bucket arrays, so filling them no longer walks the whole rehash sequence every frame.
+    // `mtx_used` is how many of them this frame filled -- the vector itself is never shortened.
+    static std::vector<std::unordered_map<Mtx*, MtxF>> mtx_replacements;
+    size_t mtx_used = 0;
+    auto next_replacement = [&]() -> std::unordered_map<Mtx*, MtxF>& {
+        if (mtx_used == mtx_replacements.size()) {
+            mtx_replacements.emplace_back();
+        }
+        // clear() drops the entries but keeps the buckets, which is the whole point.
+        auto& m = mtx_replacements[mtx_used++];
+        m.clear();
+        return m;
+    };
     int target_fps = OTRGlobals::Instance->GetInterpolationFPS();
     static int last_fps;
     static int last_update_rate;
@@ -1755,9 +1772,10 @@ extern "C" void Graph_ProcessGfxCommands(Gfx* commands) {
     while (time + original_fps <= next_original_frame) {
         time += original_fps;
         if (time != next_original_frame) {
-            mtx_replacements.push_back(FrameInterpolation_Interpolate((float)time / next_original_frame));
+            FrameInterpolation_Interpolate((float)time / next_original_frame, next_replacement());
         } else {
-            mtx_replacements.emplace_back();
+            // The original frame itself: no replacements, just an empty map.
+            next_replacement();
         }
     }
 
@@ -1769,11 +1787,11 @@ extern "C" void Graph_ProcessGfxCommands(Gfx* commands) {
 
     // When the gfx debugger is active, only run with the final mtx
     if (GfxDebuggerIsDebugging()) {
-        mtx_replacements.clear();
-        mtx_replacements.emplace_back();
+        mtx_used = 0;
+        next_replacement();
     }
 
-    RunCommands(commands, mtx_replacements);
+    RunCommands(commands, mtx_replacements, mtx_used);
 
     last_fps = fps;
     last_update_rate = R_UPDATE_RATE;

@@ -175,11 +175,71 @@ union Data {
     } open_child;
 };
 
+struct Path;
+
+// SOH [Enhancement] The children recorded under one label, kept in a pool that outlives the frame.
+// `used` is how many of them THIS recording filled; everything past it is an allocation being held on
+// to, not data. Every read of the list goes through size()/operator[], so entries beyond `used` are
+// invisible to interpolation -- which matters, because the previous frame's recording is read as the
+// "old" side and must not appear to hold ops it did not record.
+struct ChildList {
+    vector<Path> pool;
+    size_t used = 0;
+
+    size_t size() const {
+        return used;
+    }
+    // Both defined below Path: their bodies index into vector<Path>, and Path is still incomplete here.
+    Path& operator[](size_t i);
+    // Hands out the next child, wiped clean.
+    Path& acquire();
+};
+
 struct Path {
-    map<label, vector<Path>> children;
+    map<label, ChildList> children;
     map<Op, vector<Data>> ops;
     vector<pair<Op, size_t>> items;
 };
+
+// SOH [Enhancement] Empties a node for reuse WITHOUT giving its memory back: the maps keep their nodes
+// and the vectors keep their capacity, so a frame that records the same shape as the last one performs
+// no allocation at all. Sizes do go to zero, so a node that records less than it did last frame reads
+// as exactly that -- shorter -- rather than exposing stale entries.
+void reset_path(Path& p) {
+    p.items.clear();
+    for (auto& kv : p.ops) {
+        kv.second.clear();
+    }
+    for (auto& kv : p.children) {
+        kv.second.used = 0;
+    }
+}
+
+// SOH [Enhancement] Exchanges two nodes' contents through the containers' own swap(), which is a
+// guaranteed O(1) pointer exchange: nothing is destroyed and nothing is allocated. std::swap on the
+// whole Recording would go through move-assignment instead, and a move-assigned-to map frees the nodes
+// it already holds -- precisely the work this is here to avoid.
+void swap_path(Path& a, Path& b) {
+    a.children.swap(b.children);
+    a.ops.swap(b.ops);
+    a.items.swap(b.items);
+}
+
+Path& ChildList::operator[](size_t i) {
+    return pool[i];
+}
+
+Path& ChildList::acquire() {
+    if (used == pool.size()) {
+        pool.emplace_back();
+        return pool[used++];
+    }
+    // Cleaning on the way out rather than in a sweep at frame start keeps the cost proportional to what
+    // the frame actually records, and leaves untouched sub-trees alone until they are needed again.
+    Path& p = pool[used++];
+    reset_path(p);
+    return p;
+}
 
 struct Recording {
     Path root_path;
@@ -206,14 +266,16 @@ Data& append(Op op) {
 struct InterpolateCtx {
     float step;
     float w;
-    unordered_map<Mtx*, MtxF> mtx_replacements;
+    // SOH [Enhancement] Points at the caller's map instead of owning one, so the caller can hand back
+    // the same map every frame and keep its bucket array.
+    unordered_map<Mtx*, MtxF>* mtx_replacements;
     MtxF tmp_mtxf, tmp_mtxf2;
     Vec3f tmp_vec3f;
     Vec3s tmp_vec3s;
     MtxF actor_mtx;
 
     MtxF* new_replacement(Mtx* addr) {
-        return &mtx_replacements[addr];
+        return &(*mtx_replacements)[addr];
     }
 
     void interpolate_mtxf(MtxF* res, MtxF* o, MtxF* n) {
@@ -443,17 +505,20 @@ struct InterpolateCtx {
 
 } // anonymous namespace
 
-unordered_map<Mtx*, MtxF> FrameInterpolation_Interpolate(float step) {
+void FrameInterpolation_Interpolate(float step, unordered_map<Mtx*, MtxF>& mtx_replacements) {
     InterpolateCtx ctx;
     ctx.step = step;
     ctx.w = 1.0f - step;
+    ctx.mtx_replacements = &mtx_replacements;
     ctx.interpolate_branch(&previous_recording.root_path, &current_recording.root_path);
-    return ctx.mtx_replacements;
 }
 
 void FrameInterpolation_StartRecord(void) {
-    previous_recording = std::move(current_recording);
-    current_recording = {};
+    // SOH [Enhancement] Swap rather than move-and-default-construct: the recording that is now two
+    // frames old becomes the buffer we record into, so its whole tree of nodes is reused. reset_path
+    // empties the root; the nodes below it are emptied as ChildList::acquire hands them out.
+    swap_path(previous_recording.root_path, current_recording.root_path);
+    reset_path(current_recording.root_path);
     current_path.clear();
     current_path.push_back(&current_recording.root_path);
     if (OTRGlobals::Instance->GetInterpolationFPS() != 20) {
@@ -472,7 +537,7 @@ void FrameInterpolation_RecordOpenChild(const void* a, int b) {
     label key = { a, b };
     auto& m = current_path.back()->children[key];
     append(Op::OpenChild).open_child = { key, m.size() };
-    current_path.push_back(&m.emplace_back());
+    current_path.push_back(&m.acquire());
 }
 
 void FrameInterpolation_RecordCloseChild(void) {

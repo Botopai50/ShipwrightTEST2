@@ -6,7 +6,10 @@
 
 #include <unordered_map>
 
-std::unordered_map<Mtx*, MtxF> FrameInterpolation_Interpolate(float step);
+// SOH [Enhancement] Fills the caller's map instead of returning a fresh one, so the caller can reuse
+// the same map -- and its bucket array -- on every interpolated frame. The map is NOT cleared here;
+// the caller decides whether it is starting a new frame or adding to one.
+void FrameInterpolation_Interpolate(float step, std::unordered_map<Mtx*, MtxF>& mtx_replacements);
 
 extern "C" {
 

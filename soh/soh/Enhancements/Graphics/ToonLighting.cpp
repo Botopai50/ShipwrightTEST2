@@ -181,6 +181,14 @@ static void RefreshFrameParams() {
     sParams.shadowMap = sParams.shadowMode == SHADOW_MODE_SHADOW_MAP;
     // Only worth asking when the mode is actually selected; otherwise leave it false so the per-actor
     // getters short-circuit on the cheap check.
+    // SOH [Enhancement] GPU profiling of the shadow pass, which is a plain flag on the backend and changes
+    // nothing about what is drawn. Pushed from out here rather than from inside the branch below so it is
+    // also CLEARED when the shadow map is switched off -- otherwise the timer would keep opening queries
+    // every frame for a pass that no longer runs, and report on nothing.
+    if (Fast::GfxRenderingAPI* profileRapi = GetRenderingApi(); profileRapi != nullptr) {
+        profileRapi->SetShadowMapProfiling(sParams.shadowMap &&
+                                           CVarGetInteger(CVAR_DEVELOPER_TOOLS("ShadowMap.ProfileGpu"), 0) != 0);
+    }
     if (sParams.shadowMap) {
         Fast::GfxRenderingAPI* rapi = GetRenderingApi();
         sParams.shadowMapSupported = rapi != nullptr && rapi->SupportsShadowMap();

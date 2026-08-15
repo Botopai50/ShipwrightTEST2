@@ -855,6 +855,21 @@ AddWidget(path, "Depuração", WIDGET_SEPARATOR_TEXT).PreFunc(hideUnlessShadowMa
                      .DefaultValue(0)
                      .ShowButtons(true)
                      .Format("%d"));
+    // SOH [Enhancement] Timing without the debug picture. The slider above always timed the pass as a side
+    // effect, but every one of its values also repaints the scene, so the only frames that could be measured
+    // were frames that no longer looked like the game -- and the numbers were about those frames. This is the
+    // same measurement with nothing drawn differently.
+    AddWidget(path, "Medir Custo na GPU (log)", WIDGET_CVAR_CHECKBOX)
+        .CVar(CVAR_DEVELOPER_TOOLS("ShadowMap.ProfileGpu"))
+        .PreFunc(hideUnlessShadowMap)
+        .Options(CheckboxOptions().Tooltip(
+            "Mede quanto tempo de GPU o mapa de sombras consome e escreve o resultado no log a cada segundo. "
+            "Não altera nada do que é desenhado, então os números valem para o jogo como ele realmente é.\n\n"
+            "A linha traz o custo do quadro inteiro, o custo do passe de profundidade dentro dele, em quantos "
+            "quadros o passe precisou ser submetido e QUANTAS FATIAS foram redesenhadas por quadro. Essa última "
+            "é a que decide o que fazer: com poucas fatias por quadro o passe já está sendo reaproveitado e o "
+            "custo restante é geometria; com quase todas, algo está impedindo o reaproveitamento.\n\n"
+            "Somente Direct3D 11."));
     // Live list of what the world (green) caster layer is actually made of, so a stray green blob in the
     // debug view can be named instead of guessed at. WIDGET_TEXT draws widget.name, and PreFunc runs first,
     // so rewriting the name each frame is what makes it live.

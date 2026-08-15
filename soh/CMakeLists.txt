@@ -235,15 +235,10 @@ if (CMAKE_SYSTEM_NAME STREQUAL "Windows")
     set_target_properties(${PROJECT_NAME} PROPERTIES
         VS_GLOBAL_KEYWORD "Win32Proj"
     )
-    if("${CMAKE_VS_PLATFORM_NAME}" STREQUAL "x64")
-        set_target_properties(${PROJECT_NAME} PROPERTIES
-            INTERPROCEDURAL_OPTIMIZATION_RELEASE "TRUE"
-        )
-    elseif("${CMAKE_VS_PLATFORM_NAME}" STREQUAL "Win32")
-        set_target_properties(${PROJECT_NAME} PROPERTIES
-            INTERPROCEDURAL_OPTIMIZATION_RELEASE "TRUE"
-        )
-    endif()
+    # Link time optimization used to be set here, for Windows and for this target alone -- which meant the
+    # one boundary worth optimizing across, soh to libultraship, was never crossed. It now lives in the
+    # top-level CMakeLists for every platform and both targets, behind SOH_ENABLE_LTO. Setting it here as
+    # well would quietly keep LTO on for Windows after that option was turned off.
 elseif(CMAKE_SYSTEM_NAME STREQUAL "Darwin")
     set_target_properties(${PROJECT_NAME} PROPERTIES
         XCODE_ATTRIBUTE_CLANG_ENABLE_OBJC_ARC YES

@@ -177,6 +177,51 @@ add_subdirectory(ZAPDTR/ZAPD ${CMAKE_BINARY_DIR}/ZAPD)
 add_subdirectory(OTRExporter)
 add_subdirectory(soh)
 
+################################################################################
+# Link Time Optimization
+################################################################################
+# Optimize across translation units AND across the soh/libultraship boundary. That boundary is the one
+# worth having: the renderer lives in libultraship and every call into it comes from soh, so with only one
+# side taking part the compiler still cannot see through the edge -- which is exactly the state this was
+# in, since the property was set on soh alone, and only on Windows.
+#
+# Release configurations only. LTO trades link time and memory for run time, and a Debug build wants
+# neither half of that trade.
+#
+# The console toolchains are deliberately left out. They cross-compile with devkitPro against a fixed libc,
+# they have the least memory to spend on a link, and none of this performance work has been aimed at them;
+# they keep building exactly as they did.
+option(SOH_ENABLE_LTO "Optimize across translation units and libraries in Release builds" ON)
+
+if(SOH_ENABLE_LTO AND NOT CMAKE_SYSTEM_NAME STREQUAL "NintendoSwitch" AND NOT CMAKE_SYSTEM_NAME STREQUAL "CafeOS")
+    include(CheckIPOSupported)
+    # Asked rather than assumed. A toolchain whose LTO plugin is missing or mismatched fails at LINK time
+    # otherwise -- after a full build, with an error that says nothing about LTO.
+    check_ipo_supported(RESULT SOH_LTO_SUPPORTED OUTPUT SOH_LTO_ERROR LANGUAGES C CXX)
+    if(SOH_LTO_SUPPORTED)
+        foreach(SOH_LTO_TARGET soh libultraship)
+            set_target_properties(${SOH_LTO_TARGET} PROPERTIES
+                INTERPROCEDURAL_OPTIMIZATION_RELEASE TRUE
+                INTERPROCEDURAL_OPTIMIZATION_RELWITHDEBINFO TRUE
+            )
+            # Strict aliasing over a whole program is a different proposition from strict aliasing inside
+            # one file. The game code is decompiled N64 source and it type-puns freely; at -O2 the compiler
+            # could only act on that within a translation unit, which is where these patterns have survived
+            # for years. LTO hands it everything at once, and the prize for finding one would be a
+            # miscompile that surfaces as something moving wrongly, with nothing in the build log pointing
+            # at it. Cheap insurance, and only bought where the risk exists: MSVC's /GL does not reason
+            # about types this way.
+            if(CMAKE_C_COMPILER_ID MATCHES "GNU|Clang" OR CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang|AppleClang")
+                target_compile_options(${SOH_LTO_TARGET} PRIVATE
+                    $<$<CONFIG:Release,RelWithDebInfo>:-fno-strict-aliasing>)
+            endif()
+        endforeach()
+        message(STATUS "LTO enabled for Release builds (soh, libultraship)")
+    else()
+        message(STATUS "LTO unavailable with this toolchain, building without it: ${SOH_LTO_ERROR}")
+    endif()
+endif()
+
 set_property(TARGET soh PROPERTY APPIMAGE_DESKTOP_FILE_TERMINAL YES)
 set_property(TARGET soh PROPERTY APPIMAGE_DESKTOP_FILE "${CMAKE_SOURCE_DIR}/scripts/linux/appimage/soh.desktop")
 set_property(TARGET soh PROPERTY APPIMAGE_ICON_FILE "${CMAKE_BINARY_DIR}/sohIcon.png")

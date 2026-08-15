@@ -416,6 +416,24 @@ void SohMenu::AddMenuSettings() {
                               "Turning this on sets MSAA back to 1x: paying for both would soften the result "
                               "and cost twice. Direct3D 11 only; elsewhere the frame is shown unfiltered."));
 #endif
+    // How much graphics memory the texture cache may hold. A ceiling, not a reservation.
+    AddWidget(path, "Texture cache (MB)", WIDGET_CVAR_SLIDER_INT)
+        .CVar(CVAR_TEXTURE_CACHE_MB)
+        .RaceDisable(false)
+        .Options(IntSliderOptions()
+                     .Tooltip("How much graphics memory the texture cache may hold.\n\n"
+                              "The cache used to be limited to a fixed number of images instead, which suits "
+                              "the stock textures -- all of them small -- and does not suit an HD pack at all. "
+                              "The same count of much larger images is far more memory than intended, and in a "
+                              "room whose materials do not all fit, the cache spends every frame evicting one "
+                              "texture to load the next and then evicting that one to load the first again.\n\n"
+                              "Raise this if you use large texture packs and see stuttering that follows where "
+                              "you look. Lower it if you are short of video memory. This is a ceiling and not a "
+                              "reservation: nothing is used until the game asks for it, so the stock game will "
+                              "sit far below any setting here.")
+                     .Min(16)
+                     .Max(4096)
+                     .DefaultValue(512));
     auto fps = CVarGetInteger(CVAR_SETTING("InterpolationFPS"), 20);
     const char* fpsFormat = fps == 20 ? "Original (%d)" : "%d";
     AddWidget(path, "Current FPS", WIDGET_CVAR_SLIDER_INT)

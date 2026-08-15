@@ -417,10 +417,43 @@ void SohMenu::AddMenuSettings() {
                               "and cost twice. Direct3D 11 only; elsewhere the frame is shown unfiltered."));
 #endif
     // How much graphics memory the texture cache may hold. A ceiling, not a reservation.
-    AddWidget(path, "Texture cache (MB)", WIDGET_CVAR_SLIDER_INT)
+    //
+    // Doubling steps rather than a free slider: the useful range spans three orders of magnitude, so a
+    // slider spends most of its travel on distinctions that do not matter, and the difference between 500
+    // and 512 MB is nothing anyone can perceive.
+    AddWidget(path, "Texture cache", WIDGET_CVAR_COMBOBOX)
         .CVar(CVAR_TEXTURE_CACHE_MB)
         .RaceDisable(false)
-        .Options(IntSliderOptions()
+        // The combobox looks its current value up in the map and throws if it is not there, so a setting
+        // left over from anything that wrote a different number -- an earlier build, a hand-edited config --
+        // has to be brought onto the ladder before the widget is drawn rather than after.
+        .PreFunc([](WidgetInfo&) {
+            static const int32_t steps[] = { 16, 32, 64, 128, 256, 512, 1024, 2048, 4096 };
+            const int32_t current = CVarGetInteger(CVAR_TEXTURE_CACHE_MB, 512);
+            int32_t nearest = steps[0];
+            int32_t nearestGap = (current > nearest) ? (current - nearest) : (nearest - current);
+            for (int32_t step : steps) {
+                const int32_t gap = (current > step) ? (current - step) : (step - current);
+                if (gap < nearestGap) {
+                    nearest = step;
+                    nearestGap = gap;
+                }
+            }
+            if (nearest != current) {
+                CVarSetInteger(CVAR_TEXTURE_CACHE_MB, nearest);
+            }
+        })
+        .Options(ComboboxOptions()
+                     .ComboMap({ { 16, "16 MB" },
+                                 { 32, "32 MB" },
+                                 { 64, "64 MB" },
+                                 { 128, "128 MB" },
+                                 { 256, "256 MB" },
+                                 { 512, "512 MB" },
+                                 { 1024, "1 GB" },
+                                 { 2048, "2 GB" },
+                                 { 4096, "4 GB" } })
+                     .DefaultIndex(512)
                      .Tooltip("How much graphics memory the texture cache may hold.\n\n"
                               "The cache used to be limited to a fixed number of images instead, which suits "
                               "the stock textures -- all of them small -- and does not suit an HD pack at all. "
@@ -430,10 +463,7 @@ void SohMenu::AddMenuSettings() {
                               "Raise this if you use large texture packs and see stuttering that follows where "
                               "you look. Lower it if you are short of video memory. This is a ceiling and not a "
                               "reservation: nothing is used until the game asks for it, so the stock game will "
-                              "sit far below any setting here.")
-                     .Min(16)
-                     .Max(4096)
-                     .DefaultValue(512));
+                              "sit far below any setting here."));
     auto fps = CVarGetInteger(CVAR_SETTING("InterpolationFPS"), 20);
     const char* fpsFormat = fps == 20 ? "Original (%d)" : "%d";
     AddWidget(path, "Current FPS", WIDGET_CVAR_SLIDER_INT)

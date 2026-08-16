@@ -235,10 +235,13 @@ if (CMAKE_SYSTEM_NAME STREQUAL "Windows")
     set_target_properties(${PROJECT_NAME} PROPERTIES
         VS_GLOBAL_KEYWORD "Win32Proj"
     )
-    # Link time optimization used to be set here, for Windows and for this target alone -- which meant the
-    # one boundary worth optimizing across, soh to libultraship, was never crossed. It now lives in the
-    # top-level CMakeLists for every platform and both targets, behind SOH_ENABLE_LTO. Setting it here as
-    # well would quietly keep LTO on for Windows after that option was turned off.
+    # Link time optimization used to be set here (INTERPROCEDURAL_OPTIMIZATION_RELEASE, Windows only, this
+    # target only). It is gone deliberately, and it was measured rather than assumed: widening it to cover
+    # libultraship too cost about 15% of the frame rate -- 70-80 fps down to 60-65 in the heaviest scene,
+    # reproduced across two builds -- and narrowing it back to this target alone did not recover the rest.
+    # The renderer is one large dispatch loop and whole program optimization keeps making inlining choices
+    # around it that cost more in instruction cache than they save in call overhead. Removed at the tuned
+    # configuration's request; the build is now plainly LTO-free on every platform.
 elseif(CMAKE_SYSTEM_NAME STREQUAL "Darwin")
     set_target_properties(${PROJECT_NAME} PROPERTIES
         XCODE_ATTRIBUTE_CLANG_ENABLE_OBJC_ARC YES

@@ -180,41 +180,61 @@ add_subdirectory(soh)
 ################################################################################
 # Link Time Optimization
 ################################################################################
-# Optimize across translation units AND across the soh/libultraship boundary. That boundary is the one
-# worth having: the renderer lives in libultraship and every call into it comes from soh, so with only one
-# side taking part the compiler still cannot see through the edge -- which is exactly the state this was
-# in, since the property was set on soh alone, and only on Windows.
+# A scope, not a switch, because measurement said the two halves of "everything" behave very differently.
+#
+#   off  - no link time optimization anywhere.
+#   soh  - the game code only. Cross-file optimization over all of the decompiled source, with
+#          libultraship compiled exactly as it is today.
+#   full - the game code and libultraship together, so calls into the renderer can be inlined too.
+#
+# `full` is the one that looked obviously best on paper and measured 15% SLOWER on real hardware: 70-80 fps
+# down to 60-65 in the heaviest scene, reproduced across two builds. `soh` was what that same machine was
+# running at 70-80 -- upstream set the property on soh alone, on Windows only -- so the variable between
+# fast and slow was libultraship, and it is not hard to see why. The renderer is built around one large
+# dispatch loop, and whole program optimization re-decides inlining across every translation unit feeding
+# it; inlining that a single file would never have chosen costs more in instruction cache than it saves in
+# call overhead. Bigger scope is not monotonically better, and this is where it turned around.
+#
+# So the default is the scope that was measured fast, and `full` stays available for a machine that may
+# answer differently -- that answer belongs to the CPU, not to the code.
 #
 # Release configurations only. LTO trades link time and memory for run time, and a Debug build wants
 # neither half of that trade.
 #
-# The console toolchains are deliberately left out. They cross-compile with devkitPro against a fixed libc,
-# they have the least memory to spend on a link, and none of this performance work has been aimed at them;
-# they keep building exactly as they did.
-#
-# DEFAULT OFF, and that is a measurement, not caution. Enabling this cost about 15% of the frame rate on
-# the hardware it was tried on -- 70-80 fps down to 60-65 in the heaviest scene -- reproduced across two
-# builds, the second of which already had the interpolation leak fixed, so that was not the cause. Whole
-# program optimization is not free in either direction: it re-decides inlining across the whole binary,
-# and in a renderer built around a large dispatch loop, inlining that a single translation unit would
-# never have chosen can cost more in instruction cache than it saves in call overhead.
-#
-# It stays here, working and one flag away (-DSOH_ENABLE_LTO=ON), because the answer is a property of the
-# machine and not of the code, and on another CPU it may well go the other way. What is NOT justified is
-# shipping it on by default against a measurement saying it hurts.
-#
-# Note this also drops the LTO that was on before any of this: upstream set the property on soh alone, on
-# Windows only. Turning this option off now means no LTO anywhere, which is the clean baseline the numbers
-# above want compared against. If Windows-and-soh-only turns out to beat both, it is a one-line change.
-option(SOH_ENABLE_LTO "Optimize across translation units and libraries in Release builds" OFF)
+# The console toolchains are left out. They cross-compile with devkitPro against a fixed libc, they have
+# the least memory to spend on a link, and none of this work has been aimed at them; they build as before.
+set(SOH_LTO_MODE "soh" CACHE STRING "Link time optimization scope: off, soh, or full")
+set_property(CACHE SOH_LTO_MODE PROPERTY STRINGS off soh full)
+string(TOLOWER "${SOH_LTO_MODE}" SOH_LTO_SCOPE)
 
-if(SOH_ENABLE_LTO AND NOT CMAKE_SYSTEM_NAME STREQUAL "NintendoSwitch" AND NOT CMAKE_SYSTEM_NAME STREQUAL "CafeOS")
+# The boolean this replaced, honoured so a -DSOH_ENABLE_LTO=OFF in someone's build script keeps meaning off
+# rather than silently becoming the new default.
+if(DEFINED SOH_ENABLE_LTO AND NOT SOH_ENABLE_LTO)
+    set(SOH_LTO_SCOPE "off")
+endif()
+
+if(SOH_LTO_SCOPE STREQUAL "full")
+    set(SOH_LTO_TARGETS soh libultraship)
+elseif(SOH_LTO_SCOPE STREQUAL "soh")
+    set(SOH_LTO_TARGETS soh)
+elseif(SOH_LTO_SCOPE STREQUAL "off")
+    set(SOH_LTO_TARGETS "")
+else()
+    message(WARNING "SOH_LTO_MODE=\"${SOH_LTO_MODE}\" is not one of off/soh/full; building without LTO.")
+    set(SOH_LTO_TARGETS "")
+endif()
+
+if(CMAKE_SYSTEM_NAME STREQUAL "NintendoSwitch" OR CMAKE_SYSTEM_NAME STREQUAL "CafeOS")
+    set(SOH_LTO_TARGETS "")
+endif()
+
+if(SOH_LTO_TARGETS)
     include(CheckIPOSupported)
     # Asked rather than assumed. A toolchain whose LTO plugin is missing or mismatched fails at LINK time
     # otherwise -- after a full build, with an error that says nothing about LTO.
     check_ipo_supported(RESULT SOH_LTO_SUPPORTED OUTPUT SOH_LTO_ERROR LANGUAGES C CXX)
     if(SOH_LTO_SUPPORTED)
-        foreach(SOH_LTO_TARGET soh libultraship)
+        foreach(SOH_LTO_TARGET ${SOH_LTO_TARGETS})
             set_target_properties(${SOH_LTO_TARGET} PROPERTIES
                 INTERPROCEDURAL_OPTIMIZATION_RELEASE TRUE
                 INTERPROCEDURAL_OPTIMIZATION_RELWITHDEBINFO TRUE
@@ -224,17 +244,20 @@ if(SOH_ENABLE_LTO AND NOT CMAKE_SYSTEM_NAME STREQUAL "NintendoSwitch" AND NOT CM
             # could only act on that within a translation unit, which is where these patterns have survived
             # for years. LTO hands it everything at once, and the prize for finding one would be a
             # miscompile that surfaces as something moving wrongly, with nothing in the build log pointing
-            # at it. Cheap insurance, and only bought where the risk exists: MSVC's /GL does not reason
-            # about types this way.
+            # at it. Cheap insurance, and only bought where the risk exists: applied per target alongside
+            # the LTO itself, so a target that is not being optimized across does not pay for it. MSVC's
+            # /GL does not reason about types this way and does not get the flag at all.
             if(CMAKE_C_COMPILER_ID MATCHES "GNU|Clang" OR CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang|AppleClang")
                 target_compile_options(${SOH_LTO_TARGET} PRIVATE
                     $<$<CONFIG:Release,RelWithDebInfo>:-fno-strict-aliasing>)
             endif()
         endforeach()
-        message(STATUS "LTO enabled for Release builds (soh, libultraship)")
+        message(STATUS "LTO scope '${SOH_LTO_SCOPE}' for Release builds: ${SOH_LTO_TARGETS}")
     else()
         message(STATUS "LTO unavailable with this toolchain, building without it: ${SOH_LTO_ERROR}")
     endif()
+else()
+    message(STATUS "LTO disabled (SOH_LTO_MODE=${SOH_LTO_MODE})")
 endif()
 
 set_property(TARGET soh PROPERTY APPIMAGE_DESKTOP_FILE_TERMINAL YES)

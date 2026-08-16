@@ -191,7 +191,22 @@ add_subdirectory(soh)
 # The console toolchains are deliberately left out. They cross-compile with devkitPro against a fixed libc,
 # they have the least memory to spend on a link, and none of this performance work has been aimed at them;
 # they keep building exactly as they did.
-option(SOH_ENABLE_LTO "Optimize across translation units and libraries in Release builds" ON)
+#
+# DEFAULT OFF, and that is a measurement, not caution. Enabling this cost about 15% of the frame rate on
+# the hardware it was tried on -- 70-80 fps down to 60-65 in the heaviest scene -- reproduced across two
+# builds, the second of which already had the interpolation leak fixed, so that was not the cause. Whole
+# program optimization is not free in either direction: it re-decides inlining across the whole binary,
+# and in a renderer built around a large dispatch loop, inlining that a single translation unit would
+# never have chosen can cost more in instruction cache than it saves in call overhead.
+#
+# It stays here, working and one flag away (-DSOH_ENABLE_LTO=ON), because the answer is a property of the
+# machine and not of the code, and on another CPU it may well go the other way. What is NOT justified is
+# shipping it on by default against a measurement saying it hurts.
+#
+# Note this also drops the LTO that was on before any of this: upstream set the property on soh alone, on
+# Windows only. Turning this option off now means no LTO anywhere, which is the clean baseline the numbers
+# above want compared against. If Windows-and-soh-only turns out to beat both, it is a one-line change.
+option(SOH_ENABLE_LTO "Optimize across translation units and libraries in Release builds" OFF)
 
 if(SOH_ENABLE_LTO AND NOT CMAKE_SYSTEM_NAME STREQUAL "NintendoSwitch" AND NOT CMAKE_SYSTEM_NAME STREQUAL "CafeOS")
     include(CheckIPOSupported)

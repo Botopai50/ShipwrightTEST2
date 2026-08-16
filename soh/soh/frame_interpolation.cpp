@@ -210,8 +210,25 @@ void reset_path(Path& p) {
     for (auto& kv : p.ops) {
         kv.second.clear();
     }
-    for (auto& kv : p.children) {
-        kv.second.used = 0;
+    // The ops map is safe to keep whole: it is keyed by Op, so it can never hold more than one entry per
+    // opcode. The children map is a different animal. Its key is (pointer, epoch), and callers pass an
+    // epoch that COUNTS UP -- FrameInterpolation_RecordOpenChild(eff, eff->epoch), with eff->epoch bumped
+    // every time that effect slot is recycled -- so a node that keeps every key it has ever seen keeps
+    // them forever. That is unbounded: the map grows for as long as the game runs, this loop walks all of
+    // it on every reset, every children[key] lookup descends a deeper tree, and the pooled sub-tree under
+    // each dead key is never freed. Throwing the tree away wholesale, which is what this replaced, had the
+    // side effect of keeping that in check.
+    //
+    // So anything that went unused in the last fill of THIS tree goes now. Keys that recur every frame --
+    // the rooms, the actors with stable labels, which is what the pooling exists for -- are never touched
+    // and keep their allocations. Keys built from a moving epoch were never reusable anyway.
+    for (auto it = p.children.begin(); it != p.children.end();) {
+        if (it->second.used == 0) {
+            it = p.children.erase(it);
+        } else {
+            it->second.used = 0;
+            ++it;
+        }
     }
 }
 

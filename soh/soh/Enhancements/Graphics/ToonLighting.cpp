@@ -704,9 +704,16 @@ static void OnToonFrameUpdate() {
             CVarGetFloat(CVAR_ENHANCEMENT("Graphics.ShadowMap.FilterWidth"), SHADOW_MAP_DEFAULT_FILTER_WIDTH),
             CVarGetFloat(CVAR_ENHANCEMENT("Graphics.ShadowMap.MinCasterSize"),
                          SHADOW_MAP_DEFAULT_MIN_CASTER_SIZE),
-            // Debug: paints everything outside a cascade's footprint as fully occluded, which is the only
-            // way to see where a cascade actually ends -- a receiver outside it is silently reported lit,
-            // so a shadow that stops at the boundary is indistinguishable from one that was never cast.
+            // Debug view selector, 0-8. Passed through as an integer-valued float and not clamped here: the
+            // shader owns the list, so a value it does not recognise falls through to normal shading rather
+            // than being silently remapped to a view the user did not ask for.
+            //
+            // 1 and 2 show the system's OUTPUT (cascade footprints; which caster layer occludes). 3 to 8
+            // show its INPUT -- the normal the biases run on, where that normal came from, the filter's raw
+            // coverage, the receiver-plane gradient, the cascade selection, the tapered edge hardness. That
+            // second group is the one to reach for when a shadow is the wrong SHAPE rather than in the wrong
+            // place, because every tuning knob in shadow_map.h acts after the fact and cannot localise it.
+            // The full list, with how to read them against each other, is in the shader's PSMain.
             (f32)CVarGetInteger(CVAR_DEVELOPER_TOOLS("ShadowMap.ShowCascadeBounds"), 0),
             CVarGetFloat(CVAR_ENHANCEMENT("Graphics.ShadowMap.EdgeHardness"), SHADOW_MAP_DEFAULT_EDGE_HARDNESS),
             CVarGetFloat(CVAR_ENHANCEMENT("Graphics.ShadowMap.EdgeHardnessFar"),

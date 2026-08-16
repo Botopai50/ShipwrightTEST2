@@ -837,11 +837,20 @@ AddWidget(path, "Depuração", WIDGET_SEPARATOR_TEXT).PreFunc(hideUnlessShadowMa
     // Live readout of which light won the frame. A lot of policy decides the single direction the cascades
     // get, so without this a hierarchy that picked the wrong light is indistinguishable from one that
     // picked the right light and aimed it badly. Same live-name trick as the caster census below.
-    AddWidget(path, "Mostrar Limites das Faixas: %d", WIDGET_CVAR_SLIDER_INT)
+    // The CVar key still says ShowCascadeBounds because that is what the first view did and renaming it
+    // would silently reset everyone's saved value. The label does not, because the slider now selects
+    // between nine views and only one of them is about cascade bounds.
+    AddWidget(path, "Visão de Diagnóstico: %d", WIDGET_CVAR_SLIDER_INT)
         .CVar(CVAR_DEVELOPER_TOOLS("ShadowMap.ShowCascadeBounds"))
         .PreFunc(hideUnlessShadowMap)
         .Options(IntSliderOptions()
                      .Tooltip("0 = desligado.\n\n"
+                              "As visões 1 e 2 mostram o que o sistema de sombras PRODUZIU. As visões 3 a 8 "
+                              "mostram o que ele RECEBEU -- use estas quando a sombra sai com a FORMA errada "
+                              "(facetada, triangular, escadinha) em vez de no lugar errado. Todos os outros "
+                              "controles deste painel agem sobre o resultado da comparação, então conseguem "
+                              "deixar esse tipo de defeito menos visível e nunca conseguem dizer de onde ele "
+                              "veio.\n\n"
                               "1 = pinta tudo que está FORA da área de uma faixa como totalmente sombreado. "
                               "Uma superfície fora dela é silenciosamente considerada iluminada, então uma "
                               "sombra que para no limite da faixa fica idêntica a uma que nunca foi "
@@ -849,9 +858,30 @@ AddWidget(path, "Depuração", WIDGET_SEPARATOR_TEXT).PreFunc(hideUnlessShadowMa
                               "2 = colore as duas camadas de projeção em vez de sombrear com elas. VERDE "
                               "onde o cenário bloqueia a luz, VERMELHO onde um personagem bloqueia. Use para "
                               "descobrir se algo está sendo capturado e em qual camada.\n\n"
+                              "3 = a normal da superfície sobre a qual todo o ajuste de profundidade é "
+                              "construído, como cor. Manchas chapadas de uma cor só, numa superfície que "
+                              "deveria variar suavemente, são os próprios triângulos da malha aparecendo.\n\n"
+                              "4 = de onde veio essa normal. VERDE = a normal de vértice do desenho, "
+                              "escurecendo conforme a normal interpolada encurta. VERMELHO = o desenho não "
+                              "tem normal, então é usada uma normal de face recuperada das derivadas de "
+                              "tela -- constante ao longo de um triângulo inteiro.\n\n"
+                              "5 = a cobertura crua do filtro, antes de a definição de borda reescrevê-la. "
+                              "Compare com a imagem sombreada: facetado aqui também significa que a "
+                              "comparação ou o mapa desenhou o defeito; liso aqui significa que a definição "
+                              "de borda desenhou.\n\n"
+                              "6 = o gradiente do plano da superfície. VERDE cresce com o tamanho dele, "
+                              "VERMELHO marca onde o limite interno foi atingido e a correção deixou de ser "
+                              "exata.\n\n"
+                              "7 = em qual faixa cada pixel caiu: vermelho, verde e azul, da mais próxima "
+                              "para a mais distante. Use para incluir ou descartar a escolha de faixa.\n\n"
+                              "8 = a definição de borda depois da atenuação por incidência. VERMELHO dura, "
+                              "VERDE macia. A atenuação lê a normal, então uma normal por triângulo vira "
+                              "uma borda por triângulo aqui.\n\n"
+                              "A névoa é desligada em todas as visões, para a distância não lavar as "
+                              "cores.\n\n"
                               "Qualquer valor diferente de zero também preenche a lista abaixo.")
                      .Min(0)
-                     .Max(2)
+                     .Max(8) // SHADOW_MAP_MAX_DEBUG_VIEW, written out per the note at the top of this panel
                      .DefaultValue(0)
                      .ShowButtons(true)
                      .Format("%d"));

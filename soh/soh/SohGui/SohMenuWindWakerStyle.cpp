@@ -548,6 +548,8 @@ void SohMenu::AddMenuWindWakerStyle() {
             CVarClear(CVAR_ENHANCEMENT("Graphics.ShadowMap.PlaneGradientLimit"));
             CVarClear(CVAR_ENHANCEMENT("Graphics.ShadowMap.PlaneSoftFalloff"));
             CVarClear(CVAR_ENHANCEMENT("Graphics.ShadowMap.MaxAnisoTaps"));
+            CVarClear(CVAR_ENHANCEMENT("Graphics.ShadowMap.EdgeScreenWidth"));
+            CVarClear(CVAR_ENHANCEMENT("Graphics.ShadowMap.MinHardnessScale"));
             CVarClear(CVAR_ENHANCEMENT("Graphics.ShadowMap.MinElevation"));
             CVarClear(CVAR_ENHANCEMENT("Graphics.ShadowMap.CasterDrawRadius"));
             Ship::Context::GetInstance()->GetWindow()->GetGui()->SaveConsoleVariablesNextFrame();
@@ -826,6 +828,40 @@ void SohMenu::AddMenuWindWakerStyle() {
                      .Min(0.1f)
                      .Max(64.0f)
                      .DefaultValue(3.2f)); // SHADOW_MAP_DEFAULT_PLANE_GRADIENT_LIMIT
+    AddWidget(path, "Borda em Largura de Tela", WIDGET_CVAR_CHECKBOX)
+        .CVar(CVAR_ENHANCEMENT("Graphics.ShadowMap.EdgeScreenWidth"))
+        .RaceDisable(false)
+        .PreFunc(hideUnlessShadowMap)
+        .Options(CheckboxOptions().DefaultValue(false).Tooltip(
+            "Mede a rampa da borda dura em PIXELS DE TELA em vez de em cobertura. Só faz diferença com a "
+            "Nitidez da Borda acima de zero.\n\n"
+            "A rampa sempre teve largura fixa em cobertura, e cobertura não é o que o olho lê. Quantos "
+            "pixels de tela essa rampa ocupa depende de quão rápido a cobertura muda naquela superfície, e "
+            "isso varia muito: num chão de frente para a luz pode ser uma fração de pixel, o que serrilha e "
+            "formiga em movimento; numa parede rasante à luz o mesmo número se espalha por vários pixels e "
+            "vira borrão numa borda que era para ser dura. Um valor só não serve para os dois, porque não "
+            "está medindo a coisa que decide a aparência.\n\n"
+            "Com isto a rampa fica em cerca de três quartos de pixel em qualquer superfície: borda dura com "
+            "antisserrilhado suficiente para não formigar, igual no chão e na parede. Para um visual cel é "
+            "a diferença entre uma borda NÍTIDA e uma borda apenas estreita."));
+    AddWidget(path, "Piso da Atenuação por Incidência", WIDGET_CVAR_SLIDER_FLOAT)
+        .CVar(CVAR_ENHANCEMENT("Graphics.ShadowMap.MinHardnessScale"))
+        .RaceDisable(false)
+        .PreFunc(hideUnlessShadowMap)
+        .Options(FloatSliderOptions()
+                     .Tooltip("Quanto da Nitidez da Borda sobrevive nas superfícies de lado para a luz. 1 "
+                              "desliga a atenuação e deixa a borda igualmente dura em toda parte.\n\n"
+                              "A atenuação existe por um bom motivo: traçar uma linha dura sobre um "
+                              "contorno mal amostrado imprime os degraus dele como facetas. Ela é a defesa "
+                              "contra os dentes — e a defesa é justamente abrir mão da borda dura ali.\n\n"
+                              "Com as Amostras na Direção da Fuga ligadas esse contorno deixa de ser mal "
+                              "amostrado, e aí a atenuação passa a cobrar um preço por um problema que já "
+                              "foi resolvido de outro jeito. Suba para 1 DEPOIS de ligar as amostras, nunca "
+                              "antes: sem elas, 1 devolve os dentes em cheio.")
+                     .Format("%.2f")
+                     .Min(0.0f)
+                     .Max(1.0f)
+                     .DefaultValue(0.4f)); // SHADOW_MAP_MIN_EDGE_HARDNESS_SCALE
     AddWidget(path, "Amostras na Direção da Fuga: %d", WIDGET_CVAR_SLIDER_INT)
         .CVar(CVAR_ENHANCEMENT("Graphics.ShadowMap.MaxAnisoTaps"))
         .RaceDisable(false)

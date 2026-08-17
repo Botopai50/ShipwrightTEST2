@@ -746,7 +746,12 @@ static void OnToonFrameUpdate() {
             // from the light. 1 is off, and off is the default -- this targets projective aliasing, which
             // is a sampling limit rather than a bias failure, and that diagnosis is still unconfirmed.
             CVarGetInteger(CVAR_ENHANCEMENT("Graphics.ShadowMap.MaxAnisoTaps"),
-                           SHADOW_MAP_DEFAULT_MAX_ANISO_TAPS));
+                           SHADOW_MAP_DEFAULT_MAX_ANISO_TAPS),
+            // Measures the hard edge's ramp in screen pixels instead of in coverage, so a cel edge is the
+            // same crispness on a floor and on a raking wall instead of aliasing on one and smudging on
+            // the other.
+            CVarGetInteger(CVAR_ENHANCEMENT("Graphics.ShadowMap.EdgeScreenWidth"),
+                           SHADOW_MAP_DEFAULT_EDGE_SCREEN_WIDTH) != 0);
     }
 
     Fast::GfxRenderingAPI* rapi = GetRenderingApi();

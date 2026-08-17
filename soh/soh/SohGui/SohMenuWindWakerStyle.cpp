@@ -549,6 +549,7 @@ void SohMenu::AddMenuWindWakerStyle() {
             CVarClear(CVAR_ENHANCEMENT("Graphics.ShadowMap.PlaneSoftFalloff"));
             CVarClear(CVAR_ENHANCEMENT("Graphics.ShadowMap.MaxAnisoTaps"));
             CVarClear(CVAR_ENHANCEMENT("Graphics.ShadowMap.EdgeScreenWidth"));
+            CVarClear(CVAR_ENHANCEMENT("Graphics.ShadowMap.AnisoSpacing"));
             CVarClear(CVAR_ENHANCEMENT("Graphics.ShadowMap.MinHardnessScale"));
             CVarClear(CVAR_ENHANCEMENT("Graphics.ShadowMap.MinElevation"));
             CVarClear(CVAR_ENHANCEMENT("Graphics.ShadowMap.CasterDrawRadius"));
@@ -667,7 +668,7 @@ void SohMenu::AddMenuWindWakerStyle() {
                      .Format("%.0f")
                      .Min(50.0f)
                      .Max(600.0f)
-                     .DefaultValue(150.0f)); // SHADOW_MAP_DEFAULT_SPLIT_0
+                     .DefaultValue(350.0f)); // SHADOW_MAP_DEFAULT_SPLIT_0
     AddWidget(path, "Faixa Média Termina Em: %.0f", WIDGET_CVAR_SLIDER_FLOAT)
         .CVar(CVAR_ENHANCEMENT("Graphics.ShadowMap.Split1"))
         .RaceDisable(false)
@@ -684,7 +685,7 @@ void SohMenu::AddMenuWindWakerStyle() {
                      .Format("%.0f")
                      .Min(100.0f)
                      .Max(3000.0f)
-                     .DefaultValue(1200.0f)); // SHADOW_MAP_DEFAULT_SPLIT_1
+                     .DefaultValue(2500.0f)); // SHADOW_MAP_DEFAULT_SPLIT_1
     AddWidget(path, "Faixa Distante Termina Em: %.0f", WIDGET_CVAR_SLIDER_FLOAT)
         .CVar(CVAR_ENHANCEMENT("Graphics.ShadowMap.Split2"))
         .RaceDisable(false)
@@ -765,7 +766,7 @@ void SohMenu::AddMenuWindWakerStyle() {
                      .Format("%.2f")
                      .Min(0.0f)
                      .Max(8.0f)
-                     .DefaultValue(0.05f)); // SHADOW_MAP_DEFAULT_DEPTH_BIAS_WORLD
+                     .DefaultValue(0.60f)); // SHADOW_MAP_DEFAULT_DEPTH_BIAS_WORLD
     AddWidget(path, "Ajuste por Inclinação", WIDGET_CVAR_SLIDER_FLOAT)
         .CVar(CVAR_ENHANCEMENT("Graphics.ShadowMap.SlopeBias"))
         .RaceDisable(false)
@@ -827,7 +828,28 @@ void SohMenu::AddMenuWindWakerStyle() {
                      .Format("%.2f")
                      .Min(0.1f)
                      .Max(64.0f)
-                     .DefaultValue(3.2f)); // SHADOW_MAP_DEFAULT_PLANE_GRADIENT_LIMIT
+                     .DefaultValue(5.50f)); // SHADOW_MAP_DEFAULT_PLANE_GRADIENT_LIMIT
+    AddWidget(path, "Espaçamento das Amostras", WIDGET_CVAR_SLIDER_FLOAT)
+        .CVar(CVAR_ENHANCEMENT("Graphics.ShadowMap.AnisoSpacing"))
+        .RaceDisable(false)
+        .PreFunc(hideUnlessShadowMap)
+        .Options(FloatSliderOptions()
+                     .Tooltip("Distância entre as amostras da fileira acima, em células do mapa.\n\n"
+                              "2,0 encosta uma na outra: cada amostra bilinear cobre um bloco de 2x2 "
+                              "células, então esse é o maior espaçamento que não deixa célula nenhuma sem "
+                              "ser lida. Mas não é o mais LISO — cada amostra pesa sua vizinhança como uma "
+                              "barraca, e barracas que apenas se encostam ainda afundam no meio do caminho, "
+                              "o que faz a fileira parecer um enfileirado de amostras separadas em vez de "
+                              "um borrão só.\n\n"
+                              "1,0 sobrepõe as barracas pela metade e some com esse afundamento.\n\n"
+                              "O que custa é ALCANCE: a fileira mede amostras × espaçamento células de "
+                              "qualquer jeito, então metade do espaçamento cobre metade do trecho com a "
+                              "mesma quantidade de amostras. Densidade e alcance se pagam um com o outro "
+                              "aqui — para ter os dois, aumente a quantidade de amostras.")
+                     .Format("%.2f")
+                     .Min(0.25f)
+                     .Max(2.0f)
+                     .DefaultValue(1.0f)); // SHADOW_MAP_DEFAULT_ANISO_SPACING
     AddWidget(path, "Borda em Largura de Tela", WIDGET_CVAR_CHECKBOX)
         .CVar(CVAR_ENHANCEMENT("Graphics.ShadowMap.EdgeScreenWidth"))
         .RaceDisable(false)
@@ -861,7 +883,7 @@ void SohMenu::AddMenuWindWakerStyle() {
                      .Format("%.2f")
                      .Min(0.0f)
                      .Max(1.0f)
-                     .DefaultValue(0.4f)); // SHADOW_MAP_MIN_EDGE_HARDNESS_SCALE
+                     .DefaultValue(1.0f)); // SHADOW_MAP_MIN_EDGE_HARDNESS_SCALE
     AddWidget(path, "Amostras na Direção da Fuga: %d", WIDGET_CVAR_SLIDER_INT)
         .CVar(CVAR_ENHANCEMENT("Graphics.ShadowMap.MaxAnisoTaps"))
         .RaceDisable(false)
@@ -890,14 +912,14 @@ void SohMenu::AddMenuWindWakerStyle() {
                               "profundidade.")
                      .Min(1)
                      .Max(8)
-                     .DefaultValue(1) // SHADOW_MAP_DEFAULT_MAX_ANISO_TAPS
+                     .DefaultValue(5) // SHADOW_MAP_DEFAULT_MAX_ANISO_TAPS
                      .ShowButtons(true)
                      .Format("%d"));
     AddWidget(path, "Estreitar o Filtro no Limite", WIDGET_CVAR_CHECKBOX)
         .CVar(CVAR_ENHANCEMENT("Graphics.ShadowMap.PlaneSoftFalloff"))
         .RaceDisable(false)
         .PreFunc(hideUnlessShadowMap)
-        .Options(CheckboxOptions().DefaultValue(false).Tooltip(
+        .Options(CheckboxOptions().DefaultValue(true).Tooltip(
             "O conserto candidato para as faixas que o controle acima diagnostica. Deixe desligado para o "
             "comportamento de sempre, ligue para comparar os dois lado a lado.\n\n"
             "Cortar o gradiente no teto não torna a correção segura, só a torna errada de um jeito "
@@ -928,7 +950,7 @@ void SohMenu::AddMenuWindWakerStyle() {
                      .Format("%.2f")
                      .Min(0.1f)
                      .Max(0.95f)
-                     .DefaultValue(0.5f)); // SHADOW_MAP_DEFAULT_MIN_ELEVATION
+                     .DefaultValue(0.60f)); // SHADOW_MAP_DEFAULT_MIN_ELEVATION
     AddWidget(path, "Alcance Fora da Tela: %.0f", WIDGET_CVAR_SLIDER_FLOAT)
         .CVar(CVAR_ENHANCEMENT("Graphics.ShadowMap.CasterDrawRadius"))
         .RaceDisable(false)

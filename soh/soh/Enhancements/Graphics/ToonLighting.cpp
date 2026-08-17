@@ -751,7 +751,9 @@ static void OnToonFrameUpdate() {
             // same crispness on a floor and on a raking wall instead of aliasing on one and smudging on
             // the other.
             CVarGetInteger(CVAR_ENHANCEMENT("Graphics.ShadowMap.EdgeScreenWidth"),
-                           SHADOW_MAP_DEFAULT_EDGE_SCREEN_WIDTH) != 0);
+                           SHADOW_MAP_DEFAULT_EDGE_SCREEN_WIDTH) != 0,
+            CVarGetFloat(CVAR_ENHANCEMENT("Graphics.ShadowMap.AnisoSpacing"),
+                         SHADOW_MAP_DEFAULT_ANISO_SPACING));
     }
 
     Fast::GfxRenderingAPI* rapi = GetRenderingApi();

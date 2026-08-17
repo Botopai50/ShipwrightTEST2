@@ -547,6 +547,7 @@ void SohMenu::AddMenuWindWakerStyle() {
             CVarClear(CVAR_ENHANCEMENT("Graphics.ShadowMap.NormalOffset"));
             CVarClear(CVAR_ENHANCEMENT("Graphics.ShadowMap.PlaneGradientLimit"));
             CVarClear(CVAR_ENHANCEMENT("Graphics.ShadowMap.PlaneSoftFalloff"));
+            CVarClear(CVAR_ENHANCEMENT("Graphics.ShadowMap.MaxAnisoTaps"));
             CVarClear(CVAR_ENHANCEMENT("Graphics.ShadowMap.MinElevation"));
             CVarClear(CVAR_ENHANCEMENT("Graphics.ShadowMap.CasterDrawRadius"));
             Ship::Context::GetInstance()->GetWindow()->GetGui()->SaveConsoleVariablesNextFrame();
@@ -825,6 +826,37 @@ void SohMenu::AddMenuWindWakerStyle() {
                      .Min(0.1f)
                      .Max(64.0f)
                      .DefaultValue(3.2f)); // SHADOW_MAP_DEFAULT_PLANE_GRADIENT_LIMIT
+    AddWidget(path, "Amostras na Direção da Fuga: %d", WIDGET_CVAR_SLIDER_INT)
+        .CVar(CVAR_ENHANCEMENT("Graphics.ShadowMap.MaxAnisoTaps"))
+        .RaceDisable(false)
+        .PreFunc(hideUnlessShadowMap)
+        .Options(IntSliderOptions()
+                     .Tooltip("Alarga o filtro APENAS na direção em que a superfície foge da luz. 1 desliga "
+                              "e deixa o filtro quadrado de sempre.\n\n"
+                              "Este é o único controle do painel que ataca os DENTES, e ele é de natureza "
+                              "diferente de todos os outros. As listras de acne são uma comparação errada, "
+                              "e um ajuste de profundidade resolve — é o que todos os outros fazem. Os "
+                              "dentes não são isso: numa superfície virando de lado para a luz, o mapa quase "
+                              "não tem resolução na direção em que ela se afasta, então a borda da sombra "
+                              "quantiza em degraus de uma célula dividida pelo seno do ângulo. A 83° isso "
+                              "são oito células por degrau; a 87°, vinte. Nenhum ajuste move esses degraus, "
+                              "porque nada está sendo mal comparado — a borda está sendo desenhada numa "
+                              "resolução que não existe.\n\n"
+                              "Um degrau desses não pode ser resolvido, mas pode ser MEDIADO: isso troca a "
+                              "escadinha dura por um degradê suave na mesma direção — a mesma informação "
+                              "faltando, apresentada como penumbra em vez de serrilha. E só nessa direção: "
+                              "na transversal o mapa amostra bem, e alargar ali só borraria uma borda que "
+                              "estava certa.\n\n"
+                              "Custa duas amostras por passo, contra quatro do filtro quadrado inteiro — "
+                              "então 4 aqui é o dobro de buscas, e só nos pixels cujo ângulo pede.\n\n"
+                              "Comece em 4. Se os dentes viraram um degradê macio, era aliasing de "
+                              "amostragem; se não mudaram nada, não era, e o problema está no mapa de "
+                              "profundidade.")
+                     .Min(1)
+                     .Max(8)
+                     .DefaultValue(1) // SHADOW_MAP_DEFAULT_MAX_ANISO_TAPS
+                     .ShowButtons(true)
+                     .Format("%d"));
     AddWidget(path, "Estreitar o Filtro no Limite", WIDGET_CVAR_CHECKBOX)
         .CVar(CVAR_ENHANCEMENT("Graphics.ShadowMap.PlaneSoftFalloff"))
         .RaceDisable(false)

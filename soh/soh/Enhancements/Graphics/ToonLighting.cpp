@@ -741,7 +741,12 @@ static void OnToonFrameUpdate() {
             CVarGetFloat(CVAR_ENHANCEMENT("Graphics.ShadowMap.PlaneGradientLimit"),
                          SHADOW_MAP_DEFAULT_PLANE_GRADIENT_LIMIT),
             CVarGetInteger(CVAR_ENHANCEMENT("Graphics.ShadowMap.PlaneSoftFalloff"),
-                           SHADOW_MAP_DEFAULT_PLANE_SOFT_FALLOFF) != 0);
+                           SHADOW_MAP_DEFAULT_PLANE_SOFT_FALLOFF) != 0,
+            // Anisotropic PCF: how many quads the kernel may lay along the direction a receiver recedes
+            // from the light. 1 is off, and off is the default -- this targets projective aliasing, which
+            // is a sampling limit rather than a bias failure, and that diagnosis is still unconfirmed.
+            CVarGetInteger(CVAR_ENHANCEMENT("Graphics.ShadowMap.MaxAnisoTaps"),
+                           SHADOW_MAP_DEFAULT_MAX_ANISO_TAPS));
     }
 
     Fast::GfxRenderingAPI* rapi = GetRenderingApi();

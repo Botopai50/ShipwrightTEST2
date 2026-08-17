@@ -22,9 +22,15 @@ jobs:
     # zero cost. Every other job `needs:` this one, so they skip with it.
     #
     # The name substrings are the opt-in: a branch whose work is worth a build on every push says so
-    # by carrying one, and everything else stays free. `shadowmap` joins `celshade` because that work
+    # by carrying one, and everything else stays free. `shadow` joins `celshade` because that work
     # lands in the renderer's Windows-only depth pass -- the one part of it no other job compiles, so
     # a push that is never built is a push that is never checked.
+    #
+    # `shadow` and not `shadowmap`, which is the narrower spelling this started as and which quietly
+    # did nothing for `shadow-map-...`. A branch doing exactly the work the substring was added for
+    # went unbuilt through a dozen pushes because of one hyphen, which is the failure the paragraph
+    # above warns about, arriving through the guard meant to prevent it. Matching the stem covers
+    # every spelling anyone reaches for.
     #
     # `performance` joins them for the same reason. That work is in the Fast3D interpreter and the
     # backends, which only build-windows compiles here -- generate-soh-otr builds the asset target and
@@ -34,7 +40,7 @@ jobs:
       github.event_name == 'workflow_dispatch'
       || github.ref_name == github.event.repository.default_branch
       || contains(github.ref, 'celshade')
-      || contains(github.ref, 'shadowmap')
+      || contains(github.ref, 'shadow')
       || contains(github.ref, 'performance')
     runs-on: ubuntu-22.04
     steps:

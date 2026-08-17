@@ -924,11 +924,17 @@ AddWidget(path, "Depuração", WIDGET_SEPARATOR_TEXT).PreFunc(hideUnlessShadowMa
                               "8 = a definição de borda depois da atenuação por incidência. VERMELHO dura, "
                               "VERDE macia. A atenuação lê a normal, então uma normal por triângulo vira "
                               "uma borda por triângulo aqui.\n\n"
+                              "9 = o alcance real do filtro, em células do mapa. VERDE cresce com ele, "
+                              "VERMELHO significa ZERO. Com alcance zero as dezesseis amostras colapsam "
+                              "numa só, que suaviza DENTRO de uma célula e não faz nada contra a escadinha "
+                              "ENTRE células — a grade do mapa chega inteira à tela, e uma escadinha vista "
+                              "em diagonal vira uma fileira de dentes. Use quando um controle que deveria "
+                              "importar não mudou nada.\n\n"
                               "A névoa é desligada em todas as visões, para a distância não lavar as "
                               "cores.\n\n"
                               "Qualquer valor diferente de zero também preenche a lista abaixo.")
                      .Min(0)
-                     .Max(8) // SHADOW_MAP_MAX_DEBUG_VIEW, written out per the note at the top of this panel
+                     .Max(9) // SHADOW_MAP_MAX_DEBUG_VIEW, written out per the note at the top of this panel
                      .DefaultValue(0)
                      .ShowButtons(true)
                      .Format("%d"));

@@ -26,6 +26,21 @@ void SkyboxDraw_Draw(SkyboxContext* skyboxCtx, GraphicsContext* gfxCtx, s16 skyb
         gSPShadowMapReceiveOff(POLY_OPA_DISP++);
     }
 
+    // SOH [Enhancement] Mipmapping: the sky reads its textures at full size. Turned back off at the end of
+    // the function so nothing after it inherits the state, exactly like the marker above.
+    //
+    // The sky is drawn as separate faces, each holding its own texture, laid edge to edge. At the top level
+    // the two sides of a join disagree by less than a texel and nothing sees it. Each smaller copy averages
+    // twice as many texels together, and each side averages only its own, so the disagreement widens with
+    // every level until it reads as a line drawn along the join -- three of them meeting overhead, which is
+    // the shape a cube's corner makes from the inside.
+    //
+    // The renderer already does this for the interface, which it recognises by the projection: a draw with
+    // no perspective term is on-screen furniture. That test cannot reach here, because the sky is genuinely
+    // 3D and genuinely in perspective. Nothing in the render state says "this face continues into the next
+    // texture" either -- it is knowledge about the ART, and the game is the only thing that has it.
+    gSPTextureLodClampOn(POLY_OPA_DISP++);
+
     Gfx_SetupDL_40Opa(gfxCtx);
 
     // gsSPShaderTest(POLY_OPA_DISP++);
@@ -106,6 +121,7 @@ void SkyboxDraw_Draw(SkyboxContext* skyboxCtx, GraphicsContext* gfxCtx, s16 skyb
     if (shadowMapOn) {
         gSPShadowMapReceiveOn(POLY_OPA_DISP++);
     }
+    gSPTextureLodClampOff(POLY_OPA_DISP++);
 
     FrameInterpolation_RecordCloseChild();
     CLOSE_DISPS(gfxCtx);

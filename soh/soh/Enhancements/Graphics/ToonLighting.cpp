@@ -188,6 +188,10 @@ static void RefreshFrameParams() {
     if (Fast::GfxRenderingAPI* profileRapi = GetRenderingApi(); profileRapi != nullptr) {
         profileRapi->SetShadowMapProfiling(sParams.shadowMap &&
                                            CVarGetInteger(CVAR_DEVELOPER_TOOLS("ShadowMap.ProfileGpu"), 0) != 0);
+        // The depth map itself, drawn in a corner. Every other shadow diagnostic here asks what the SHADING
+        // pixel was handed; this one shows what the depth pass STORED, which until now nothing could.
+        profileRapi->SetShadowMapViewSlice(
+            sParams.shadowMap ? CVarGetInteger(CVAR_DEVELOPER_TOOLS("ShadowMap.ViewSlice"), 0) : 0);
     }
     if (sParams.shadowMap) {
         Fast::GfxRenderingAPI* rapi = GetRenderingApi();

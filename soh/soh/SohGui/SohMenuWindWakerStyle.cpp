@@ -550,6 +550,7 @@ void SohMenu::AddMenuWindWakerStyle() {
             CVarClear(CVAR_ENHANCEMENT("Graphics.ShadowMap.MaxAnisoTaps"));
             CVarClear(CVAR_ENHANCEMENT("Graphics.ShadowMap.EdgeScreenWidth"));
             CVarClear(CVAR_ENHANCEMENT("Graphics.ShadowMap.AnisoSpacing"));
+            CVarClear(CVAR_DEVELOPER_TOOLS("ShadowMap.ViewSlice"));
             CVarClear(CVAR_ENHANCEMENT("Graphics.ShadowMap.MinHardnessScale"));
             CVarClear(CVAR_ENHANCEMENT("Graphics.ShadowMap.MinElevation"));
             CVarClear(CVAR_ENHANCEMENT("Graphics.ShadowMap.CasterDrawRadius"));
@@ -1043,6 +1044,28 @@ AddWidget(path, "Depuração", WIDGET_SEPARATOR_TEXT).PreFunc(hideUnlessShadowMa
             "é a que decide o que fazer: com poucas fatias por quadro o passe já está sendo reaproveitado e o "
             "custo restante é geometria; com quase todas, algo está impedindo o reaproveitamento.\n\n"
             "Somente Direct3D 11."));
+    AddWidget(path, "Ver o Mapa de Profundidade: %d", WIDGET_CVAR_SLIDER_INT)
+        .CVar(CVAR_DEVELOPER_TOOLS("ShadowMap.ViewSlice"))
+        .PreFunc(hideUnlessShadowMap)
+        .Options(IntSliderOptions()
+                     .Tooltip("Desenha uma fatia do mapa de profundidade num canto da tela. 0 = desligado.\n\n"
+                              "Todas as Visões de Diagnóstico acima olham o RECEPTOR — o que o pixel sendo "
+                              "sombreado recebeu. Esta mostra o que o passo de profundidade GUARDOU, que é a "
+                              "outra metade do sistema. Um defeito de sombra pode morar em qualquer uma das "
+                              "duas, e até agora só uma podia ser inspecionada.\n\n"
+                              "1 em diante são as faixas da camada do MUNDO, em ordem; depois delas vêm as da "
+                              "camada de ATORES, que é mais curta.\n\n"
+                              "AZUL é célula vazia — nada foi desenhado ali. Isso é diferente de cinza "
+                              "escuro, que é algo próximo: os dois são o mesmo número no mapa e significam "
+                              "coisas opostas, e confundir um com o outro faz um caster ausente parecer "
+                              "presente.\n\n"
+                              "A amostragem é por ponto de propósito. Filtrar borraria vizinhos numa imagem "
+                              "que a comparação de sombra nunca enxerga.")
+                     .Min(0)
+                     .Max(5)
+                     .DefaultValue(0)
+                     .ShowButtons(true)
+                     .Format("%d"));
     // Live list of what the world (green) caster layer is actually made of, so a stray green blob in the
     // debug view can be named instead of guessed at. WIDGET_TEXT draws widget.name, and PreFunc runs first,
     // so rewriting the name each frame is what makes it live.

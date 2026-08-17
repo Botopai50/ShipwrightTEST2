@@ -731,7 +731,17 @@ static void OnToonFrameUpdate() {
             // depth gradient, so it is nearly nothing on a surface facing the light and large on one edge-on
             // to it -- which is where acne lives and why the two are separate controls rather than one.
             CVarGetFloat(CVAR_ENHANCEMENT("Graphics.ShadowMap.DepthBias"), SHADOW_MAP_DEFAULT_DEPTH_BIAS_WORLD),
-            CVarGetFloat(CVAR_ENHANCEMENT("Graphics.ShadowMap.SlopeBias"), SHADOW_MAP_DEFAULT_SLOPE_BIAS));
+            CVarGetFloat(CVAR_ENHANCEMENT("Graphics.ShadowMap.SlopeBias"), SHADOW_MAP_DEFAULT_SLOPE_BIAS),
+            // The receiver-plane gradient's bound, and whether overshooting it narrows the filter kernel
+            // too. Both live here rather than as constants because this is an open question, not a tuned
+            // one: the diagnostic views cleared the normal (every receiver has one) and the edge hardening
+            // (it is off), and left this bound binding on exactly the faces that carry the banding. The
+            // bound sweeps live to settle whether that is cause or coincidence; the falloff is the
+            // candidate fix, defaulted OFF so the two can be compared in one build.
+            CVarGetFloat(CVAR_ENHANCEMENT("Graphics.ShadowMap.PlaneGradientLimit"),
+                         SHADOW_MAP_DEFAULT_PLANE_GRADIENT_LIMIT),
+            CVarGetInteger(CVAR_ENHANCEMENT("Graphics.ShadowMap.PlaneSoftFalloff"),
+                           SHADOW_MAP_DEFAULT_PLANE_SOFT_FALLOFF) != 0);
     }
 
     Fast::GfxRenderingAPI* rapi = GetRenderingApi();

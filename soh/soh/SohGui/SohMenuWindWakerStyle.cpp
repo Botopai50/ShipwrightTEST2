@@ -545,6 +545,8 @@ void SohMenu::AddMenuWindWakerStyle() {
             CVarClear(CVAR_ENHANCEMENT("Graphics.ShadowMap.DepthBias"));
             CVarClear(CVAR_ENHANCEMENT("Graphics.ShadowMap.SlopeBias"));
             CVarClear(CVAR_ENHANCEMENT("Graphics.ShadowMap.NormalOffset"));
+            CVarClear(CVAR_ENHANCEMENT("Graphics.ShadowMap.PlaneGradientLimit"));
+            CVarClear(CVAR_ENHANCEMENT("Graphics.ShadowMap.PlaneSoftFalloff"));
             CVarClear(CVAR_ENHANCEMENT("Graphics.ShadowMap.MinElevation"));
             CVarClear(CVAR_ENHANCEMENT("Graphics.ShadowMap.CasterDrawRadius"));
             Ship::Context::GetInstance()->GetWindow()->GetGui()->SaveConsoleVariablesNextFrame();
@@ -797,6 +799,51 @@ void SohMenu::AddMenuWindWakerStyle() {
                      .Min(0.0f)
                      .Max(8.0f)
                      .DefaultValue(0.0f)); // SHADOW_MAP_DEFAULT_NORMAL_OFFSET
+
+    // The receiver-plane gradient's bound. Exposed to be TESTED, not tuned -- see the note where it is read
+    // in ToonLighting.cpp. Default is the value it has always had, so leaving both alone changes nothing.
+    AddWidget(path, "Limite do Gradiente do Plano", WIDGET_CVAR_SLIDER_FLOAT)
+        .CVar(CVAR_ENHANCEMENT("Graphics.ShadowMap.PlaneGradientLimit"))
+        .RaceDisable(false)
+        .PreFunc(hideUnlessShadowMap)
+        .Options(FloatSliderOptions()
+                     .Tooltip("Até onde vai a correção que faz cada amostra do filtro comparar contra o "
+                              "plano da própria superfície, em vez de contra um único ponto dela.\n\n"
+                              "Essa correção precisa de um teto: na silhueta de um objeto o cálculo dela "
+                              "não significa nada, e sem teto ela abriria um buraco na sombra. Mas quando o "
+                              "teto é atingido, a correção passa a comparar contra um plano mais achatado "
+                              "que a superfície real, e as amostras das bordas do filtro discordam do "
+                              "centro. Isso vira faixas de auto-sombreamento — acne fabricada justamente "
+                              "pelo termo que existe para evitá-la.\n\n"
+                              "Este controle existe para VARRER, não para ajustar. Ligue a Visão de "
+                              "Diagnóstico 6: o vermelho é exatamente onde este teto está sendo atingido. "
+                              "Suba e desça este valor olhando as visões 5 e 6 juntas. Se as faixas "
+                              "acompanharem o vermelho, o teto é a causa; se não acompanharem, a causa está "
+                              "no próprio mapa de profundidade.\n\n"
+                              "O padrão 3.2 equivale a cerca de 83° entre a superfície e a luz.")
+                     .Format("%.2f")
+                     .Min(0.1f)
+                     .Max(64.0f)
+                     .DefaultValue(3.2f)); // SHADOW_MAP_DEFAULT_PLANE_GRADIENT_LIMIT
+    AddWidget(path, "Estreitar o Filtro no Limite", WIDGET_CVAR_CHECKBOX)
+        .CVar(CVAR_ENHANCEMENT("Graphics.ShadowMap.PlaneSoftFalloff"))
+        .RaceDisable(false)
+        .PreFunc(hideUnlessShadowMap)
+        .Options(CheckboxOptions().DefaultValue(false).Tooltip(
+            "O conserto candidato para as faixas que o controle acima diagnostica. Deixe desligado para o "
+            "comportamento de sempre, ligue para comparar os dois lado a lado.\n\n"
+            "Cortar o gradiente no teto não torna a correção segura, só a torna errada de um jeito "
+            "específico, e o erro é o produto de dois fatores: o quanto o gradiente passou do teto e o "
+            "quanto o filtro se afasta do centro. Nada consegue corrigir o primeiro, então isto encolhe o "
+            "segundo exatamente na mesma proporção — o filtro é multiplicado por teto/gradiente — e o erro "
+            "fica preso no valor que tinha NO teto.\n\n"
+            "O ganho é ser contínuo: sem isso, uma face que passa do teto e a vizinha que não passa se "
+            "comportam de maneiras diferentes, e a fronteira entre as duas é a aresta entre elas. É assim "
+            "que um limiar desenha os triângulos da malha na tela.\n\n"
+            "O custo é largura de filtro nas superfícies muito inclinadas em relação à luz: conforme o "
+            "gradiente dispara, o filtro encolhe até virar praticamente uma amostra só, e a borda da sombra "
+            "fica mais dura ali. São superfícies que quase não recebem luz, que é o mesmo argumento pelo "
+            "qual a faixa de incidência já alivia nelas."));
 
     AddWidget(path, "Luz e Alcance", WIDGET_SEPARATOR_TEXT).PreFunc(hideUnlessShadowMap);
     AddWidget(path, "Altura Mínima do Sol", WIDGET_CVAR_SLIDER_FLOAT)

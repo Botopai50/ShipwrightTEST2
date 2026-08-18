@@ -850,7 +850,7 @@ void SohMenu::AddMenuWindWakerStyle() {
                      .Format("%.2f")
                      .Min(0.25f)
                      .Max(2.0f)
-                     .DefaultValue(1.0f)); // SHADOW_MAP_DEFAULT_ANISO_SPACING
+                     .DefaultValue(2.0f)); // SHADOW_MAP_DEFAULT_ANISO_SPACING
     AddWidget(path, "Borda em Largura de Tela", WIDGET_CVAR_CHECKBOX)
         .CVar(CVAR_ENHANCEMENT("Graphics.ShadowMap.EdgeScreenWidth"))
         .RaceDisable(false)
@@ -912,8 +912,12 @@ void SohMenu::AddMenuWindWakerStyle() {
                               "amostragem; se não mudaram nada, não era, e o problema está no mapa de "
                               "profundidade.")
                      .Min(1)
-                     .Max(8)
-                     .DefaultValue(5) // SHADOW_MAP_DEFAULT_MAX_ANISO_TAPS
+                     // 16, because the reach has to be able to cover the step. That step is one map cell
+                     // over the sine of the angle to the light -- about fourteen cells on a wall at eighty
+                     // degrees -- and reach is samples times spacing, so eight at two cells apart is where
+                     // covering it starts being possible at all.
+                     .Max(16)
+                     .DefaultValue(8) // SHADOW_MAP_DEFAULT_MAX_ANISO_TAPS
                      .ShowButtons(true)
                      .Format("%d"));
     AddWidget(path, "Estreitar o Filtro no Limite", WIDGET_CVAR_CHECKBOX)

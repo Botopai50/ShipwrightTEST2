@@ -917,7 +917,7 @@ void SohMenu::AddMenuWindWakerStyle() {
                      // degrees -- and reach is samples times spacing, so eight at two cells apart is where
                      // covering it starts being possible at all.
                      .Max(16)
-                     .DefaultValue(8) // SHADOW_MAP_DEFAULT_MAX_ANISO_TAPS
+                     .DefaultValue(12) // SHADOW_MAP_DEFAULT_MAX_ANISO_TAPS
                      .ShowButtons(true)
                      .Format("%d"));
     AddWidget(path, "Estreitar o Filtro no Limite", WIDGET_CVAR_CHECKBOX)

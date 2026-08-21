@@ -718,61 +718,22 @@ static void OnToonFrameUpdate() {
             splits,
             lightDir, CVarGetFloat(CVAR_ENHANCEMENT("Graphics.ShadowMap.BlendFraction"),
                                    SHADOW_MAP_DEFAULT_BLEND_FRACTION),
-            CVarGetFloat(CVAR_ENHANCEMENT("Graphics.ShadowMap.NormalOffset"), SHADOW_MAP_DEFAULT_NORMAL_OFFSET),
             CVarGetFloat(CVAR_ENHANCEMENT("Graphics.ShadowMap.Strength"), SHADOW_MAP_DEFAULT_STRENGTH),
-            CVarGetFloat(CVAR_ENHANCEMENT("Graphics.ShadowMap.FilterWidth"), SHADOW_MAP_DEFAULT_FILTER_WIDTH),
             CVarGetFloat(CVAR_ENHANCEMENT("Graphics.ShadowMap.MinCasterSize"),
                          SHADOW_MAP_DEFAULT_MIN_CASTER_SIZE),
-            // Debug view selector, 0-8. Passed through as an integer-valued float and not clamped here: the
+            // Debug view selector. Passed through as an integer-valued float and not clamped here: the
             // shader owns the list, so a value it does not recognise falls through to normal shading rather
             // than being silently remapped to a view the user did not ask for.
             //
-            // 1 and 2 show the system's OUTPUT (cascade footprints; which caster layer occludes). 3 to 8
-            // show its INPUT -- the normal the biases run on, where that normal came from, the filter's raw
-            // coverage, the receiver-plane gradient, the cascade selection, the tapered edge hardness. That
-            // second group is the one to reach for when a shadow is the wrong SHAPE rather than in the wrong
-            // place, because every tuning knob in shadow_map.h acts after the fact and cannot localise it.
-            // The full list, with how to read them against each other, is in the shader's PSMain.
+            // 1 and 2 show the system's OUTPUT (cascade footprints; which caster layer occludes). 3, 4, 5
+            // and 7 show its INPUT -- the receiver normal, where that normal came from, the filter's raw
+            // coverage, the cascade selection. That second group is the one to reach for when a shadow is
+            // the wrong SHAPE rather than in the wrong place. The full list, with how to read them against
+            // each other, is in the shader's PSMain.
             (f32)CVarGetInteger(CVAR_DEVELOPER_TOOLS("ShadowMap.ShowCascadeBounds"), 0),
             CVarGetFloat(CVAR_ENHANCEMENT("Graphics.ShadowMap.EdgeHardness"), SHADOW_MAP_DEFAULT_EDGE_HARDNESS),
             CVarGetFloat(CVAR_ENHANCEMENT("Graphics.ShadowMap.EdgeHardnessFar"),
                          SHADOW_MAP_DEFAULT_EDGE_HARDNESS_FAR),
-            // The incidence band, on scenery. This is the trade-off that decides what a wall does as it
-            // turns edge-on to the sun: below MinIncidence the shadow is not applied at all, because the map
-            // has no resolution left along the direction the surface recedes and its boundary quantises into
-            // wedges. Raising it hides those wedges on more surfaces and costs those surfaces their shadow.
-            // Live values rather than compile-time ones precisely because there is no single right answer.
-            CVarGetFloat(CVAR_ENHANCEMENT("Graphics.ShadowMap.MinIncidence"), SHADOW_MAP_MIN_INCIDENCE),
-            CVarGetFloat(CVAR_ENHANCEMENT("Graphics.ShadowMap.FullIncidence"), SHADOW_MAP_FULL_INCIDENCE),
-            CVarGetFloat(CVAR_ENHANCEMENT("Graphics.ShadowMap.MinHardnessScale"),
-                         SHADOW_MAP_MIN_EDGE_HARDNESS_SCALE),
-            // The two biases. Constant is a flat push in world units; slope multiplies the polygon's own
-            // depth gradient, so it is nearly nothing on a surface facing the light and large on one edge-on
-            // to it -- which is where acne lives and why the two are separate controls rather than one.
-            CVarGetFloat(CVAR_ENHANCEMENT("Graphics.ShadowMap.DepthBias"), SHADOW_MAP_DEFAULT_DEPTH_BIAS_WORLD),
-            CVarGetFloat(CVAR_ENHANCEMENT("Graphics.ShadowMap.SlopeBias"), SHADOW_MAP_DEFAULT_SLOPE_BIAS),
-            // The receiver-plane gradient's bound, and whether overshooting it narrows the filter kernel
-            // too. Both live here rather than as constants because this is an open question, not a tuned
-            // one: the diagnostic views cleared the normal (every receiver has one) and the edge hardening
-            // (it is off), and left this bound binding on exactly the faces that carry the banding. The
-            // bound sweeps live to settle whether that is cause or coincidence; the falloff is the
-            // candidate fix, defaulted OFF so the two can be compared in one build.
-            CVarGetFloat(CVAR_ENHANCEMENT("Graphics.ShadowMap.PlaneGradientLimit"),
-                         SHADOW_MAP_DEFAULT_PLANE_GRADIENT_LIMIT),
-            CVarGetInteger(CVAR_ENHANCEMENT("Graphics.ShadowMap.PlaneSoftFalloff"),
-                           SHADOW_MAP_DEFAULT_PLANE_SOFT_FALLOFF) != 0,
-            // Anisotropic PCF: how many quads the kernel may lay along the direction a receiver recedes
-            // from the light. 1 is off, and off is the default -- this targets projective aliasing, which
-            // is a sampling limit rather than a bias failure, and that diagnosis is still unconfirmed.
-            CVarGetInteger(CVAR_ENHANCEMENT("Graphics.ShadowMap.MaxAnisoTaps"),
-                           SHADOW_MAP_DEFAULT_MAX_ANISO_TAPS),
-            // Measures the hard edge's ramp in screen pixels instead of in coverage, so a cel edge is the
-            // same crispness on a floor and on a raking wall instead of aliasing on one and smudging on
-            // the other.
-            CVarGetInteger(CVAR_ENHANCEMENT("Graphics.ShadowMap.EdgeScreenWidth"),
-                           SHADOW_MAP_DEFAULT_EDGE_SCREEN_WIDTH) != 0,
-            CVarGetFloat(CVAR_ENHANCEMENT("Graphics.ShadowMap.AnisoSpacing"),
-                         SHADOW_MAP_DEFAULT_ANISO_SPACING),
             cascadeDivisors);
     }
 

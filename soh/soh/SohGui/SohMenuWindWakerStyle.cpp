@@ -539,19 +539,9 @@ void SohMenu::AddMenuWindWakerStyle() {
             CVarClear(CVAR_ENHANCEMENT("Graphics.ShadowMap.Split0"));
             CVarClear(CVAR_ENHANCEMENT("Graphics.ShadowMap.Split1"));
             CVarClear(CVAR_ENHANCEMENT("Graphics.ShadowMap.Split2"));
-            CVarClear(CVAR_ENHANCEMENT("Graphics.ShadowMap.FilterWidth"));
             CVarClear(CVAR_ENHANCEMENT("Graphics.ShadowMap.EdgeHardness"));
             CVarClear(CVAR_ENHANCEMENT("Graphics.ShadowMap.EdgeHardnessFar"));
-            CVarClear(CVAR_ENHANCEMENT("Graphics.ShadowMap.DepthBias"));
-            CVarClear(CVAR_ENHANCEMENT("Graphics.ShadowMap.SlopeBias"));
-            CVarClear(CVAR_ENHANCEMENT("Graphics.ShadowMap.NormalOffset"));
-            CVarClear(CVAR_ENHANCEMENT("Graphics.ShadowMap.PlaneGradientLimit"));
-            CVarClear(CVAR_ENHANCEMENT("Graphics.ShadowMap.PlaneSoftFalloff"));
-            CVarClear(CVAR_ENHANCEMENT("Graphics.ShadowMap.MaxAnisoTaps"));
-            CVarClear(CVAR_ENHANCEMENT("Graphics.ShadowMap.EdgeScreenWidth"));
-            CVarClear(CVAR_ENHANCEMENT("Graphics.ShadowMap.AnisoSpacing"));
             CVarClear(CVAR_DEVELOPER_TOOLS("ShadowMap.ViewSlice"));
-            CVarClear(CVAR_ENHANCEMENT("Graphics.ShadowMap.MinHardnessScale"));
             CVarClear(CVAR_ENHANCEMENT("Graphics.ShadowMap.MinElevation"));
             CVarClear(CVAR_ENHANCEMENT("Graphics.ShadowMap.CasterDrawRadius"));
             CVarClear(CVAR_ENHANCEMENT("Graphics.ShadowMap.UpdateDivisor0"));
@@ -709,33 +699,18 @@ void SohMenu::AddMenuWindWakerStyle() {
                      .DefaultValue(6000.0f)); // SHADOW_MAP_DEFAULT_SPLIT_2
 
     AddWidget(path, "Bordas", WIDGET_SEPARATOR_TEXT).PreFunc(hideUnlessShadowMap);
-    AddWidget(path, "Desfoque", WIDGET_CVAR_SLIDER_FLOAT)
-        .CVar(CVAR_ENHANCEMENT("Graphics.ShadowMap.FilterWidth"))
-        .RaceDisable(false)
-        .PreFunc(hideUnlessShadowMap)
-        .Options(FloatSliderOptions()
-                     .Tooltip("O quanto o filtro de suavização se espalha em volta de cada borda de "
-                              "sombra, em células do mapa.\n\n"
-                              "É isto que esconde os degraus do contorno, e não sai de graça: o que ele "
-                              "suaviza é a borda inteira, então exagerar deixa a sombra sem forma nenhuma. "
-                              "Aumente só até os degraus sumirem, e depois use a Nitidez abaixo para "
-                              "recuperar a definição.")
-                     .Format("%.2f")
-                     .Min(0.0f)
-                     .Max(1.5f)
-                     .DefaultValue(0.6f)); // SHADOW_MAP_DEFAULT_FILTER_WIDTH
     AddWidget(path, "Nitidez (Perto)", WIDGET_CVAR_SLIDER_FLOAT)
         .CVar(CVAR_ENHANCEMENT("Graphics.ShadowMap.EdgeHardness"))
         .RaceDisable(false)
         .PreFunc(hideUnlessShadowMap)
         .Options(FloatSliderOptions()
-                     .Tooltip("Devolve à borda desfocada um contorno definido, perto da câmera.\n\n"
-                              "Ele trabalha sobre o resultado do desfoque em vez de desfazê-lo: o degradê "
-                              "suave do filtro é remapeado de modo que o meio dele volte a ser uma borda. "
-                              "Isso mantém o posicionamento em fração de célula que o desfoque deu, que é o "
-                              "que impede o contorno de parecer uma escada, e ao mesmo tempo devolve uma "
-                              "sombra com forma.\n\n"
-                              "0 deixa o desfoque como está; 1 deixa a borda quase dura.")
+                     .Tooltip("Quão dura é a borda da sombra perto da câmera.\n\n"
+                              "O filtro devolve COBERTURA — o quanto da amostra está ocluída —, que é um "
+                              "degradê. Este controle remapeia esse degradê através de uma rampa estreita "
+                              "centrada na metade, transformando-o numa borda. Isso preserva o "
+                              "posicionamento em fração de célula que a amostragem bilinear deu, que é o "
+                              "que impede o contorno de virar uma escada alinhada à grade do mapa.\n\n"
+                              "0 deixa a cobertura crua; 1 deixa a borda quase dura.")
                      .Format("%.2f")
                      .Min(0.0f)
                      .Max(1.0f)
@@ -747,201 +722,13 @@ void SohMenu::AddMenuWindWakerStyle() {
         .Options(FloatSliderOptions()
                      .Tooltip("O mesmo controle, só que para a faixa mais distante. O valor é interpolado "
                               "entre os dois ao longo das faixas.\n\n"
-                              "As células distantes são bem maiores, então lá longe o desfoque cobre muito "
-                              "mais chão e uma sombra distante some bem antes de uma sombra perto sumir. Por "
-                              "isso este valor costuma ficar mais alto que o de perto.")
+                              "As células distantes são bem maiores, então o mesmo degradê de cobertura "
+                              "cobre muito mais chão lá longe. Ter os dois separados permite endurecer a "
+                              "borda distante sem endurecer a de perto, ou o contrário.")
                      .Format("%.2f")
                      .Min(0.0f)
                      .Max(1.0f)
                      .DefaultValue(0.6f)); // SHADOW_MAP_DEFAULT_EDGE_HARDNESS_FAR
-    AddWidget(path, "Ajuste de Profundidade", WIDGET_SEPARATOR_TEXT).PreFunc(hideUnlessShadowMap);
-    AddWidget(path, "Ajuste Fixo", WIDGET_CVAR_SLIDER_FLOAT)
-        .CVar(CVAR_ENHANCEMENT("Graphics.ShadowMap.DepthBias"))
-        .RaceDisable(false)
-        .PreFunc(hideUnlessShadowMap)
-        .Options(FloatSliderOptions()
-                     .Tooltip("Um empurrão fixo na comparação de sombra, em unidades do mundo (o Link tem "
-                              "cerca de 60 de altura). A mesma distância física em todas as faixas, "
-                              "independentemente do tamanho delas.\n\n"
-                              "É o mais grosseiro dos três: ele desliza a comparação ao longo do raio de "
-                              "luz, então cada unidade daqui é também uma unidade de sombra se descolando de "
-                              "quem a projeta. Aumente até as listras de sombra pararem, e pare aí: dali "
-                              "para frente você só está comprando um vão embaixo dos pés do objeto.")
-                     .Format("%.2f")
-                     .Min(0.0f)
-                     .Max(8.0f)
-                     .DefaultValue(0.60f)); // SHADOW_MAP_DEFAULT_DEPTH_BIAS_WORLD
-    AddWidget(path, "Ajuste por Inclinação", WIDGET_CVAR_SLIDER_FLOAT)
-        .CVar(CVAR_ENHANCEMENT("Graphics.ShadowMap.SlopeBias"))
-        .RaceDisable(false)
-        .PreFunc(hideUnlessShadowMap)
-        .Options(FloatSliderOptions()
-                     .Tooltip("Um multiplicador de o quanto a profundidade da própria superfície muda ao "
-                              "longo de uma célula do mapa.\n\n"
-                              "Este é o que realmente ataca as listras de sombra, porque não custa nada onde "
-                              "não há problema: uma superfície virada para a luz quase não tem inclinação e "
-                              "quase não recebe empurrão, enquanto uma de lado para a luz, onde a "
-                              "profundidade dispara dentro de uma célula e as listras aparecem, recebe "
-                              "bastante. Use este antes do Ajuste Fixo.\n\n"
-                              "Cada faixa tem seu próprio limite, para que uma célula distante, com várias "
-                              "unidades de largura, não saia do controle.")
-                     .Format("%.2f")
-                     .Min(0.0f)
-                     .Max(16.0f)
-                     .DefaultValue(1.0f)); // SHADOW_MAP_DEFAULT_SLOPE_BIAS
-    AddWidget(path, "Afastamento pela Normal", WIDGET_CVAR_SLIDER_FLOAT)
-        .CVar(CVAR_ENHANCEMENT("Graphics.ShadowMap.NormalOffset"))
-        .RaceDisable(false)
-        .PreFunc(hideUnlessShadowMap)
-        .Options(FloatSliderOptions()
-                     .Tooltip("O quanto a superfície é empurrada na direção da própria normal antes da "
-                              "comparação, em células do mapa, proporcional ao quanto ela está de lado para "
-                              "a luz.\n\n"
-                              "Os outros dois deslizam a amostra AO LONGO do raio de luz, o que a mantém "
-                              "dentro do mesmo polígono. Este a move para o lado, para fora da superfície que "
-                              "está causando o problema. É por isso que ele resolve superfícies curvas e "
-                              "rasantes que os outros não resolvem, e por isso que descola menos a sombra "
-                              "pelo que corrige.\n\n"
-                              "Exagerar faz as sombras começarem a fugir dos cantos.")
-                     .Format("%.2f")
-                     .Min(0.0f)
-                     .Max(8.0f)
-                     .DefaultValue(0.0f)); // SHADOW_MAP_DEFAULT_NORMAL_OFFSET
-
-    // The receiver-plane gradient's bound. Exposed to be TESTED, not tuned -- see the note where it is read
-    // in ToonLighting.cpp. Default is the value it has always had, so leaving both alone changes nothing.
-    AddWidget(path, "Limite do Gradiente do Plano", WIDGET_CVAR_SLIDER_FLOAT)
-        .CVar(CVAR_ENHANCEMENT("Graphics.ShadowMap.PlaneGradientLimit"))
-        .RaceDisable(false)
-        .PreFunc(hideUnlessShadowMap)
-        .Options(FloatSliderOptions()
-                     .Tooltip("Até onde vai a correção que faz cada amostra do filtro comparar contra o "
-                              "plano da própria superfície, em vez de contra um único ponto dela.\n\n"
-                              "Essa correção precisa de um teto: na silhueta de um objeto o cálculo dela "
-                              "não significa nada, e sem teto ela abriria um buraco na sombra. Mas quando o "
-                              "teto é atingido, a correção passa a comparar contra um plano mais achatado "
-                              "que a superfície real, e as amostras das bordas do filtro discordam do "
-                              "centro. Isso vira faixas de auto-sombreamento — acne fabricada justamente "
-                              "pelo termo que existe para evitá-la.\n\n"
-                              "Este controle existe para VARRER, não para ajustar. Ligue a Visão de "
-                              "Diagnóstico 6: o vermelho é exatamente onde este teto está sendo atingido. "
-                              "Suba e desça este valor olhando as visões 5 e 6 juntas. Se as faixas "
-                              "acompanharem o vermelho, o teto é a causa; se não acompanharem, a causa está "
-                              "no próprio mapa de profundidade.\n\n"
-                              "O padrão 3.2 equivale a cerca de 83° entre a superfície e a luz.")
-                     .Format("%.2f")
-                     .Min(0.1f)
-                     .Max(64.0f)
-                     .DefaultValue(5.50f)); // SHADOW_MAP_DEFAULT_PLANE_GRADIENT_LIMIT
-    AddWidget(path, "Espaçamento das Amostras", WIDGET_CVAR_SLIDER_FLOAT)
-        .CVar(CVAR_ENHANCEMENT("Graphics.ShadowMap.AnisoSpacing"))
-        .RaceDisable(false)
-        .PreFunc(hideUnlessShadowMap)
-        .Options(FloatSliderOptions()
-                     .Tooltip("Distância entre as amostras da fileira acima, em células do mapa.\n\n"
-                              "2,0 encosta uma na outra: cada amostra bilinear cobre um bloco de 2x2 "
-                              "células, então esse é o maior espaçamento que não deixa célula nenhuma sem "
-                              "ser lida. Mas não é o mais LISO — cada amostra pesa sua vizinhança como uma "
-                              "barraca, e barracas que apenas se encostam ainda afundam no meio do caminho, "
-                              "o que faz a fileira parecer um enfileirado de amostras separadas em vez de "
-                              "um borrão só.\n\n"
-                              "1,0 sobrepõe as barracas pela metade e some com esse afundamento.\n\n"
-                              "O que custa é ALCANCE: a fileira mede amostras × espaçamento células de "
-                              "qualquer jeito, então metade do espaçamento cobre metade do trecho com a "
-                              "mesma quantidade de amostras. Densidade e alcance se pagam um com o outro "
-                              "aqui — para ter os dois, aumente a quantidade de amostras.")
-                     .Format("%.2f")
-                     .Min(0.25f)
-                     .Max(2.0f)
-                     .DefaultValue(2.0f)); // SHADOW_MAP_DEFAULT_ANISO_SPACING
-    AddWidget(path, "Borda em Largura de Tela", WIDGET_CVAR_CHECKBOX)
-        .CVar(CVAR_ENHANCEMENT("Graphics.ShadowMap.EdgeScreenWidth"))
-        .RaceDisable(false)
-        .PreFunc(hideUnlessShadowMap)
-        .Options(CheckboxOptions().DefaultValue(false).Tooltip(
-            "Mede a rampa da borda dura em PIXELS DE TELA em vez de em cobertura. Só faz diferença com a "
-            "Nitidez da Borda acima de zero.\n\n"
-            "A rampa sempre teve largura fixa em cobertura, e cobertura não é o que o olho lê. Quantos "
-            "pixels de tela essa rampa ocupa depende de quão rápido a cobertura muda naquela superfície, e "
-            "isso varia muito: num chão de frente para a luz pode ser uma fração de pixel, o que serrilha e "
-            "formiga em movimento; numa parede rasante à luz o mesmo número se espalha por vários pixels e "
-            "vira borrão numa borda que era para ser dura. Um valor só não serve para os dois, porque não "
-            "está medindo a coisa que decide a aparência.\n\n"
-            "Com isto a rampa fica em cerca de três quartos de pixel em qualquer superfície: borda dura com "
-            "antisserrilhado suficiente para não formigar, igual no chão e na parede. Para um visual cel é "
-            "a diferença entre uma borda NÍTIDA e uma borda apenas estreita."));
-    AddWidget(path, "Piso da Atenuação por Incidência", WIDGET_CVAR_SLIDER_FLOAT)
-        .CVar(CVAR_ENHANCEMENT("Graphics.ShadowMap.MinHardnessScale"))
-        .RaceDisable(false)
-        .PreFunc(hideUnlessShadowMap)
-        .Options(FloatSliderOptions()
-                     .Tooltip("Quanto da Nitidez da Borda sobrevive nas superfícies de lado para a luz. 1 "
-                              "desliga a atenuação e deixa a borda igualmente dura em toda parte.\n\n"
-                              "A atenuação existe por um bom motivo: traçar uma linha dura sobre um "
-                              "contorno mal amostrado imprime os degraus dele como facetas. Ela é a defesa "
-                              "contra os dentes — e a defesa é justamente abrir mão da borda dura ali.\n\n"
-                              "Com as Amostras na Direção da Fuga ligadas esse contorno deixa de ser mal "
-                              "amostrado, e aí a atenuação passa a cobrar um preço por um problema que já "
-                              "foi resolvido de outro jeito. Suba para 1 DEPOIS de ligar as amostras, nunca "
-                              "antes: sem elas, 1 devolve os dentes em cheio.")
-                     .Format("%.2f")
-                     .Min(0.0f)
-                     .Max(1.0f)
-                     .DefaultValue(1.0f)); // SHADOW_MAP_MIN_EDGE_HARDNESS_SCALE
-    AddWidget(path, "Amostras na Direção da Fuga: %d", WIDGET_CVAR_SLIDER_INT)
-        .CVar(CVAR_ENHANCEMENT("Graphics.ShadowMap.MaxAnisoTaps"))
-        .RaceDisable(false)
-        .PreFunc(hideUnlessShadowMap)
-        .Options(IntSliderOptions()
-                     .Tooltip("Alarga o filtro APENAS na direção em que a superfície foge da luz. 1 desliga "
-                              "e deixa o filtro quadrado de sempre.\n\n"
-                              "Este é o único controle do painel que ataca os DENTES, e ele é de natureza "
-                              "diferente de todos os outros. As listras de acne são uma comparação errada, "
-                              "e um ajuste de profundidade resolve — é o que todos os outros fazem. Os "
-                              "dentes não são isso: numa superfície virando de lado para a luz, o mapa quase "
-                              "não tem resolução na direção em que ela se afasta, então a borda da sombra "
-                              "quantiza em degraus de uma célula dividida pelo seno do ângulo. A 83° isso "
-                              "são oito células por degrau; a 87°, vinte. Nenhum ajuste move esses degraus, "
-                              "porque nada está sendo mal comparado — a borda está sendo desenhada numa "
-                              "resolução que não existe.\n\n"
-                              "Um degrau desses não pode ser resolvido, mas pode ser MEDIADO: isso troca a "
-                              "escadinha dura por um degradê suave na mesma direção — a mesma informação "
-                              "faltando, apresentada como penumbra em vez de serrilha. E só nessa direção: "
-                              "na transversal o mapa amostra bem, e alargar ali só borraria uma borda que "
-                              "estava certa.\n\n"
-                              "Custa duas amostras por passo, contra quatro do filtro quadrado inteiro — "
-                              "então 4 aqui é o dobro de buscas, e só nos pixels cujo ângulo pede.\n\n"
-                              "Comece em 4. Se os dentes viraram um degradê macio, era aliasing de "
-                              "amostragem; se não mudaram nada, não era, e o problema está no mapa de "
-                              "profundidade.")
-                     .Min(1)
-                     // 16, because the reach has to be able to cover the step. That step is one map cell
-                     // over the sine of the angle to the light -- about fourteen cells on a wall at eighty
-                     // degrees -- and reach is samples times spacing, so eight at two cells apart is where
-                     // covering it starts being possible at all.
-                     .Max(16)
-                     .DefaultValue(12) // SHADOW_MAP_DEFAULT_MAX_ANISO_TAPS
-                     .ShowButtons(true)
-                     .Format("%d"));
-    AddWidget(path, "Estreitar o Filtro no Limite", WIDGET_CVAR_CHECKBOX)
-        .CVar(CVAR_ENHANCEMENT("Graphics.ShadowMap.PlaneSoftFalloff"))
-        .RaceDisable(false)
-        .PreFunc(hideUnlessShadowMap)
-        .Options(CheckboxOptions().DefaultValue(true).Tooltip(
-            "O conserto candidato para as faixas que o controle acima diagnostica. Deixe desligado para o "
-            "comportamento de sempre, ligue para comparar os dois lado a lado.\n\n"
-            "Cortar o gradiente no teto não torna a correção segura, só a torna errada de um jeito "
-            "específico, e o erro é o produto de dois fatores: o quanto o gradiente passou do teto e o "
-            "quanto o filtro se afasta do centro. Nada consegue corrigir o primeiro, então isto encolhe o "
-            "segundo exatamente na mesma proporção — o filtro é multiplicado por teto/gradiente — e o erro "
-            "fica preso no valor que tinha NO teto.\n\n"
-            "O ganho é ser contínuo: sem isso, uma face que passa do teto e a vizinha que não passa se "
-            "comportam de maneiras diferentes, e a fronteira entre as duas é a aresta entre elas. É assim "
-            "que um limiar desenha os triângulos da malha na tela.\n\n"
-            "O custo é largura de filtro nas superfícies muito inclinadas em relação à luz: conforme o "
-            "gradiente dispara, o filtro encolhe até virar praticamente uma amostra só, e a borda da sombra "
-            "fica mais dura ali. São superfícies que quase não recebem luz, que é o mesmo argumento pelo "
-            "qual a faixa de incidência já alivia nelas."));
 
     AddWidget(path, "Luz e Alcance", WIDGET_SEPARATOR_TEXT).PreFunc(hideUnlessShadowMap);
     AddWidget(path, "Altura Mínima do Sol", WIDGET_CVAR_SLIDER_FLOAT)
@@ -1045,19 +832,18 @@ AddWidget(path, "Depuração", WIDGET_SEPARATOR_TEXT).PreFunc(hideUnlessShadowMa
     // get, so without this a hierarchy that picked the wrong light is indistinguishable from one that
     // picked the right light and aimed it badly. Same live-name trick as the caster census below.
     // The CVar key still says ShowCascadeBounds because that is what the first view did and renaming it
-    // would silently reset everyone's saved value. The label does not, because the slider now selects
-    // between nine views and only one of them is about cascade bounds.
+    // would silently reset everyone's saved value. The label does not, because the slider selects between
+    // several views and only one of them is about cascade bounds.
     AddWidget(path, "Visão de Diagnóstico: %d", WIDGET_CVAR_SLIDER_INT)
         .CVar(CVAR_DEVELOPER_TOOLS("ShadowMap.ShowCascadeBounds"))
         .PreFunc(hideUnlessShadowMap)
         .Options(IntSliderOptions()
                      .Tooltip("0 = desligado.\n\n"
-                              "As visões 1 e 2 mostram o que o sistema de sombras PRODUZIU. As visões 3 a 8 "
-                              "mostram o que ele RECEBEU -- use estas quando a sombra sai com a FORMA errada "
-                              "(facetada, triangular, escadinha) em vez de no lugar errado. Todos os outros "
-                              "controles deste painel agem sobre o resultado da comparação, então conseguem "
-                              "deixar esse tipo de defeito menos visível e nunca conseguem dizer de onde ele "
-                              "veio.\n\n"
+                              "As visões 1 e 2 mostram o que o sistema de sombras PRODUZIU. As visões 3, 4, "
+                              "5 e 7 mostram o que ele RECEBEU -- use estas quando a sombra sai com a FORMA "
+                              "errada (facetada, triangular, escadinha) em vez de no lugar errado. Um "
+                              "ajuste age sobre o RESULTADO da comparação, então consegue deixar esse tipo "
+                              "de defeito menos visível e nunca consegue dizer de onde ele veio.\n\n"
                               "1 = pinta tudo que está FORA da área de uma faixa como totalmente sombreado. "
                               "Uma superfície fora dela é silenciosamente considerada iluminada, então uma "
                               "sombra que para no limite da faixa fica idêntica a uma que nunca foi "
@@ -1065,9 +851,9 @@ AddWidget(path, "Depuração", WIDGET_SEPARATOR_TEXT).PreFunc(hideUnlessShadowMa
                               "2 = colore as duas camadas de projeção em vez de sombrear com elas. VERDE "
                               "onde o cenário bloqueia a luz, VERMELHO onde um personagem bloqueia. Use para "
                               "descobrir se algo está sendo capturado e em qual camada.\n\n"
-                              "3 = a normal da superfície sobre a qual todo o ajuste de profundidade é "
-                              "construído, como cor. Manchas chapadas de uma cor só, numa superfície que "
-                              "deveria variar suavemente, são os próprios triângulos da malha aparecendo.\n\n"
+                              "3 = a normal da superfície, como cor. Manchas chapadas de uma cor só, numa "
+                              "superfície que deveria variar suavemente, são os próprios triângulos da "
+                              "malha aparecendo.\n\n"
                               "4 = de onde veio essa normal. VERDE = a normal de vértice do desenho, "
                               "escurecendo conforme a normal interpolada encurta. VERMELHO = o desenho não "
                               "tem normal, então é usada uma normal de face recuperada das derivadas de "
@@ -1076,25 +862,16 @@ AddWidget(path, "Depuração", WIDGET_SEPARATOR_TEXT).PreFunc(hideUnlessShadowMa
                               "Compare com a imagem sombreada: facetado aqui também significa que a "
                               "comparação ou o mapa desenhou o defeito; liso aqui significa que a definição "
                               "de borda desenhou.\n\n"
-                              "6 = o gradiente do plano da superfície. VERDE cresce com o tamanho dele, "
-                              "VERMELHO marca onde o limite interno foi atingido e a correção deixou de ser "
-                              "exata.\n\n"
                               "7 = em qual faixa cada pixel caiu: vermelho, verde e azul, da mais próxima "
                               "para a mais distante. Use para incluir ou descartar a escolha de faixa.\n\n"
-                              "8 = a definição de borda depois da atenuação por incidência. VERMELHO dura, "
-                              "VERDE macia. A atenuação lê a normal, então uma normal por triângulo vira "
-                              "uma borda por triângulo aqui.\n\n"
-                              "9 = o alcance real do filtro, em células do mapa. VERDE cresce com ele, "
-                              "VERMELHO significa ZERO. Com alcance zero as dezesseis amostras colapsam "
-                              "numa só, que suaviza DENTRO de uma célula e não faz nada contra a escadinha "
-                              "ENTRE células — a grade do mapa chega inteira à tela, e uma escadinha vista "
-                              "em diagonal vira uma fileira de dentes. Use quando um controle que deveria "
-                              "importar não mudou nada.\n\n"
+                              "(6, 8 e 9 não existem mais: mediam mecanismos que foram removidos. A "
+                              "numeração das outras foi mantida de propósito, para 5 continuar significando "
+                              "o que significava.)\n\n"
                               "A névoa é desligada em todas as visões, para a distância não lavar as "
                               "cores.\n\n"
                               "Qualquer valor diferente de zero também preenche a lista abaixo.")
                      .Min(0)
-                     .Max(9) // SHADOW_MAP_MAX_DEBUG_VIEW, written out per the note at the top of this panel
+                     .Max(7) // SHADOW_MAP_MAX_DEBUG_VIEW, written out per the note at the top of this panel
                      .DefaultValue(0)
                      .ShowButtons(true)
                      .Format("%d"));

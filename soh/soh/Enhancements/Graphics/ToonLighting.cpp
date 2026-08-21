@@ -651,6 +651,21 @@ static void OnToonFrameUpdate() {
             CVarGetFloat(CVAR_ENHANCEMENT("Graphics.ShadowMap.Split1"), SHADOW_MAP_DEFAULT_SPLIT_1),
             CVarGetFloat(CVAR_ENHANCEMENT("Graphics.ShadowMap.Split2"), SHADOW_MAP_DEFAULT_SPLIT_2)
         };
+        // Per-cascade update rate, as a divisor of the frame rate: 1 rebuilds every frame, 2 every other.
+        // At 60 fps the defaults run the near and mid cascades at 60 Hz and the far one at 30 Hz -- the far
+        // one is the cheapest to halve, since it covers the most ground per texel and so changes the least
+        // between frames, while sweeping in the most casters to draw.
+        int cascadeDivisors[SHADOW_MAP_MAX_CASCADES] = {
+            CVarGetInteger(CVAR_ENHANCEMENT("Graphics.ShadowMap.UpdateDivisor0"),
+                           SHADOW_MAP_DEFAULT_CASCADE_DIVISOR_0),
+            CVarGetInteger(CVAR_ENHANCEMENT("Graphics.ShadowMap.UpdateDivisor1"),
+                           SHADOW_MAP_DEFAULT_CASCADE_DIVISOR_1),
+            CVarGetInteger(CVAR_ENHANCEMENT("Graphics.ShadowMap.UpdateDivisor2"),
+                           SHADOW_MAP_DEFAULT_CASCADE_DIVISOR_2)
+        };
+        for (int i = 0; i < SHADOW_MAP_MAX_CASCADES; i++) {
+            cascadeDivisors[i] = CLAMP(cascadeDivisors[i], 1, SHADOW_MAP_MAX_CASCADE_DIVISOR);
+        }
         // One sun (or moon) for the whole frame, straight from the environment directionals. This used to
         // take the last actor key emitted, which looked right until Navi walked on screen: Navi IS a light,
         // so her key became "the frame's light" and every shadow in the scene swung to point away from her.
@@ -757,7 +772,8 @@ static void OnToonFrameUpdate() {
             CVarGetInteger(CVAR_ENHANCEMENT("Graphics.ShadowMap.EdgeScreenWidth"),
                            SHADOW_MAP_DEFAULT_EDGE_SCREEN_WIDTH) != 0,
             CVarGetFloat(CVAR_ENHANCEMENT("Graphics.ShadowMap.AnisoSpacing"),
-                         SHADOW_MAP_DEFAULT_ANISO_SPACING));
+                         SHADOW_MAP_DEFAULT_ANISO_SPACING),
+            cascadeDivisors);
     }
 
     Fast::GfxRenderingAPI* rapi = GetRenderingApi();

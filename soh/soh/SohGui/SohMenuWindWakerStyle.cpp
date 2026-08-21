@@ -554,6 +554,9 @@ void SohMenu::AddMenuWindWakerStyle() {
             CVarClear(CVAR_ENHANCEMENT("Graphics.ShadowMap.MinHardnessScale"));
             CVarClear(CVAR_ENHANCEMENT("Graphics.ShadowMap.MinElevation"));
             CVarClear(CVAR_ENHANCEMENT("Graphics.ShadowMap.CasterDrawRadius"));
+            CVarClear(CVAR_ENHANCEMENT("Graphics.ShadowMap.UpdateDivisor0"));
+            CVarClear(CVAR_ENHANCEMENT("Graphics.ShadowMap.UpdateDivisor1"));
+            CVarClear(CVAR_ENHANCEMENT("Graphics.ShadowMap.UpdateDivisor2"));
             Ship::Context::GetInstance()->GetWindow()->GetGui()->SaveConsoleVariablesNextFrame();
         })
         .Options(ButtonOptions().Tooltip("Devolve todas as opções do Shadow Map abaixo aos valores padrão."));
@@ -974,6 +977,68 @@ void SohMenu::AddMenuWindWakerStyle() {
                      .Min(400.0f)
                      .Max(4000.0f)
                      .DefaultValue(1500.0f)); // SHADOW_MAP_DEFAULT_CASTER_DRAW_RADIUS
+
+    AddWidget(path, "Desempenho", WIDGET_SEPARATOR_TEXT).PreFunc(hideUnlessShadowMap);
+    // Shared tooltip tail: the trade-off is identical for all three, only the cascade differs. A macro
+    // rather than a variable because Tooltip() keeps the raw pointer it is handed -- a std::string built
+    // per widget would be freed before the menu ever draws it, while adjacent literals are joined by the
+    // compiler and live in static storage.
+#define SHADOW_UPDATE_RATE_TOOLTIP_TAIL                                                                      \
+    "\n\nPular a reconstrução CONGELA a faixa inteira, matriz inclusive. O mapa guardado foi desenhado com " \
+    "a matriz daquele quadro, e lê-lo com outra projetaria a sombra a partir de onde a luz estava — uma "    \
+    "sombra atrasada vira uma sombra no lugar errado, que é pior do que o custo economizado. Por isso o "    \
+    "preço aqui é atraso, não deslocamento: a sombra desta faixa reage um quadro depois, e isso aparece "    \
+    "principalmente ao girar a câmera rápido."
+    AddWidget(path, "Atualização da Faixa Próxima: 1 a cada %d quadros", WIDGET_CVAR_SLIDER_INT)
+        .CVar(CVAR_ENHANCEMENT("Graphics.ShadowMap.UpdateDivisor0"))
+        .RaceDisable(false)
+        .PreFunc(hideUnlessShadowMap)
+        .Options(IntSliderOptions()
+                     .Tooltip("Com que frequência a faixa mais próxima é redesenhada. 1 é todo quadro "
+                              "(60 Hz a 60 fps), 2 é um sim um não (30 Hz).\n\n"
+                              "Deixe em 1. Esta é a faixa que segue você de perto e é onde o olho está; é "
+                              "também a mais barata, porque cobre pouco chão e pega poucos objetos. "
+                              "Economizar aqui rende quase nada e o atraso é visto "
+                              "imediatamente." SHADOW_UPDATE_RATE_TOOLTIP_TAIL)
+                     .Min(1)
+                     .Max(4) // SHADOW_MAP_MAX_CASCADE_DIVISOR
+                     .DefaultValue(1) // SHADOW_MAP_DEFAULT_CASCADE_DIVISOR_0
+                     .ShowButtons(true)
+                     .Format("%d"));
+    AddWidget(path, "Atualização da Faixa Média: 1 a cada %d quadros", WIDGET_CVAR_SLIDER_INT)
+        .CVar(CVAR_ENHANCEMENT("Graphics.ShadowMap.UpdateDivisor1"))
+        .RaceDisable(false)
+        .PreFunc(hideUnlessShadowMap)
+        .Options(IntSliderOptions()
+                     .Tooltip("Com que frequência a faixa média é redesenhada. 1 é todo quadro (60 Hz a 60 "
+                              "fps), 2 é um sim um não (30 Hz).\n\n"
+                              "É o meio-termo dos dois lados: cobre bastante cena, mas ainda perto o "
+                              "suficiente para o atraso ser notado em objetos que se movem. Suba para 2 só "
+                              "depois de já ter subido a faixa distante e ainda precisar de "
+                              "FPS." SHADOW_UPDATE_RATE_TOOLTIP_TAIL)
+                     .Min(1)
+                     .Max(4) // SHADOW_MAP_MAX_CASCADE_DIVISOR
+                     .DefaultValue(1) // SHADOW_MAP_DEFAULT_CASCADE_DIVISOR_1
+                     .ShowButtons(true)
+                     .Format("%d"));
+    AddWidget(path, "Atualização da Faixa Distante: 1 a cada %d quadros", WIDGET_CVAR_SLIDER_INT)
+        .CVar(CVAR_ENHANCEMENT("Graphics.ShadowMap.UpdateDivisor2"))
+        .RaceDisable(false)
+        .PreFunc(hideUnlessShadowMap)
+        .Options(IntSliderOptions()
+                     .Tooltip("Com que frequência a faixa distante é redesenhada. O padrão é 2 — 30 Hz a "
+                              "60 fps, enquanto as outras duas ficam em 60 Hz.\n\n"
+                              "É a faixa que vale reduzir, e por dois motivos ao mesmo tempo: ela cobre a "
+                              "maior área com o mesmo número de células, então o conteúdo dela é o que "
+                              "menos muda de um quadro para o outro (uma árvore a três mil unidades anda "
+                              "uma fração de célula), e é a mais cara de preencher, porque a área grande "
+                              "varre o maior número de objetos." SHADOW_UPDATE_RATE_TOOLTIP_TAIL)
+                     .Min(1)
+                     .Max(4) // SHADOW_MAP_MAX_CASCADE_DIVISOR
+                     .DefaultValue(2) // SHADOW_MAP_DEFAULT_CASCADE_DIVISOR_2
+                     .ShowButtons(true)
+                     .Format("%d"));
+#undef SHADOW_UPDATE_RATE_TOOLTIP_TAIL
 
 AddWidget(path, "Depuração", WIDGET_SEPARATOR_TEXT).PreFunc(hideUnlessShadowMap);
     // Live readout of which light won the frame. A lot of policy decides the single direction the cascades

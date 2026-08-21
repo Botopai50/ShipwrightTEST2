@@ -730,11 +730,7 @@ static void OnToonFrameUpdate() {
             // coverage, the cascade selection. That second group is the one to reach for when a shadow is
             // the wrong SHAPE rather than in the wrong place. The full list, with how to read them against
             // each other, is in the shader's PSMain.
-            (f32)CVarGetInteger(CVAR_DEVELOPER_TOOLS("ShadowMap.ShowCascadeBounds"), 0),
-            CVarGetFloat(CVAR_ENHANCEMENT("Graphics.ShadowMap.EdgeHardness"), SHADOW_MAP_DEFAULT_EDGE_HARDNESS),
-            CVarGetFloat(CVAR_ENHANCEMENT("Graphics.ShadowMap.EdgeHardnessFar"),
-                         SHADOW_MAP_DEFAULT_EDGE_HARDNESS_FAR),
-            cascadeDivisors);
+            (f32)CVarGetInteger(CVAR_DEVELOPER_TOOLS("ShadowMap.ShowCascadeBounds"), 0), cascadeDivisors);
     }
 
     Fast::GfxRenderingAPI* rapi = GetRenderingApi();

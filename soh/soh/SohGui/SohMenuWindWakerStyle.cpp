@@ -539,8 +539,6 @@ void SohMenu::AddMenuWindWakerStyle() {
             CVarClear(CVAR_ENHANCEMENT("Graphics.ShadowMap.Split0"));
             CVarClear(CVAR_ENHANCEMENT("Graphics.ShadowMap.Split1"));
             CVarClear(CVAR_ENHANCEMENT("Graphics.ShadowMap.Split2"));
-            CVarClear(CVAR_ENHANCEMENT("Graphics.ShadowMap.EdgeHardness"));
-            CVarClear(CVAR_ENHANCEMENT("Graphics.ShadowMap.EdgeHardnessFar"));
             CVarClear(CVAR_DEVELOPER_TOOLS("ShadowMap.ViewSlice"));
             CVarClear(CVAR_ENHANCEMENT("Graphics.ShadowMap.MinElevation"));
             CVarClear(CVAR_ENHANCEMENT("Graphics.ShadowMap.CasterDrawRadius"));
@@ -698,37 +696,6 @@ void SohMenu::AddMenuWindWakerStyle() {
                      .Max(12000.0f)
                      .DefaultValue(6000.0f)); // SHADOW_MAP_DEFAULT_SPLIT_2
 
-    AddWidget(path, "Bordas", WIDGET_SEPARATOR_TEXT).PreFunc(hideUnlessShadowMap);
-    AddWidget(path, "Nitidez (Perto)", WIDGET_CVAR_SLIDER_FLOAT)
-        .CVar(CVAR_ENHANCEMENT("Graphics.ShadowMap.EdgeHardness"))
-        .RaceDisable(false)
-        .PreFunc(hideUnlessShadowMap)
-        .Options(FloatSliderOptions()
-                     .Tooltip("Quão dura é a borda da sombra perto da câmera.\n\n"
-                              "O filtro devolve COBERTURA — o quanto da amostra está ocluída —, que é um "
-                              "degradê. Este controle remapeia esse degradê através de uma rampa estreita "
-                              "centrada na metade, transformando-o numa borda. Isso preserva o "
-                              "posicionamento em fração de célula que a amostragem bilinear deu, que é o "
-                              "que impede o contorno de virar uma escada alinhada à grade do mapa.\n\n"
-                              "0 deixa a cobertura crua; 1 deixa a borda quase dura.")
-                     .Format("%.2f")
-                     .Min(0.0f)
-                     .Max(1.0f)
-                     .DefaultValue(0.6f)); // SHADOW_MAP_DEFAULT_EDGE_HARDNESS
-    AddWidget(path, "Nitidez (Longe)", WIDGET_CVAR_SLIDER_FLOAT)
-        .CVar(CVAR_ENHANCEMENT("Graphics.ShadowMap.EdgeHardnessFar"))
-        .RaceDisable(false)
-        .PreFunc(hideUnlessShadowMap)
-        .Options(FloatSliderOptions()
-                     .Tooltip("O mesmo controle, só que para a faixa mais distante. O valor é interpolado "
-                              "entre os dois ao longo das faixas.\n\n"
-                              "As células distantes são bem maiores, então o mesmo degradê de cobertura "
-                              "cobre muito mais chão lá longe. Ter os dois separados permite endurecer a "
-                              "borda distante sem endurecer a de perto, ou o contrário.")
-                     .Format("%.2f")
-                     .Min(0.0f)
-                     .Max(1.0f)
-                     .DefaultValue(0.6f)); // SHADOW_MAP_DEFAULT_EDGE_HARDNESS_FAR
 
     AddWidget(path, "Luz e Alcance", WIDGET_SEPARATOR_TEXT).PreFunc(hideUnlessShadowMap);
     AddWidget(path, "Altura Mínima do Sol", WIDGET_CVAR_SLIDER_FLOAT)

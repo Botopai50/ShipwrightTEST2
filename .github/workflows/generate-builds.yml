@@ -133,6 +133,74 @@ jobs:
         key: ${{ steps.restore-cache-deps.outputs.cache-primary-key }}
         path: deps
 
+  # SOH [fork] Compile the Direct3D shader template with the REAL fxc before anyone runs the build.
+  #
+  # Nothing in the ordinary build looks at that file. The renderer expands and compiles it at run time, so a
+  # mistake there is not a build error -- it is a shader compile failure inside a frame on a player's
+  # machine, which takes the process down on startup. Two such failures shipped from this branch before this
+  # existed.
+  #
+  # Split across two machines because the halves want different tools. Expanding needs a C++ compiler and
+  # prism, which are easy on Linux; compiling wants fxc.exe, which is only real on Windows. The local script
+  # does both in one pass against Wine's d3dcompiler_47 -- and Wine is exactly what let the second failure
+  # through, having accepted code that fxc rejects outright. This job is the authoritative one.
+  #
+  # Runs beside build-windows rather than gating it: a bad shader still produces a working binary (the
+  # failure is at run time), so blocking the build would cost the artifact without buying anything. This
+  # reports in about two minutes, long before that build finishes.
+  expand-shaders:
+    needs: generate-soh-otr
+    runs-on: ubuntu-22.04
+    steps:
+    - name: Git Checkout
+      uses: actions/checkout@v6
+      with:
+        submodules: true
+    - name: Build prism
+      # Tag read out of the CMake dependency rather than pinned again here, so this cannot drift from the
+      # version the renderer itself expands with -- which is the one thing that would make this job lie.
+      run: |
+        PRISM_TAG=$(grep -A3 'prism-processor.git' libultraship/cmake/dependencies/common.cmake \
+                    | grep GIT_TAG | awk '{print $2}')
+        echo "prism tag: $PRISM_TAG"
+        git clone --quiet https://github.com/KiritoDv/prism-processor.git prism-src
+        git -C prism-src checkout --quiet "$PRISM_TAG"
+        cmake -S prism-src -B prism-build -DCMAKE_BUILD_TYPE=Release
+        cmake --build prism-build --target prism --parallel
+    - name: Expand every shader variant
+      run: |
+        export PRISM_DIR="$PWD/prism-src"
+        export PRISM_LIB="$(find "$PWD/prism-build" -name 'libprism.a' -print -quit)"
+        test -n "$PRISM_LIB" || { echo "libprism.a not found" >&2; exit 1; }
+        libultraship/tools/shader-validate/validate.sh libultraship --expand-only "$PWD/shader-stage"
+    - name: Upload the expansions
+      uses: actions/upload-artifact@v7
+      with:
+        name: shader-stage
+        path: shader-stage
+
+  validate-shaders:
+    needs: expand-shaders
+    runs-on: windows-latest
+    steps:
+    - name: Git Checkout
+      uses: actions/checkout@v6
+      with:
+        submodules: true
+    - name: Configure Developer Command Prompt
+      # Puts the Windows SDK on PATH, which is where fxc.exe lives. If it is somehow absent the script
+      # exits non-zero with a plain message rather than falling back to something weaker -- a validator
+      # that quietly downgrades its compiler is worse than none.
+      uses: ilammy/msvc-dev-cmd@v1
+    - name: Download the expansions
+      uses: actions/download-artifact@v7
+      with:
+        name: shader-stage
+        path: shader-stage
+    - name: Compile every variant with fxc
+      shell: bash
+      run: libultraship/tools/shader-validate/validate.sh --compile-only "$PWD/shader-stage"
+
   build-windows:
     needs: generate-soh-otr
     runs-on: windows-latest

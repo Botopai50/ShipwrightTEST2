@@ -48,6 +48,7 @@ class SohMenu : public Ship::Menu {
     void AddMenuNetwork();
     void AddMenuWindWakerStyle();
     void AddMenuShadowQuality();
+    void AddMenuShadowAcne();
     static void UpdateLanguageMap(std::map<int32_t, const char*>& languageMap);
 
   private:

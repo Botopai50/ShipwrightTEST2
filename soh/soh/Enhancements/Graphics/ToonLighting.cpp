@@ -744,6 +744,30 @@ static void OnToonFrameUpdate() {
             quality.screenDepthTolerance =
                 CVarGetFloat(CVAR_ENHANCEMENT("Graphics.ShadowQuality.ScreenDepthTolerance"),
                              SHADOW_MAP_DEFAULT_SCREEN_DEPTH_TOLERANCE);
+            // SOH [Enhancement] Shadow acne (see fast/shadow_map.h and the "Correção de Acne" menu tab).
+            // Defaults come from the header rather than being written twice, so the menu's "restore
+            // defaults" and the renderer's fallback cannot drift apart.
+            const ShadowMapAcne acneDefaults = ShadowMapQualityDefaults().acne;
+            quality.acne.enabled =
+                CVarGetInteger(CVAR_ENHANCEMENT("Graphics.ShadowAcne.Enabled"), acneDefaults.enabled);
+            quality.acne.normalOffset = CVarGetInteger(CVAR_ENHANCEMENT("Graphics.ShadowAcne.NormalOffset"),
+                                                       acneDefaults.normalOffset);
+            quality.acne.normalTexels = CVarGetFloat(CVAR_ENHANCEMENT("Graphics.ShadowAcne.NormalTexels"),
+                                                     acneDefaults.normalTexels);
+            quality.acne.lightOffset = CVarGetInteger(CVAR_ENHANCEMENT("Graphics.ShadowAcne.LightOffset"),
+                                                      acneDefaults.lightOffset);
+            quality.acne.lightWorld =
+                CVarGetFloat(CVAR_ENHANCEMENT("Graphics.ShadowAcne.LightWorld"), acneDefaults.lightWorld);
+            quality.acne.depthBias =
+                CVarGetInteger(CVAR_ENHANCEMENT("Graphics.ShadowAcne.DepthBias"), acneDefaults.depthBias);
+            quality.acne.depthWorld =
+                CVarGetFloat(CVAR_ENHANCEMENT("Graphics.ShadowAcne.DepthWorld"), acneDefaults.depthWorld);
+            quality.acne.slopeScaled = CVarGetInteger(CVAR_ENHANCEMENT("Graphics.ShadowAcne.SlopeScaled"),
+                                                      acneDefaults.slopeScaled);
+            quality.acne.slopeMax =
+                CVarGetFloat(CVAR_ENHANCEMENT("Graphics.ShadowAcne.SlopeMax"), acneDefaults.slopeMax);
+            quality.acne.onReceiver = CVarGetInteger(CVAR_ENHANCEMENT("Graphics.ShadowAcne.OnReceiver"),
+                                                     acneDefaults.onReceiver);
             interp->SetShadowMapQuality(quality);
         }
         interp->SetShadowMapParams(

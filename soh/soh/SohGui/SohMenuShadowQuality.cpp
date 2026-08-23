@@ -344,34 +344,26 @@ void SohMenu::AddMenuShadowQuality() {
                         !CVarGetInteger(CVAR_ENHANCEMENT("Graphics.ShadowQuality.ScreenSpace"), 0);
     };
 
-    // Not implemented, and the tab says so plainly rather than offering a switch that does nothing. The
-    // blocker is structural and is written out in fast/shadow_map.h: the mask needs a complete scene depth
-    // buffer and this renderer never has one before its receivers shade.
-    AddWidget(path, "NÃO IMPLEMENTADO -- precisa de um passe de profundidade prévio.", WIDGET_TEXT)
+    AddWidget(path, "Requer que a geometria da sala esteja capturada como caster do mundo.", WIDGET_TEXT)
         .PreFunc(hideUnlessShadowMap);
-    AddWidget(path, "A ordem do quadro é: atores desenham, o passe de sombra roda, e só então a sala", WIDGET_TEXT)
+    AddWidget(path, "Superfícies fora dessa captura -- transparentes, água, partículas -- caem", WIDGET_TEXT)
         .PreFunc(hideUnlessShadowMap);
-    AddWidget(path, "desenha e amostra as cascatas. No único momento em que a máscara poderia ser", WIDGET_TEXT)
-        .PreFunc(hideUnlessShadowMap);
-    AddWidget(path, "construída, o buffer de profundidade tem os personagens e não a sala -- e a sala", WIDGET_TEXT)
-        .PreFunc(hideUnlessShadowMap);
-    AddWidget(path, "é justamente onde está o serrilhado que esta técnica resolveria.", WIDGET_TEXT)
-        .PreFunc(hideUnlessShadowMap);
-    AddWidget(path, "Os controles ficam aqui para quando o passe prévio existir. Hoje não fazem nada.",
-              WIDGET_TEXT)
+    AddWidget(path, "automaticamente de volta para a amostragem normal das cascatas.", WIDGET_TEXT)
         .PreFunc(hideUnlessShadowMap);
 
-    AddWidget(path, "Controles (inativos)", WIDGET_SEPARATOR_TEXT).PreFunc(hideUnlessShadowMap);
     AddWidget(path, "Ativar Máscara em Espaço de Tela", WIDGET_CVAR_CHECKBOX)
         .CVar(CVAR_ENHANCEMENT("Graphics.ShadowQuality.ScreenSpace"))
         .RaceDisable(false)
         .PreFunc(hideUnlessShadowMap)
         .Options(CheckboxOptions().DefaultValue(false).Tooltip(
-            "INATIVO -- veja a explicação acima.\n\n"
-            "Resolveria a sombra do quadro inteiro numa máscara e borraria ESSA máscara. Seria a única das "
-            "cinco cuja penumbra é medida em PIXELS DE TELA, que é a unidade em que o serrilhado é "
-            "realmente percebido: um borrão de 2 pixels teria 2 pixels em qualquer distância e em qualquer "
-            "cascata, por mais grosso que fosse o texel dela."));
+            "Resolve a sombra do quadro inteiro numa máscara e borra ESSA máscara.\n\n"
+            "É a única das cinco cuja penumbra é medida em PIXELS DE TELA, que é a unidade em que o "
+            "serrilhado é realmente percebido: um borrão de 2 pixels tem 2 pixels em qualquer distância e "
+            "em qualquer cascata, por mais grosso que seja o texel dela. Também reduz o receiver a uma "
+            "única leitura.\n\n"
+            "Funciona desenhando a geometria da sala uma vez com a matriz da câmera -- reaproveitando os "
+            "mesmos buffers já enviados para as cascatas, então não há captura nova nem passe extra pelo "
+            "interpretador."));
     AddWidget(path, "Raio do Borrão: %.1f px", WIDGET_CVAR_SLIDER_FLOAT)
         .CVar(CVAR_ENHANCEMENT("Graphics.ShadowQuality.ScreenBlur"))
         .RaceDisable(false)

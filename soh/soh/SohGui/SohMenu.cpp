@@ -91,6 +91,7 @@ void SohMenu::AddMenuElements() {
     AddMenuNetwork();
     AddMenuDevTools();
     AddMenuWindWakerStyle();
+    AddMenuShadowQuality();
 
     if (CVarGetInteger(CVAR_SETTING("Menu.SidebarSearch"), 0)) {
         InsertSidebarSearch();

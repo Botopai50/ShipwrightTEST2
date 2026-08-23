@@ -709,6 +709,43 @@ static void OnToonFrameUpdate() {
         sParams.shadowMapLightDir[0] = lightDir[0];
         sParams.shadowMapLightDir[1] = lightDir[1];
         sParams.shadowMapLightDir[2] = lightDir[2];
+        // SOH [Enhancement] Edge quality (see fast/shadow_map.h and the "Qualidade das Sombras" menu tab).
+        // Five independent techniques that shape the shadow's EDGE; everything else in this block decides
+        // where the shadow falls. Pushed before the params below so the split ladder -- which is one of the
+        // five and is fitted on the CPU -- is in effect for the splits that arrive with them.
+        {
+            ShadowMapQuality quality = ShadowMapQualityDefaults();
+            quality.analyticEdge = CVarGetInteger(CVAR_ENHANCEMENT("Graphics.ShadowQuality.AnalyticEdge"), 0);
+            quality.analyticEdgeWidth = CVarGetFloat(CVAR_ENHANCEMENT("Graphics.ShadowQuality.AnalyticEdgeWidth"),
+                                                     SHADOW_MAP_DEFAULT_ANALYTIC_EDGE_WIDTH);
+            quality.jitter = CVarGetInteger(CVAR_ENHANCEMENT("Graphics.ShadowQuality.Jitter"), 0);
+            quality.jitterTaps = CVarGetInteger(CVAR_ENHANCEMENT("Graphics.ShadowQuality.JitterTaps"),
+                                                SHADOW_MAP_DEFAULT_JITTER_TAPS);
+            quality.jitterRadius = CVarGetFloat(CVAR_ENHANCEMENT("Graphics.ShadowQuality.JitterRadius"),
+                                                SHADOW_MAP_DEFAULT_JITTER_RADIUS);
+            quality.jitterTemporal = CVarGetInteger(CVAR_ENHANCEMENT("Graphics.ShadowQuality.JitterTemporal"), 0);
+            quality.filterMode = CVarGetInteger(CVAR_ENHANCEMENT("Graphics.ShadowQuality.FilterMode"),
+                                                SHADOW_MAP_DEFAULT_FILTER_MODE);
+            quality.esmExponent = CVarGetFloat(CVAR_ENHANCEMENT("Graphics.ShadowQuality.EsmExponent"),
+                                               SHADOW_MAP_DEFAULT_ESM_EXPONENT);
+            quality.blurRadius = CVarGetFloat(CVAR_ENHANCEMENT("Graphics.ShadowQuality.BlurRadius"),
+                                              SHADOW_MAP_DEFAULT_BLUR_RADIUS);
+            quality.bleedReduction = CVarGetFloat(CVAR_ENHANCEMENT("Graphics.ShadowQuality.BleedReduction"),
+                                                  SHADOW_MAP_DEFAULT_BLEED_REDUCTION);
+            quality.ladderMode = CVarGetInteger(CVAR_ENHANCEMENT("Graphics.ShadowQuality.LadderMode"),
+                                                SHADOW_MAP_DEFAULT_LADDER_MODE);
+            quality.ladderLambda = CVarGetFloat(CVAR_ENHANCEMENT("Graphics.ShadowQuality.LadderLambda"),
+                                                SHADOW_MAP_DEFAULT_LADDER_LAMBDA);
+            quality.ladderNear = CVarGetFloat(CVAR_ENHANCEMENT("Graphics.ShadowQuality.LadderNear"),
+                                              SHADOW_MAP_DEFAULT_LADDER_NEAR);
+            quality.screenSpace = CVarGetInteger(CVAR_ENHANCEMENT("Graphics.ShadowQuality.ScreenSpace"), 0);
+            quality.screenBlur = CVarGetFloat(CVAR_ENHANCEMENT("Graphics.ShadowQuality.ScreenBlur"),
+                                              SHADOW_MAP_DEFAULT_SCREEN_BLUR);
+            quality.screenDepthTolerance =
+                CVarGetFloat(CVAR_ENHANCEMENT("Graphics.ShadowQuality.ScreenDepthTolerance"),
+                             SHADOW_MAP_DEFAULT_SCREEN_DEPTH_TOLERANCE);
+            interp->SetShadowMapQuality(quality);
+        }
         interp->SetShadowMapParams(
             shadowMapOn,
             CVarGetInteger(CVAR_ENHANCEMENT("Graphics.ShadowMap.CascadeCount"), SHADOW_MAP_DEFAULT_CASCADES),

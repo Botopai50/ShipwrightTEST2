@@ -35,6 +35,11 @@ int ToonLighting_ShadowsEnabled(void);         // stencil-volume (Actor Shadows)
                                                // callers that mean "any system that needs casters marked"
                                                // must also test ToonLighting_ShadowMapEnabled()
 int ToonLighting_ShadowMapEnabled(void);       // shadow-map mode on (gates the depth-pass capture)
+// Whether shadow-map mode also reorders the frame so the actor loop draws before the room (z_play.c). That
+// reorder is what takes a frame of lag off a moving character's shadow, and it is the only thing this mode
+// changes about draw ORDER -- so it is also the switch to try when something composites wrongly with
+// shadow maps on and correctly with them off.
+int ToonLighting_ShadowMapCasterFirst(void);
 // Radius around the camera within which actors are drawn purely so they can cast (0 = off). Read per
 // actor by the draw-culling test, so it comes from the frame snapshot rather than a CVar lookup.
 float ToonLighting_ShadowMapCasterDrawRadius(void);

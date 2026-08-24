@@ -732,6 +732,22 @@ void SohMenu::AddMenuWindWakerStyle() {
                      .Max(4000.0f)
                      .DefaultValue(1500.0f)); // SHADOW_MAP_DEFAULT_CASTER_DRAW_RADIUS
 
+    AddWidget(path, "Desenhar Atores Antes da Sala", WIDGET_CVAR_CHECKBOX)
+        .CVar(CVAR_ENHANCEMENT("Graphics.ShadowMap.CasterFirst"))
+        .RaceDisable(false)
+        .PreFunc(hideUnlessShadowMap)
+        .Options(CheckboxOptions().DefaultValue(true).Tooltip(
+            "Inverte a ordem do quadro: o laço de atores desenha ANTES da sala.\n\n"
+            "Serve para tirar um quadro de atraso da sombra de quem está em movimento. Sem isso, a sombra "
+            "de um personagem correndo fica sempre onde ele estava um quadro atrás -- invisível no cenário, "
+            "que não anda, e visível nele.\n\n"
+            "O custo é que atores e sala passam a ser enviados em ordem trocada, e ordem de envio é o que "
+            "decide a sobreposição de geometria translúcida. É a ÚNICA coisa que o modo Shadow Map muda na "
+            "ordem de desenho.\n\n"
+            "Então: se algo aparecer empilhado errado só com Shadow Map ligado -- um efeito atravessando o "
+            "chão, uma fada aparecendo por baixo do piso -- desligue isto primeiro. Se corrigir, é a "
+            "reordenação; se não, o problema está em outro lugar."));
+
     AddWidget(path, "Desempenho", WIDGET_SEPARATOR_TEXT).PreFunc(hideUnlessShadowMap);
     // Shared tooltip tail: the trade-off is identical for all three, only the cascade differs. A macro
     // rather than a variable because Tooltip() keeps the raw pointer it is handed -- a std::string built

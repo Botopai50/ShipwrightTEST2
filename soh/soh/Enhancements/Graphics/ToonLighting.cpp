@@ -83,6 +83,12 @@ static struct {
     // furthest active cascade, since beyond that there is no depth map left to record it in.
     f32 shadowMapReach = SHADOW_MAP_DEFAULT_SPLIT_2;
     f32 shadowMapCasterDrawRadius = 0.0f;
+    // SOH [Enhancement] Whether shadow-map mode reorders the frame so the actor loop draws BEFORE the room
+    // (see z_play.c). It exists to take a frame of lag off a moving character's shadow, and it changes the
+    // order actors and the room are submitted in -- which is the order translucent geometry is composited
+    // in. Switchable because that is a real trade, and because it is the one thing this mode does to draw
+    // order at all: if something is layered wrongly only with shadow maps on, this is what to turn off.
+    bool shadowMapCasterFirst = true;
     // The direction the key light TRAVELS, world space, normalised -- the same vector the cascades are
     // built from, kept here so the caster-reach test can follow a shadow along it. Straight down until the
     // first frame computes it.
@@ -206,6 +212,8 @@ static void RefreshFrameParams() {
         s32 count = CVarGetInteger(CVAR_ENHANCEMENT("Graphics.ShadowMap.CascadeCount"), SHADOW_MAP_DEFAULT_CASCADES);
         count = count < 1 ? 1 : (count > SHADOW_MAP_MAX_CASCADES ? SHADOW_MAP_MAX_CASCADES : count);
         sParams.shadowMapReach = CVarGetFloat(kSplitCVars[count - 1], kSplitDefaults[count - 1]);
+        sParams.shadowMapCasterFirst =
+            CVarGetInteger(CVAR_ENHANCEMENT("Graphics.ShadowMap.CasterFirst"), 1) != 0;
         sParams.shadowMapCasterDrawRadius = CVarGetFloat(CVAR_ENHANCEMENT("Graphics.ShadowMap.CasterDrawRadius"),
                                                          SHADOW_MAP_DEFAULT_CASTER_DRAW_RADIUS);
     } else {
@@ -257,6 +265,13 @@ extern "C" int ToonLighting_ShadowsEnabled(void) {
 extern "C" float ToonLighting_ShadowMapCasterDrawRadius(void) {
     return (sParams.shadowMap && sParams.shadowMapSupported) ? sParams.shadowMapCasterDrawRadius : 0.0f;
 }
+// SOH [Enhancement] Does the frame reorder apply this frame? See sParams.shadowMapCasterFirst and the
+// block it gates in z_play.c. False whenever shadow-map mode is not actually running, so the reorder can
+// never happen without the thing it exists for.
+extern "C" int ToonLighting_ShadowMapCasterFirst(void) {
+    return (sParams.shadowMap && sParams.shadowMapSupported && sParams.shadowMapCasterFirst) ? 1 : 0;
+}
+
 extern "C" int ToonLighting_ShadowMapEnabled(void) {
     return sParams.shadowMap && sParams.shadowMapSupported;
 }

@@ -1566,7 +1566,7 @@ void Play_Draw(PlayState* play) {
         // reach the actors, and moving them above it would let a backdrop erase everyone in the room. The
         // reorder is worth nothing there anyway: it buys a moving character's shadow on the ground, and
         // these are small interiors.
-        s32 shadowMapCasterFirst = ToonLighting_ShadowMapEnabled() && (play->skyboxCtx.unk_140 == 0);
+        s32 shadowMapCasterFirst = ToonLighting_ShadowMapCasterFirst() && (play->skyboxCtx.unk_140 == 0);
 
         if (shadowMapCasterFirst && ((HREG(80) != 10) || (HREG(85) != 0))) {
             func_800315AC(play, &play->actorCtx);

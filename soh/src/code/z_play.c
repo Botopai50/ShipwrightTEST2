@@ -1568,8 +1568,41 @@ void Play_Draw(PlayState* play) {
         // these are small interiors.
         s32 shadowMapCasterFirst = ToonLighting_ShadowMapCasterFirst() && (play->skyboxCtx.unk_140 == 0);
 
+        // SOH [Enhancement] Cascaded shadow maps: only the OPAQUE stream needs to move.
+        //
+        // What the reorder is for is the depth pass, and the depth pass is a marker in POLY_OPA (see
+        // gSPShadowMapFlush in z_actor.c). All of POLY_OPA executes before any of POLY_XLU, so what decides
+        // whether the room samples this frame's actor casters or last frame's is purely the order of the
+        // OPAQUE halves. The translucent halves were dragged along for no benefit at all -- and translucent
+        // surfaces composite in submission order, not by depth, so dragging them along is how Navi came to
+        // draw through the Graveyard paving.
+        //
+        // The two buffers are separate arenas, so the fix is to keep the actors' translucent block where it
+        // is physically and jump around it, putting it back in vanilla order at EXECUTION time:
+        //
+        //     [J1] [actors' XLU] [J2] [room's XLU] [J3] [rest of the frame]
+        //       |                  |                |
+        //       +-> room's XLU     |                +-> actors' XLU
+        //                          +-> rest of the frame
+        //
+        // J1 jumps over the actors to the room; the room ends by jumping back to the actors; the actors end
+        // by jumping past the room. Execution therefore runs room-then-actors, which is exactly vanilla,
+        // while the opaque halves keep the order the shadow pass needs. Three commands, no allocation, and
+        // the translucent stream's internal order is byte-for-byte what it was.
+        Gfx* shadowXluJumpToRoom = NULL;  // patched to where the room's translucent block begins
+        Gfx* shadowXluActorStart = NULL;  // where the actors' translucent block begins
+        Gfx* shadowXluJumpPastRoom = NULL; // patched past the room's block, ending the detour
+
         if (shadowMapCasterFirst && ((HREG(80) != 10) || (HREG(85) != 0))) {
+            shadowXluJumpToRoom = POLY_XLU_DISP++;
+            shadowXluActorStart = POLY_XLU_DISP;
+
             func_800315AC(play, &play->actorCtx);
+
+            // Closes the actors' block. Patched once the room's is placed, since it has to land after it.
+            shadowXluJumpPastRoom = POLY_XLU_DISP++;
+            // The room's block starts here, so the jump that opens the detour can be resolved now.
+            gSPBranchList(shadowXluJumpToRoom, POLY_XLU_DISP);
         }
 
         if ((HREG(80) != 10) || (HREG(84) != 0)) {
@@ -1585,6 +1618,14 @@ void Play_Draw(PlayState* play) {
                 Room_Draw(play, &play->roomCtx.curRoom, roomDrawFlags & 3);
                 Room_Draw(play, &play->roomCtx.prevRoom, roomDrawFlags & 3);
             }
+        }
+
+        // SOH [Enhancement] Cascaded shadow maps: close the translucent detour opened above, now that the
+        // room's block is complete and nothing else has written to POLY_XLU. The light pools below write
+        // only to POLY_OPA, so this is the last moment the two blocks are still adjacent.
+        if (shadowXluJumpPastRoom != NULL) {
+            gSPBranchList(POLY_XLU_DISP++, shadowXluActorStart);
+            gSPBranchList(shadowXluJumpPastRoom, POLY_XLU_DISP);
         }
 
         // SOH [Enhancement] WW light casting: the pools are normally cast from inside the actor loop, which

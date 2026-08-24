@@ -738,19 +738,21 @@ void SohMenu::AddMenuWindWakerStyle() {
         .PreFunc(hideUnlessShadowMap)
         .Options(CheckboxOptions().DefaultValue(false).Tooltip(
             "Inverte a ordem do quadro: o laço de atores desenha ANTES da sala.\n\n"
-            "DESLIGADO por padrão. Esteve ligado e causava defeitos de sobreposição -- no Cemitério, a "
-            "Navi aparecia através do piso de pedras.\n\n"
+            "Antes isto arrastava junto o fluxo TRANSLÚCIDO dos atores, e translúcido compõe por ordem de "
+            "envio, não por profundidade -- era assim que a Navi aparecia através do piso no Cemitério. "
+            "Agora só o fluxo opaco troca de lugar: o translúcido dos atores é desviado por saltos e "
+            "executa depois da sala, exatamente como no original.\n\n"
+            "Continua DESLIGADO por padrão até a correção ser confirmada em jogo.\n\n"
             "Serve para tirar um quadro de atraso da sombra de quem está em movimento. Sem isso, a sombra "
             "de um personagem correndo fica sempre onde ele estava um quadro atrás -- invisível no cenário, "
             "que não anda, e visível nele.\n\n"
             "O custo é que atores e sala passam a ser enviados em ordem trocada, e ordem de envio é o que "
             "decide a sobreposição de geometria translúcida. É a ÚNICA coisa que o modo Shadow Map muda na "
             "ordem de desenho.\n\n"
-            "A troca é desigual: ganha-se frescor na sombra de quem ESTÁ SE MOVENDO -- invisível no cenário, "
-            "porque cenário não anda -- e perde-se a ordem de composição de tudo que é translúcido no "
-            "quadro.\n\n"
-            "Ligue se preferir a sombra mais justa e não esbarrar no defeito. Se algo aparecer empilhado "
-            "errado só com Shadow Map ligado, isto é a primeira coisa a desligar."));
+            "O que se ganha é frescor na sombra de quem ESTÁ SE MOVENDO -- invisível no cenário, porque "
+            "cenário não anda.\n\n"
+            "Se algo ainda aparecer empilhado errado só com Shadow Map ligado, isto continua sendo a "
+            "primeira coisa a desligar."));
 
     AddWidget(path, "Desempenho", WIDGET_SEPARATOR_TEXT).PreFunc(hideUnlessShadowMap);
     // Shared tooltip tail: the trade-off is identical for all three, only the cascade differs. A macro

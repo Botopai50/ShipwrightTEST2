@@ -52,23 +52,22 @@ void SohMenu::AddMenuShadowAcne() {
         .PreFunc(hideUnlessShadowMap);
     AddWidget(path, "ângulo rasante, viram raios convergindo no horizonte.", WIDGET_TEXT)
         .PreFunc(hideUnlessShadowMap);
-    AddWidget(path, "Aparece muito mais com Espaço de Tela ligado, e o motivo é estrutural: ali a", WIDGET_TEXT)
+    AddWidget(path, "A defesa padrão é o slope bias do rasterizador, aplicado enquanto o mapa de", WIDGET_TEXT)
         .PreFunc(hideUnlessShadowMap);
-    AddWidget(path, "posição é reconstruída do buffer de profundidade, e o erro dessa reconstrução", WIDGET_TEXT)
+    AddWidget(path, "profundidade é escrito, e normalmente ela basta. Estes métodos são para onde não", WIDGET_TEXT)
         .PreFunc(hideUnlessShadowMap);
-    AddWidget(path, "é medido ao longo do raio de visão -- enorme em superfícies rasantes.", WIDGET_TEXT)
+    AddWidget(path, "basta: um texel muito grande, ou uma superfície quase de lado para a luz.", WIDGET_TEXT)
         .PreFunc(hideUnlessShadowMap);
 
     AddWidget(path, "Ativar Correção", WIDGET_CVAR_CHECKBOX)
         .CVar(CVAR_ENHANCEMENT("Graphics.ShadowAcne.Enabled"))
         .RaceDisable(false)
         .PreFunc(hideUnlessShadowMap)
-        .Options(CheckboxOptions().DefaultValue(true).Tooltip(
+        .Options(CheckboxOptions().DefaultValue(false).Tooltip(
             "Chave geral dos métodos abaixo.\n\n"
-            "LIGADA por padrão, ao contrário de tudo o mais nestas abas, porque o modo Espaço de Tela é "
-            "inutilizável sem ela -- não apenas pior, inutilizável.\n\n"
-            "Não custa nada enquanto a máscara estiver desligada: o receiver comum só aplica estes métodos "
-            "se você pedir separadamente, lá embaixo."));
+            "Desligada por padrão: o receiver lê exatamente a superfície que o passe de profundidade "
+            "rasterizou, e o slope bias do próprio rasterizador já cobre isso. Ligue quando aparecer acne "
+            "mesmo assim."));
 
     AddWidget(path, "Restaurar Tudo ao Padrão", WIDGET_BUTTON)
         .PreFunc(hideUnlessAcne)
@@ -82,7 +81,6 @@ void SohMenu::AddMenuShadowAcne() {
             CVarClear(CVAR_ENHANCEMENT("Graphics.ShadowAcne.DepthWorld"));
             CVarClear(CVAR_ENHANCEMENT("Graphics.ShadowAcne.SlopeScaled"));
             CVarClear(CVAR_ENHANCEMENT("Graphics.ShadowAcne.SlopeMax"));
-            CVarClear(CVAR_ENHANCEMENT("Graphics.ShadowAcne.OnReceiver"));
             Ship::Context::GetInstance()->GetWindow()->GetGui()->SaveConsoleVariablesNextFrame();
         })
         .Options(ButtonOptions().Tooltip("Devolve os métodos abaixo à combinação recomendada."));
@@ -201,19 +199,5 @@ void SohMenu::AddMenuShadowAcne() {
                      .DefaultValue(1.0f) // SHADOW_MAP_DEFAULT_ACNE_DEPTH_WORLD
                      .Format("%.1f"));
 
-    // ===========================================================================================
-    // Where the corrections apply.
-    // ===========================================================================================
-    AddWidget(path, "Alcance", WIDGET_SEPARATOR_TEXT).PreFunc(hideUnlessAcne);
-    AddWidget(path, "Aplicar Também no Receiver Comum", WIDGET_CVAR_CHECKBOX)
-        .CVar(CVAR_ENHANCEMENT("Graphics.ShadowAcne.OnReceiver"))
-        .RaceDisable(false)
-        .PreFunc(hideUnlessAcne)
-        .Options(CheckboxOptions().DefaultValue(false).Tooltip(
-            "Por padrão estes métodos agem só na máscara de Espaço de Tela, porque é lá que o problema "
-            "existe: o receiver comum lê exatamente a superfície que o passe de profundidade rasterizou, e "
-            "o slope bias do próprio rasterizador já cobre isso.\n\n"
-            "Ligue se aparecer acne com Espaço de Tela DESLIGADO -- e use isso como diagnóstico: se ligar "
-            "aqui resolve, a culpa é do mapa de profundidade; se não, é da reconstrução."));
 }
 } // namespace SohGui

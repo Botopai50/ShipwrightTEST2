@@ -783,12 +783,6 @@ static void OnToonFrameUpdate() {
                                                 SHADOW_MAP_DEFAULT_LADDER_LAMBDA);
             quality.ladderNear = CVarGetFloat(CVAR_ENHANCEMENT("Graphics.ShadowQuality.LadderNear"),
                                               SHADOW_MAP_DEFAULT_LADDER_NEAR);
-            quality.screenSpace = CVarGetInteger(CVAR_ENHANCEMENT("Graphics.ShadowQuality.ScreenSpace"), 0);
-            quality.screenBlur = CVarGetFloat(CVAR_ENHANCEMENT("Graphics.ShadowQuality.ScreenBlur"),
-                                              SHADOW_MAP_DEFAULT_SCREEN_BLUR);
-            quality.screenDepthTolerance =
-                CVarGetFloat(CVAR_ENHANCEMENT("Graphics.ShadowQuality.ScreenDepthTolerance"),
-                             SHADOW_MAP_DEFAULT_SCREEN_DEPTH_TOLERANCE);
             // SOH [Enhancement] Shadow acne (see fast/shadow_map.h and the "Correção de Acne" menu tab).
             // Defaults come from the header rather than being written twice, so the menu's "restore
             // defaults" and the renderer's fallback cannot drift apart.
@@ -811,8 +805,6 @@ static void OnToonFrameUpdate() {
                                                       acneDefaults.slopeScaled);
             quality.acne.slopeMax =
                 CVarGetFloat(CVAR_ENHANCEMENT("Graphics.ShadowAcne.SlopeMax"), acneDefaults.slopeMax);
-            quality.acne.onReceiver = CVarGetInteger(CVAR_ENHANCEMENT("Graphics.ShadowAcne.OnReceiver"),
-                                                     acneDefaults.onReceiver);
             interp->SetShadowMapQuality(quality);
         }
         interp->SetShadowMapParams(

@@ -831,27 +831,14 @@ AddWidget(path, "Depuração", WIDGET_SEPARATOR_TEXT).PreFunc(hideUnlessShadowMa
                               "de borda desenhou.\n\n"
                               "7 = em qual faixa cada pixel caiu: vermelho, verde e azul, da mais próxima "
                               "para a mais distante. Use para incluir ou descartar a escolha de faixa.\n\n"
-                              "8 e 9 são o par da máscara de Espaço de Tela, e separam os dois defeitos que "
-                              "ficam idênticos depois de sombreados: uma máscara cujas sombras estão "
-                              "erradas, e uma máscara que não está alinhada com o quadro que ela descreve.\n\n"
-                              "8 = o que a máscara guarda ali, em tons de cinza, sem nada multiplicado. "
-                              "MAGENTA é o caso que mais importa: um pixel que a máscara cobre mas o "
-                              "receiver REJEITOU, porque a profundidade guardada discorda da superfície. "
-                              "Cinza escuro = o resolve não achou profundidade ali. AZUL = não há máscara "
-                              "neste quadro.\n\n"
-                              "9 = o quanto a profundidade guardada pela máscara se afasta da desta "
-                              "superfície, como fração da tolerância. VERDE é concordância, VERMELHO é no "
-                              "limite ou além. Leia esta PRIMEIRO: vermelho numa superfície inteira "
-                              "significa que o prepass desenhou aquela superfície em outro lugar, e nenhum "
-                              "ajuste de bias vai encostar nisso.\n\n"
-                              "(6 não existe mais: media um mecanismo que foi removido. A numeração das "
-                              "outras foi mantida de propósito, para 5 continuar significando o que "
-                              "significava.)\n\n"
+                              "(6, 8 e 9 não existem mais: mediam mecanismos que foram removidos. A "
+                              "numeração das outras foi mantida de propósito, para 5 continuar significando "
+                              "o que significava.)\n\n"
                               "A névoa é desligada em todas as visões, para a distância não lavar as "
                               "cores.\n\n"
                               "Qualquer valor diferente de zero também preenche a lista abaixo.")
                      .Min(0)
-                     .Max(9) // SHADOW_MAP_MAX_DEBUG_VIEW, written out per the note at the top of this panel
+                     .Max(7) // SHADOW_MAP_MAX_DEBUG_VIEW, written out per the note at the top of this panel
                      .DefaultValue(0)
                      .ShowButtons(true)
                      .Format("%d"));

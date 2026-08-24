@@ -9,7 +9,7 @@ namespace SohGui {
 extern std::shared_ptr<SohMenu> mSohMenu;
 using namespace UIWidgets;
 
-// "Qualidade das Sombras" -- the five techniques that shape a shadow's EDGE, as opposed to deciding where
+// "Qualidade das Sombras" -- the four techniques that shape a shadow's EDGE, as opposed to deciding where
 // it falls. See fast/shadow_map.h for what each one does and why it exists; this file is only the surface.
 //
 // Its own tab rather than more sliders under Actor Shadows, because these are a different question from the
@@ -65,7 +65,7 @@ void SohMenu::AddMenuShadowQuality() {
         .PreFunc(hideUnlessShadowMap);
     AddWidget(path, "Onde a sombra cai continua sendo decidido na aba Wind Waker Style.", WIDGET_TEXT)
         .PreFunc(hideUnlessShadowMap);
-    AddWidget(path, "As cinco técnicas são independentes e podem ser combinadas.", WIDGET_TEXT)
+    AddWidget(path, "As quatro técnicas são independentes e podem ser combinadas.", WIDGET_TEXT)
         .PreFunc(hideUnlessShadowMap);
 
     AddWidget(path, "Restaurar Tudo ao Padrão", WIDGET_BUTTON)
@@ -86,9 +86,6 @@ void SohMenu::AddMenuShadowQuality() {
             CVarClear(CVAR_ENHANCEMENT("Graphics.ShadowQuality.LadderMode"));
             CVarClear(CVAR_ENHANCEMENT("Graphics.ShadowQuality.LadderLambda"));
             CVarClear(CVAR_ENHANCEMENT("Graphics.ShadowQuality.LadderNear"));
-            CVarClear(CVAR_ENHANCEMENT("Graphics.ShadowQuality.ScreenSpace"));
-            CVarClear(CVAR_ENHANCEMENT("Graphics.ShadowQuality.ScreenBlur"));
-            CVarClear(CVAR_ENHANCEMENT("Graphics.ShadowQuality.ScreenDepthTolerance"));
             Ship::Context::GetInstance()->GetWindow()->GetGui()->SaveConsoleVariablesNextFrame();
         })
         .Options(ButtonOptions().Tooltip("Desliga as cinco técnicas e devolve todos os valores ao padrão."));
@@ -374,65 +371,5 @@ void SohMenu::AddMenuShadowQuality() {
                      .IsPercentage());
 
 
-    // ===========================================================================================
-    // Technique 5 -- screen-space shadow mask.
-    // ===========================================================================================
-    path = { "Qualidade das Sombras", "Espaço de Tela", SECTION_COLUMN_1 };
-    AddSidebarEntry("Qualidade das Sombras", "Espaço de Tela", 3);
-
-    auto hideUnlessScreenSpace = [](WidgetInfo& info) {
-        info.isHidden = CVarGetInteger(CVAR_ENHANCEMENT("Graphics.WorldShadows.Mode"), SHADOW_MODE_VANILLA) !=
-                            SHADOW_MODE_SHADOW_MAP ||
-                        !CVarGetInteger(CVAR_ENHANCEMENT("Graphics.ShadowQuality.ScreenSpace"), 0);
-    };
-
-    AddWidget(path, "Requer que a geometria da sala esteja capturada como caster do mundo.", WIDGET_TEXT)
-        .PreFunc(hideUnlessShadowMap);
-    AddWidget(path, "Superfícies fora dessa captura -- transparentes, água, partículas -- caem", WIDGET_TEXT)
-        .PreFunc(hideUnlessShadowMap);
-    AddWidget(path, "automaticamente de volta para a amostragem normal das cascatas.", WIDGET_TEXT)
-        .PreFunc(hideUnlessShadowMap);
-
-    AddWidget(path, "Ativar Máscara em Espaço de Tela", WIDGET_CVAR_CHECKBOX)
-        .CVar(CVAR_ENHANCEMENT("Graphics.ShadowQuality.ScreenSpace"))
-        .RaceDisable(false)
-        .PreFunc(hideUnlessShadowMap)
-        .Options(CheckboxOptions().DefaultValue(false).Tooltip(
-            "Resolve a sombra do quadro inteiro numa máscara e borra ESSA máscara.\n\n"
-            "É a única das cinco cuja penumbra é medida em PIXELS DE TELA, que é a unidade em que o "
-            "serrilhado é realmente percebido: um borrão de 2 pixels tem 2 pixels em qualquer distância e "
-            "em qualquer cascata, por mais grosso que seja o texel dela. Também reduz o receiver a uma "
-            "única leitura.\n\n"
-            "Funciona desenhando a geometria da sala uma vez com a matriz da câmera -- reaproveitando os "
-            "mesmos buffers já enviados para as cascatas, então não há captura nova nem passe extra pelo "
-            "interpretador."));
-    AddWidget(path, "Raio do Borrão: %.1f px", WIDGET_CVAR_SLIDER_FLOAT)
-        .CVar(CVAR_ENHANCEMENT("Graphics.ShadowQuality.ScreenBlur"))
-        .RaceDisable(false)
-        .PreFunc(hideUnlessScreenSpace)
-        .Options(FloatSliderOptions()
-                     .Tooltip("Largura do borrão da máscara, em pixels de tela a 1080p (acompanha a "
-                              "resolução, para o visual não mudar de monitor para monitor).")
-                     .Min(0.0f)
-                     .Max(16.0f) // SHADOW_MAP_MAX_SCREEN_BLUR
-                     .Step(0.5f)
-                     .DefaultValue(2.0f) // SHADOW_MAP_DEFAULT_SCREEN_BLUR
-                     .Format("%.1f"));
-    AddWidget(path, "Tolerância de Profundidade: %.1f", WIDGET_CVAR_SLIDER_FLOAT)
-        .CVar(CVAR_ENHANCEMENT("Graphics.ShadowQuality.ScreenDepthTolerance"))
-        .RaceDisable(false)
-        .PreFunc(hideUnlessScreenSpace)
-        .Options(FloatSliderOptions()
-                     .Tooltip("Quão diferentes duas profundidades podem ser antes de o borrão se recusar a "
-                              "misturá-las.\n\n"
-                              "Sem isso a máscara vaza por cima das silhuetas: uma parede sombreada borra o "
-                              "termo dela no chão iluminado atrás, o que aparece como um halo. Apertado "
-                              "demais e o borrão para de funcionar em qualquer superfície inclinada, porque "
-                              "uma inclinação muda a profundidade ao longo do kernel por construção.")
-                     .Min(0.1f)
-                     .Max(100.0f)
-                     .Step(0.5f)
-                     .DefaultValue(6.0f) // SHADOW_MAP_DEFAULT_SCREEN_DEPTH_TOLERANCE
-                     .Format("%.1f"));
 }
 } // namespace SohGui

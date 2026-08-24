@@ -86,9 +86,19 @@ static struct {
     // SOH [Enhancement] Whether shadow-map mode reorders the frame so the actor loop draws BEFORE the room
     // (see z_play.c). It exists to take a frame of lag off a moving character's shadow, and it changes the
     // order actors and the room are submitted in -- which is the order translucent geometry is composited
-    // in. Switchable because that is a real trade, and because it is the one thing this mode does to draw
-    // order at all: if something is layered wrongly only with shadow maps on, this is what to turn off.
-    bool shadowMapCasterFirst = true;
+    // in.
+    //
+    // OFF by default, after a report it was responsible for: in the Graveyard, Navi drew through the paving
+    // stones, and only with shadow maps on. Confirmed by switching this alone.
+    //
+    // The trade it was making was taken unconditionally and is the wrong way round. What it buys is a frame
+    // of freshness on a MOVING CHARACTER'S OWN shadow -- which the block in z_play.c itself calls invisible
+    // on scenery, since scenery does not move. What it costs is the submission order of every translucent
+    // surface in the frame, which produces faults a player meets in ordinary play.
+    //
+    // Still switchable: the lag it removes is real, and someone who does not hit the compositing fault may
+    // prefer the sharper result.
+    bool shadowMapCasterFirst = false;
     // The direction the key light TRAVELS, world space, normalised -- the same vector the cascades are
     // built from, kept here so the caster-reach test can follow a shadow along it. Straight down until the
     // first frame computes it.
@@ -213,7 +223,7 @@ static void RefreshFrameParams() {
         count = count < 1 ? 1 : (count > SHADOW_MAP_MAX_CASCADES ? SHADOW_MAP_MAX_CASCADES : count);
         sParams.shadowMapReach = CVarGetFloat(kSplitCVars[count - 1], kSplitDefaults[count - 1]);
         sParams.shadowMapCasterFirst =
-            CVarGetInteger(CVAR_ENHANCEMENT("Graphics.ShadowMap.CasterFirst"), 1) != 0;
+            CVarGetInteger(CVAR_ENHANCEMENT("Graphics.ShadowMap.CasterFirst"), 0) != 0;
         sParams.shadowMapCasterDrawRadius = CVarGetFloat(CVAR_ENHANCEMENT("Graphics.ShadowMap.CasterDrawRadius"),
                                                          SHADOW_MAP_DEFAULT_CASTER_DRAW_RADIUS);
     } else {

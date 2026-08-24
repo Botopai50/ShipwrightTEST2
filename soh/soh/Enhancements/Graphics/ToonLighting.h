@@ -65,6 +65,15 @@ void ToonLighting_ShadowMapSceneryCasterClose(struct GraphicsContext* gfxCtx);
 // or the exclusion list is what needs changing.
 const char* ToonLighting_ShadowMapCasterCensus(void);
 
+// Debug/UI: what the cascades actually came out as this frame -- each band's range, the world size of one
+// of its texels, and how wide its cross-fade into the next one is. As a printable table, newline separated,
+// never null.
+//
+// Exists because the automatic ladder computes the splits, so the sliders no longer say where the bands
+// are. A ladder the player cannot inspect is one they have to guess at, and the texel size in particular
+// is recovered from the projection matrix inside the renderer and is knowable nowhere else.
+const char* ToonLighting_ShadowMapCascadeReport(void);
+
 #ifdef __cplusplus
 }
 #endif

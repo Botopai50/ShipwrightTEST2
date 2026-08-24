@@ -538,6 +538,51 @@ extern "C" const char* ToonLighting_ShadowMapCasterCensus(void) {
 
 // C-callable export (see ToonLighting.h): lets the decompiled actor draw loop reorder receivers ahead of the
 // shadow flush without pulling the curated id list into the game code.
+// SOH [Enhancement] What the cascades actually came out as, for the menu to print.
+//
+// Read from the renderer rather than recomputed from the CVars, and that is the whole point: with the
+// automatic ladder on, the split sliders no longer describe where the bands are, and the texel size never
+// did -- it falls out of the projection the fit builds, which depends on the camera. Recomputing either
+// here would produce a table that can disagree with the picture.
+//
+// Rebuilt into a static string on each call. The menu asks once per frame while its page is open, which is
+// nothing next to what a frame already does.
+extern "C" const char* ToonLighting_ShadowMapCascadeReport(void) {
+    static std::string report;
+    report.clear();
+
+    Fast::GfxRenderingAPI* rapi = GetRenderingApi();
+    if (rapi == nullptr) {
+        report = "Renderizador indisponível.";
+        return report.c_str();
+    }
+    float splits[SHADOW_MAP_MAX_CASCADES] = {};
+    float texels[SHADOW_MAP_MAX_CASCADES] = {};
+    const int count = rapi->ShadowMapCascadeReport(splits, texels, SHADOW_MAP_MAX_CASCADES);
+    if (count <= 0) {
+        report = "Nenhuma cascata neste quadro.";
+        return report.c_str();
+    }
+
+    const f32 blend = CLAMP(CVarGetFloat(CVAR_ENHANCEMENT("Graphics.ShadowMap.BlendFraction"),
+                                         SHADOW_MAP_DEFAULT_BLEND_FRACTION),
+                            0.0f, 1.0f);
+    char line[192];
+    for (int i = 0; i < count; i++) {
+        const float nearEdge = (i == 0) ? 0.0f : splits[i - 1];
+        const float farEdge = splits[i];
+        // The band the shader cross-fades over, in the same terms it computes it: a fraction of THIS
+        // cascade's own span, measured back from its far edge.
+        const float fadeStart = farEdge - ((farEdge - nearEdge) * blend);
+        snprintf(line, sizeof(line), "Faixa %d:  %.0f a %.0f  |  texel %.2f un.  |  transição %.0f a %.0f\n", i + 1,
+                 nearEdge, farEdge, texels[i], fadeStart, farEdge);
+        report += line;
+    }
+    snprintf(line, sizeof(line), "Alcance total: %.0f unidades", splits[count - 1]);
+    report += line;
+    return report.c_str();
+}
+
 extern "C" int ToonLighting_IsShadowReceiver(Actor* actor) {
     return (actor != nullptr && ToonShadowReceiver(actor)) ? 1 : 0;
 }

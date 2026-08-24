@@ -332,6 +332,48 @@ void SohMenu::AddMenuShadowQuality() {
                      .DefaultValue(40.0f) // SHADOW_MAP_DEFAULT_LADDER_NEAR
                      .Format("%.0f"));
 
+    // What the ladder ACTUALLY produced, read back from the renderer rather than recomputed here.
+    //
+    // This is the answer to "what did automatic decide", and it cannot be got any other way: with the
+    // automatic ladder on, the split sliders no longer say where the bands are, and the texel size never
+    // did -- it falls out of the projection the fit builds from the camera. Shown in both modes, so manual
+    // and automatic can be compared against the same numbers.
+    //
+    // WIDGET_TEXT draws widget.name and PreFunc runs first, so rewriting the name each frame is what makes
+    // it live.
+    AddWidget(path, "Resultado", WIDGET_SEPARATOR_TEXT).PreFunc(hideUnlessShadowMap);
+    AddWidget(path, "Cascatas em uso:", WIDGET_TEXT)
+        .RaceDisable(false)
+        .PreFunc([](WidgetInfo& info) {
+            info.isHidden = CVarGetInteger(CVAR_ENHANCEMENT("Graphics.WorldShadows.Mode"), SHADOW_MODE_VANILLA) !=
+                            SHADOW_MODE_SHADOW_MAP;
+            if (!info.isHidden) {
+                const char* report = ToonLighting_ShadowMapCascadeReport();
+                info.name = std::string("Cascatas em uso:\n") + (report != nullptr ? report : "");
+            }
+        });
+
+    // The cross-fade between cascades. It has always existed and has never been reachable from the menu --
+    // only from the console -- which is why a hard cascade seam had no control to soften it.
+    AddWidget(path, "Suavidade da Transição", WIDGET_CVAR_SLIDER_FLOAT)
+        .CVar(CVAR_ENHANCEMENT("Graphics.ShadowMap.BlendFraction"))
+        .RaceDisable(false)
+        .PreFunc(hideUnlessShadowMap)
+        .Options(FloatSliderOptions()
+                     .Tooltip("Quanto do alcance de cada faixa é usado para dissolver na faixa seguinte.\n\n"
+                              "O shader amostra as DUAS cascatas dentro dessa banda e mistura com "
+                              "smoothstep. É isso que impede que a mudança de resolução apareça como uma "
+                              "linha dura varrendo o chão conforme a câmera anda.\n\n"
+                              "Em 0% a transição é um corte seco. Valores altos suavizam mais, mas custam: "
+                              "dentro da banda cada pixel faz o dobro das leituras.\n\n"
+                              "A banda resultante de cada faixa aparece em 'Cascatas em uso', acima.")
+                     .Min(0.0f)
+                     .Max(0.5f)
+                     .Step(0.01f)
+                     .DefaultValue(0.1f) // SHADOW_MAP_DEFAULT_BLEND_FRACTION
+                     .IsPercentage());
+
+
     // ===========================================================================================
     // Technique 5 -- screen-space shadow mask.
     // ===========================================================================================

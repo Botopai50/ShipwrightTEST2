@@ -538,6 +538,54 @@ extern "C" const char* ToonLighting_ShadowMapCasterCensus(void) {
 
 // C-callable export (see ToonLighting.h): lets the decompiled actor draw loop reorder receivers ahead of the
 // shadow flush without pulling the curated id list into the game code.
+// SOH [Enhancement] Why the filterable mode is not running, when it is not.
+//
+// It can be selected and refused: the moment array is one to four times the size of a depth map that is
+// already 160 MB at the default resolution, and there is a ceiling. The refusal is logged and the mode
+// silently becomes depth and PCF -- so the setting appears to do nothing, which is exactly what it looks
+// like when a feature is broken. This is the difference between the two, said where the setting is.
+//
+// The size is recomputed here rather than read back, because the point is to say what the mode WOULD have
+// cost: the backend does not keep the figure for an allocation it declined to make.
+extern "C" const char* ToonLighting_ShadowMapFilterStatus(void) {
+    static std::string status;
+    status.clear();
+
+    const int requested = CVarGetInteger(CVAR_ENHANCEMENT("Graphics.ShadowQuality.FilterMode"),
+                                         SHADOW_MAP_DEFAULT_FILTER_MODE);
+    if (requested == SHADOW_MAP_FILTER_DEPTH) {
+        return status.c_str();
+    }
+    Fast::GfxRenderingAPI* rapi = GetRenderingApi();
+    if (rapi == nullptr || rapi->ShadowMapEffectiveFilterMode() == requested) {
+        return status.c_str();
+    }
+
+    // Bytes per texel by mode, matching ShadowMomentBytesPerTexel in the backend.
+    int bytes = 4;
+    if (requested == SHADOW_MAP_FILTER_VSM) {
+        bytes = 8;
+    } else if (requested == SHADOW_MAP_FILTER_MSM) {
+        bytes = 16;
+    }
+    const int resolution =
+        CVarGetInteger(CVAR_ENHANCEMENT("Graphics.ShadowMap.Resolution"), SHADOW_MAP_DEFAULT_RESOLUTION);
+    const int cascades =
+        CVarGetInteger(CVAR_ENHANCEMENT("Graphics.ShadowMap.CascadeCount"), SHADOW_MAP_DEFAULT_CASCADES);
+    // The scratch slice the separable blur needs is the +1.
+    const double megabytes =
+        ((double)resolution * (double)resolution * (double)bytes * (double)(cascades + 1)) / (1024.0 * 1024.0);
+
+    char line[256];
+    snprintf(line, sizeof(line),
+             "NÃO ESTÁ ATIVO. Em %dx%d este modo precisa de %.0f MB, acima do teto de %d MB,\n"
+             "então o renderizador recusou e voltou para profundidade + PCF.\n"
+             "Baixe a Resolução (Wind Waker Style > Actor Shadows) para 2048 ou menos.",
+             resolution, resolution, megabytes, SHADOW_MAP_MOMENT_BUDGET_MB);
+    status = line;
+    return status.c_str();
+}
+
 // SOH [Enhancement] What the cascades actually came out as, for the menu to print.
 //
 // Read from the renderer rather than recomputed from the CVars, and that is the whole point: with the
@@ -777,6 +825,12 @@ static void OnToonFrameUpdate() {
                                               SHADOW_MAP_DEFAULT_BLUR_RADIUS);
             quality.bleedReduction = CVarGetFloat(CVAR_ENHANCEMENT("Graphics.ShadowQuality.BleedReduction"),
                                                   SHADOW_MAP_DEFAULT_BLEED_REDUCTION);
+            quality.edgeHarden = CVarGetInteger(CVAR_ENHANCEMENT("Graphics.ShadowQuality.EdgeHarden"),
+                                                SHADOW_MAP_DEFAULT_EDGE_HARDEN);
+            quality.edgeHardness = CVarGetFloat(CVAR_ENHANCEMENT("Graphics.ShadowQuality.EdgeHardness"),
+                                                SHADOW_MAP_DEFAULT_EDGE_HARDNESS);
+            quality.edgeThreshold = CVarGetFloat(CVAR_ENHANCEMENT("Graphics.ShadowQuality.EdgeThreshold"),
+                                                 SHADOW_MAP_DEFAULT_EDGE_THRESHOLD);
             quality.ladderMode = CVarGetInteger(CVAR_ENHANCEMENT("Graphics.ShadowQuality.LadderMode"),
                                                 SHADOW_MAP_DEFAULT_LADDER_MODE);
             quality.ladderLambda = CVarGetFloat(CVAR_ENHANCEMENT("Graphics.ShadowQuality.LadderLambda"),

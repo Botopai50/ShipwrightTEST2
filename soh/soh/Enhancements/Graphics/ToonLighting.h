@@ -74,6 +74,12 @@ const char* ToonLighting_ShadowMapCasterCensus(void);
 // is recovered from the projection matrix inside the renderer and is knowable nowhere else.
 const char* ToonLighting_ShadowMapCascadeReport(void);
 
+// Debug/UI: why the filterable shadow-map mode is or is not running. A mode can be selected and refused --
+// the moment array is large and there is a memory ceiling -- and the refusal only reaches the log, which is
+// not where a player finds out that a setting they ticked changed nothing. Empty string when the selected
+// mode is running (or when none is selected); otherwise a sentence saying what happened. Never null.
+const char* ToonLighting_ShadowMapFilterStatus(void);
+
 #ifdef __cplusplus
 }
 #endif

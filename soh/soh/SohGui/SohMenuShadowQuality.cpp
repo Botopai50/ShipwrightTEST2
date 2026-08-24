@@ -83,6 +83,9 @@ void SohMenu::AddMenuShadowQuality() {
             CVarClear(CVAR_ENHANCEMENT("Graphics.ShadowQuality.EsmExponent"));
             CVarClear(CVAR_ENHANCEMENT("Graphics.ShadowQuality.BlurRadius"));
             CVarClear(CVAR_ENHANCEMENT("Graphics.ShadowQuality.BleedReduction"));
+            CVarClear(CVAR_ENHANCEMENT("Graphics.ShadowQuality.EdgeHarden"));
+            CVarClear(CVAR_ENHANCEMENT("Graphics.ShadowQuality.EdgeHardness"));
+            CVarClear(CVAR_ENHANCEMENT("Graphics.ShadowQuality.EdgeThreshold"));
             CVarClear(CVAR_ENHANCEMENT("Graphics.ShadowQuality.LadderMode"));
             CVarClear(CVAR_ENHANCEMENT("Graphics.ShadowQuality.LadderLambda"));
             CVarClear(CVAR_ENHANCEMENT("Graphics.ShadowQuality.LadderNear"));
@@ -106,7 +109,7 @@ void SohMenu::AddMenuShadowQuality() {
         .CVar(CVAR_ENHANCEMENT("Graphics.ShadowQuality.AnalyticEdge"))
         .RaceDisable(false)
         .PreFunc(hideUnlessShadowMap)
-        .Options(CheckboxOptions().DefaultValue(false).Tooltip(
+        .Options(CheckboxOptions().DefaultValue(true).Tooltip(
             "Calcula onde a borda da sombra CRUZA o texel, em vez de misturar as quatro comparações.\n\n"
             "Usa exatamente as mesmas quatro leituras que já são feitas: não custa nenhuma leitura extra "
             "de textura, só aritmética.\n\n"
@@ -125,7 +128,7 @@ void SohMenu::AddMenuShadowQuality() {
                      .Min(0.25f)
                      .Max(4.0f) // SHADOW_MAP_MAX_ANALYTIC_EDGE_WIDTH
                      .Step(0.05f)
-                     .DefaultValue(1.0f) // SHADOW_MAP_DEFAULT_ANALYTIC_EDGE_WIDTH
+                     .DefaultValue(2.0f) // SHADOW_MAP_DEFAULT_ANALYTIC_EDGE_WIDTH
                      .Format("%.2f"));
 
     // ===========================================================================================
@@ -144,7 +147,7 @@ void SohMenu::AddMenuShadowQuality() {
         .CVar(CVAR_ENHANCEMENT("Graphics.ShadowQuality.Jitter"))
         .RaceDisable(false)
         .PreFunc(hideUnlessShadowMap)
-        .Options(CheckboxOptions().DefaultValue(false).Tooltip(
+        .Options(CheckboxOptions().DefaultValue(true).Tooltip(
             "Espalha as amostras num disco girado por um ângulo diferente em cada pixel.\n\n"
             "O degrau não fica menor, mas pixels vizinhos param de pular no mesmo lugar, então a borda é "
             "lida como granulado em vez de escada.\n\n"
@@ -215,7 +218,7 @@ void SohMenu::AddMenuShadowQuality() {
         .PreFunc(hideUnlessShadowMap)
         .Options(ComboboxOptions()
                      .ComboMap(shadowFilterModeLabels)
-                     .DefaultIndex(0) // SHADOW_MAP_DEFAULT_FILTER_MODE
+                     .DefaultIndex(1) // SHADOW_MAP_DEFAULT_FILTER_MODE (ESM)
                      .Tooltip(
                          "Profundidade crua NÃO pode ser borrada: a média de duas profundidades é uma "
                          "superfície que não existe em nenhuma das duas, e um mapa de profundidade borrado "
@@ -228,6 +231,21 @@ void SohMenu::AddMenuShadowQuality() {
                          "VSM: filtrável em hardware, sofre com bloqueadores sobrepostos.\n"
                          "MSM: o único que aguenta geometria sobreposta (que este jogo tem muita), e o mais "
                          "caro."));
+    // Says out loud when a selected mode was refused. The refusal only reached the log, so a mode that
+    // could not be allocated looked exactly like a mode that does nothing -- which is what it looked like.
+    AddWidget(path, "", WIDGET_TEXT)
+        .RaceDisable(false)
+        .PreFunc([](WidgetInfo& info) {
+            const char* status = ToonLighting_ShadowMapFilterStatus();
+            const bool quiet = (status == nullptr) || (status[0] == '\0');
+            info.isHidden = quiet ||
+                            CVarGetInteger(CVAR_ENHANCEMENT("Graphics.WorldShadows.Mode"), SHADOW_MODE_VANILLA) !=
+                                SHADOW_MODE_SHADOW_MAP;
+            if (!info.isHidden) {
+                info.name = status;
+            }
+        });
+
     AddWidget(path, "Raio do Borrão: %.2f texels", WIDGET_CVAR_SLIDER_FLOAT)
         .CVar(CVAR_ENHANCEMENT("Graphics.ShadowQuality.BlurRadius"))
         .RaceDisable(false)
@@ -274,6 +292,66 @@ void SohMenu::AddMenuShadowQuality() {
                      .IsPercentage());
 
     // ===========================================================================================
+    // Edge hardening -- the control in the other direction from everything above.
+    // ===========================================================================================
+    path = { "Qualidade das Sombras", "Dureza da Borda", SECTION_COLUMN_1 };
+    AddSidebarEntry("Qualidade das Sombras", "Dureza da Borda", 3);
+
+    auto hideUnlessHarden = [](WidgetInfo& info) {
+        info.isHidden = CVarGetInteger(CVAR_ENHANCEMENT("Graphics.WorldShadows.Mode"), SHADOW_MODE_VANILLA) !=
+                            SHADOW_MODE_SHADOW_MAP ||
+                        !CVarGetInteger(CVAR_ENHANCEMENT("Graphics.ShadowQuality.EdgeHarden"), 0);
+    };
+
+    AddWidget(path, "As outras seções alargam a borda. Esta comprime.", WIDGET_TEXT).PreFunc(hideUnlessShadowMap);
+    AddWidget(path, "A borda se identifica sozinha: cobertura vale 0 ou 1 em todo o interior, e só", WIDGET_TEXT)
+        .PreFunc(hideUnlessShadowMap);
+    AddWidget(path, "o contorno cai no meio. Então isto age só no contorno, sem procurar por ele", WIDGET_TEXT)
+        .PreFunc(hideUnlessShadowMap);
+    AddWidget(path, "e sem nenhuma leitura extra de textura.", WIDGET_TEXT).PreFunc(hideUnlessShadowMap);
+
+    AddWidget(path, "Ativar Dureza da Borda", WIDGET_CVAR_CHECKBOX)
+        .CVar(CVAR_ENHANCEMENT("Graphics.ShadowQuality.EdgeHarden"))
+        .RaceDisable(false)
+        .PreFunc(hideUnlessShadowMap)
+        .Options(CheckboxOptions().DefaultValue(false).Tooltip(
+            "Comprime a faixa de transição da sombra para um contorno mais definido.\n\n"
+            "Age depois de tudo o mais, sobre o valor final de cobertura -- então funciona igual com "
+            "qualquer combinação das outras técnicas, e a visão de diagnóstico 5 continua mostrando o "
+            "valor CRU, antes desta compressão."));
+    AddWidget(path, "Dureza", WIDGET_CVAR_SLIDER_FLOAT)
+        .CVar(CVAR_ENHANCEMENT("Graphics.ShadowQuality.EdgeHardness"))
+        .RaceDisable(false)
+        .PreFunc(hideUnlessHarden)
+        .Options(FloatSliderOptions()
+                     .Tooltip("0% deixa a cobertura exatamente como chegou. 100% é um corte seco, sem "
+                              "transição nenhuma.\n\n"
+                              "Corte seco nem sempre é o que se quer: a penumbra carrega o tamanho do texel "
+                              "da faixa, então tirá-la tira a única pista de que a distância está sendo "
+                              "amostrada mais grosso -- e o contorno passa a mostrar a grade de texels que "
+                              "ela escondia. O ponto costuma ficar um pouco antes de 100%.")
+                     .Min(0.0f)
+                     .Max(1.0f)
+                     .Step(0.01f)
+                     .DefaultValue(0.5f) // SHADOW_MAP_DEFAULT_EDGE_HARDNESS
+                     .IsPercentage());
+    AddWidget(path, "Limiar", WIDGET_CVAR_SLIDER_FLOAT)
+        .CVar(CVAR_ENHANCEMENT("Graphics.ShadowQuality.EdgeThreshold"))
+        .RaceDisable(false)
+        .PreFunc(hideUnlessHarden)
+        .Options(FloatSliderOptions()
+                     .Tooltip("Onde fica o contorno dentro da faixa de cobertura. 50% é a resposta "
+                              "geométrica: metade do kernel bloqueada é a borda.\n\n"
+                              "Mover ENGROSSA ou AFINA a sombra. Abaixo de 50% um pixel pouco bloqueado já "
+                              "conta como sombra e ela se espalha; acima, ela se recolhe. É com isto, junto "
+                              "com a Dureza, que se engrossa um contorno em vez de só afiá-lo.")
+                     .Min(0.05f)
+                     .Max(0.95f)
+                     .Step(0.01f)
+                     .DefaultValue(0.5f) // SHADOW_MAP_DEFAULT_EDGE_THRESHOLD
+                     .IsPercentage());
+
+    // ===========================================================================================
     // Technique 4 -- cascade split ladder.
     // ===========================================================================================
     path = { "Qualidade das Sombras", "Escada de Cascatas", SECTION_COLUMN_1 };
@@ -312,7 +390,7 @@ void SohMenu::AddMenuShadowQuality() {
                      .Min(0.0f)
                      .Max(1.0f)
                      .Step(0.01f)
-                     .DefaultValue(0.75f) // SHADOW_MAP_DEFAULT_LADDER_LAMBDA
+                     .DefaultValue(0.85f) // SHADOW_MAP_DEFAULT_LADDER_LAMBDA
                      .IsPercentage());
     AddWidget(path, "Distância Inicial: %.0f", WIDGET_CVAR_SLIDER_FLOAT)
         .CVar(CVAR_ENHANCEMENT("Graphics.ShadowQuality.LadderNear"))
@@ -367,7 +445,7 @@ void SohMenu::AddMenuShadowQuality() {
                      .Min(0.0f)
                      .Max(0.5f)
                      .Step(0.01f)
-                     .DefaultValue(0.1f) // SHADOW_MAP_DEFAULT_BLEND_FRACTION
+                     .DefaultValue(0.2f) // SHADOW_MAP_DEFAULT_BLEND_FRACTION
                      .IsPercentage());
 
 

@@ -63,11 +63,12 @@ void SohMenu::AddMenuShadowAcne() {
         .CVar(CVAR_ENHANCEMENT("Graphics.ShadowAcne.Enabled"))
         .RaceDisable(false)
         .PreFunc(hideUnlessShadowMap)
-        .Options(CheckboxOptions().DefaultValue(false).Tooltip(
+        .Options(CheckboxOptions().DefaultValue(true).Tooltip(
             "Chave geral dos métodos abaixo.\n\n"
-            "Desligada por padrão: o receiver lê exatamente a superfície que o passe de profundidade "
-            "rasterizou, e o slope bias do próprio rasterizador já cobre isso. Ligue quando aparecer acne "
-            "mesmo assim."));
+            "LIGADA por padrão, com os valores que se mostraram necessários na prática: um deslocamento "
+            "pequeno pela normal, escalado pela inclinação, e mais nada.\n\n"
+            "O slope bias do rasterizador continua sendo a defesa principal. Estes métodos cobrem onde ele "
+            "não basta."));
 
     AddWidget(path, "Restaurar Tudo ao Padrão", WIDGET_BUTTON)
         .PreFunc(hideUnlessAcne)
@@ -114,7 +115,7 @@ void SohMenu::AddMenuShadowAcne() {
                      .Min(0.0f)
                      .Max(8.0f) // SHADOW_MAP_MAX_ACNE_NORMAL_TEXELS
                      .Step(0.1f)
-                     .DefaultValue(1.5f) // SHADOW_MAP_DEFAULT_ACNE_NORMAL_TEXELS
+                     .DefaultValue(0.6f) // SHADOW_MAP_DEFAULT_ACNE_NORMAL_TEXELS
                      .Format("%.2f"));
 
     // ===========================================================================================
@@ -143,7 +144,7 @@ void SohMenu::AddMenuShadowAcne() {
                      .Min(1.0f)
                      .Max(10.0f) // SHADOW_MAP_MAX_ACNE_SLOPE_MAX
                      .Step(0.1f)
-                     .DefaultValue(3.0f) // SHADOW_MAP_DEFAULT_ACNE_SLOPE_MAX
+                     .DefaultValue(3.5f) // SHADOW_MAP_DEFAULT_ACNE_SLOPE_MAX
                      .Format("%.1f"));
 
     // ===========================================================================================

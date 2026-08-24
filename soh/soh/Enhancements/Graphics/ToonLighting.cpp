@@ -852,6 +852,8 @@ static void OnToonFrameUpdate() {
                                                   SHADOW_MAP_DEFAULT_BLEED_REDUCTION);
             quality.layout = CVarGetInteger(CVAR_ENHANCEMENT("Graphics.ShadowQuality.Layout"),
                                             SHADOW_MAP_DEFAULT_LAYOUT);
+            quality.staticCache = CVarGetInteger(CVAR_ENHANCEMENT("Graphics.ShadowQuality.StaticCache"),
+                                                 SHADOW_MAP_DEFAULT_STATIC_CACHE);
             quality.clipmapLevels = CVarGetInteger(CVAR_ENHANCEMENT("Graphics.ShadowQuality.ClipmapLevels"),
                                                    SHADOW_MAP_DEFAULT_CLIPMAP_LEVELS);
             quality.clipmapBase = CVarGetFloat(CVAR_ENHANCEMENT("Graphics.ShadowQuality.ClipmapBase"),

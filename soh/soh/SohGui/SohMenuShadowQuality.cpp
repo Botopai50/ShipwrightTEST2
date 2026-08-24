@@ -89,6 +89,7 @@ void SohMenu::AddMenuShadowQuality() {
             CVarClear(CVAR_ENHANCEMENT("Graphics.ShadowQuality.EsmExponent"));
             CVarClear(CVAR_ENHANCEMENT("Graphics.ShadowQuality.BlurRadius"));
             CVarClear(CVAR_ENHANCEMENT("Graphics.ShadowQuality.BleedReduction"));
+            CVarClear(CVAR_ENHANCEMENT("Graphics.ShadowQuality.StaticCache"));
             CVarClear(CVAR_ENHANCEMENT("Graphics.ShadowQuality.Layout"));
             CVarClear(CVAR_ENHANCEMENT("Graphics.ShadowQuality.ClipmapLevels"));
             CVarClear(CVAR_ENHANCEMENT("Graphics.ShadowQuality.ClipmapBase"));
@@ -409,6 +410,25 @@ void SohMenu::AddMenuShadowQuality() {
                      .Min(1)
                      .Max(6) // SHADOW_MAP_MAX_CLIPMAP_LEVELS
                      .DefaultValue(6)); // SHADOW_MAP_DEFAULT_CLIPMAP_LEVELS
+    AddWidget(path, "Cache de Casters Estáticos", WIDGET_CVAR_CHECKBOX)
+        .CVar(CVAR_ENHANCEMENT("Graphics.ShadowQuality.StaticCache"))
+        .RaceDisable(false)
+        .PreFunc(hideUnlessShadowMap)
+        .Options(CheckboxOptions().DefaultValue(false).Tooltip(
+            "Guarda uma segunda cópia de cada fatia do mundo contendo SÓ o que não se mexe, e a cada quadro "
+            "copia essa cópia e redesenha apenas o que se moveu por cima.\n\n"
+            "O caso que isto resolve: hoje uma árvore balançando custa a malha da sala inteira de novo, em "
+            "toda fatia que a árvore alcança, todo quadro em que ela se mexe.\n\n"
+            "A cópia substitui tanto a limpeza quanto a rasterização da sala. A 4096 uma fatia custa ~420 µs "
+            "para redesenhar e a cópia custa ~62 µs; a 1024 a cópia custa ~4 µs, que é nada.\n\n"
+            "CUSTA MEMÓRIA -- um segundo array do tamanho da camada do mundo:\n"
+            "  cascatas a 4096: +96 MB     cascatas a 2048: +24 MB\n"
+            "  clipmap a 1024:  +12 MB     clipmap a 2048:  +48 MB\n\n"
+            "Por isso combina com o Clipmap: o formato que quer muitos níveis pequenos é justamente aquele "
+            "onde a segunda cópia sai barata.\n\n"
+            "NÃO ajuda cena parada -- essa já não redesenha nada. Isto compra de volta o custo do "
+            "movimento, não o de ficar parado."));
+
     AddWidget(path, "Extensão do Nível 0: %.0f", WIDGET_CVAR_SLIDER_FLOAT)
         .CVar(CVAR_ENHANCEMENT("Graphics.ShadowQuality.ClipmapBase"))
         .RaceDisable(false)

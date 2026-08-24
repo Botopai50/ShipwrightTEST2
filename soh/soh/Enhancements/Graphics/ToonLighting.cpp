@@ -850,6 +850,12 @@ static void OnToonFrameUpdate() {
                                               SHADOW_MAP_DEFAULT_BLUR_RADIUS);
             quality.bleedReduction = CVarGetFloat(CVAR_ENHANCEMENT("Graphics.ShadowQuality.BleedReduction"),
                                                   SHADOW_MAP_DEFAULT_BLEED_REDUCTION);
+            quality.layout = CVarGetInteger(CVAR_ENHANCEMENT("Graphics.ShadowQuality.Layout"),
+                                            SHADOW_MAP_DEFAULT_LAYOUT);
+            quality.clipmapLevels = CVarGetInteger(CVAR_ENHANCEMENT("Graphics.ShadowQuality.ClipmapLevels"),
+                                                   SHADOW_MAP_DEFAULT_CLIPMAP_LEVELS);
+            quality.clipmapBase = CVarGetFloat(CVAR_ENHANCEMENT("Graphics.ShadowQuality.ClipmapBase"),
+                                               SHADOW_MAP_DEFAULT_CLIPMAP_BASE);
             quality.edgeHarden = CVarGetInteger(CVAR_ENHANCEMENT("Graphics.ShadowQuality.EdgeHarden"),
                                                 SHADOW_MAP_DEFAULT_EDGE_HARDEN);
             quality.edgeHardness = CVarGetFloat(CVAR_ENHANCEMENT("Graphics.ShadowQuality.EdgeHardness"),

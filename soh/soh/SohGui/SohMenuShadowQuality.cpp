@@ -30,6 +30,12 @@ static const std::map<int32_t, const char*> shadowFilterModeLabels = {
 };
 
 // Keyed by SHADOW_MAP_LADDER_*.
+// Keyed by SHADOW_MAP_LAYOUT_*.
+static const std::map<int32_t, const char*> shadowLayoutLabels = {
+    { 0, "Cascatas" }, // SHADOW_MAP_LAYOUT_CASCADE
+    { 1, "Clipmap" },  // SHADOW_MAP_LAYOUT_CLIPMAP
+};
+
 static const std::map<int32_t, const char*> shadowLadderModeLabels = {
     { 0, "Manual (sliders)" }, // SHADOW_MAP_LADDER_MANUAL
     { 1, "Automática" },       // SHADOW_MAP_LADDER_PRACTICAL
@@ -83,6 +89,9 @@ void SohMenu::AddMenuShadowQuality() {
             CVarClear(CVAR_ENHANCEMENT("Graphics.ShadowQuality.EsmExponent"));
             CVarClear(CVAR_ENHANCEMENT("Graphics.ShadowQuality.BlurRadius"));
             CVarClear(CVAR_ENHANCEMENT("Graphics.ShadowQuality.BleedReduction"));
+            CVarClear(CVAR_ENHANCEMENT("Graphics.ShadowQuality.Layout"));
+            CVarClear(CVAR_ENHANCEMENT("Graphics.ShadowQuality.ClipmapLevels"));
+            CVarClear(CVAR_ENHANCEMENT("Graphics.ShadowQuality.ClipmapBase"));
             CVarClear(CVAR_ENHANCEMENT("Graphics.ShadowQuality.EdgeHarden"));
             CVarClear(CVAR_ENHANCEMENT("Graphics.ShadowQuality.EdgeHardness"));
             CVarClear(CVAR_ENHANCEMENT("Graphics.ShadowQuality.EdgeThreshold"));
@@ -350,6 +359,72 @@ void SohMenu::AddMenuShadowQuality() {
                      .Step(0.01f)
                      .DefaultValue(0.5f) // SHADOW_MAP_DEFAULT_EDGE_THRESHOLD
                      .IsPercentage());
+
+    // ===========================================================================================
+    // Layout -- the ladder, or the clipmap. The one setting here that changes the SHAPE of the system.
+    // ===========================================================================================
+    path = { "Qualidade das Sombras", "Formato do Mapa", SECTION_COLUMN_1 };
+    AddSidebarEntry("Qualidade das Sombras", "Formato do Mapa", 3);
+
+    auto hideUnlessClipmap = [](WidgetInfo& info) {
+        info.isHidden = CVarGetInteger(CVAR_ENHANCEMENT("Graphics.WorldShadows.Mode"), SHADOW_MODE_VANILLA) !=
+                            SHADOW_MODE_SHADOW_MAP ||
+                        CVarGetInteger(CVAR_ENHANCEMENT("Graphics.ShadowQuality.Layout"), 0) !=
+                            1; // SHADOW_MAP_LAYOUT_CLIPMAP
+    };
+
+    AddWidget(path, "Formato", WIDGET_CVAR_COMBOBOX)
+        .CVar(CVAR_ENHANCEMENT("Graphics.ShadowQuality.Layout"))
+        .RaceDisable(false)
+        .PreFunc(hideUnlessShadowMap)
+        .Options(ComboboxOptions()
+                     .ComboMap(shadowLayoutLabels)
+                     .DefaultIndex(0) // SHADOW_MAP_DEFAULT_LAYOUT
+                     .Tooltip(
+                         "Como o mapa é distribuído pelo mundo. É a única opção desta aba que muda a FORMA "
+                         "do sistema, não o acabamento dele.\n\n"
+                         "CASCATAS: faixas ajustadas a fatias do campo de visão. O que existe hoje. A razão "
+                         "de texel entre faixas vizinhas é de 3 a 8 vezes, e é esse salto que a transição "
+                         "precisa esconder.\n\n"
+                         "CLIPMAP: quadrados aninhados centrados na CÂMERA, cada um com o dobro da extensão "
+                         "do anterior. A razão de texel entre níveis vizinhos é exatamente 2, e as "
+                         "fronteiras são círculos que andam COM você em vez de varrerem o mundo quando a "
+                         "câmera gira.\n\n"
+                         "É a metade direcional do Virtual Shadow Map da Unreal -- a parte que dá para "
+                         "portar. A paginação de memória dela não dá: precisa de compute, indirect draw e "
+                         "um passe de profundidade prévio.\n\n"
+                         "TROCA: o nível 0 do clipmap é mais grosso que a cascata 0 (0,37 contra 0,09 "
+                         "unidade por texel a 1024). A cascata 0 é fina além do que se enxerga àquela "
+                         "distância; é justamente esse desperdício que o clipmap remove. Se a sombra aos "
+                         "pés do Link ficar grosseira, suba a Resolução."));
+    AddWidget(path, "Níveis: %d", WIDGET_CVAR_SLIDER_INT)
+        .CVar(CVAR_ENHANCEMENT("Graphics.ShadowQuality.ClipmapLevels"))
+        .RaceDisable(false)
+        .PreFunc(hideUnlessClipmap)
+        .Options(IntSliderOptions()
+                     .Tooltip("Quantos quadrados aninhados. Cada um dobra a extensão do anterior, então N "
+                              "níveis alcançam a extensão base vezes 2^(N-1).\n\n"
+                              "Um nível de clipmap é barato justamente porque não precisa ser grande para "
+                              "ser nítido -- diferente de uma cascata.")
+                     .Min(1)
+                     .Max(6) // SHADOW_MAP_MAX_CLIPMAP_LEVELS
+                     .DefaultValue(6)); // SHADOW_MAP_DEFAULT_CLIPMAP_LEVELS
+    AddWidget(path, "Extensão do Nível 0: %.0f", WIDGET_CVAR_SLIDER_FLOAT)
+        .CVar(CVAR_ENHANCEMENT("Graphics.ShadowQuality.ClipmapBase"))
+        .RaceDisable(false)
+        .PreFunc(hideUnlessClipmap)
+        .Options(FloatSliderOptions()
+                     .Tooltip("Meia-extensão do nível mais interno, em unidades de mundo. Toda a escada "
+                              "segue: o nível i é este valor vezes 2^i.\n\n"
+                              "190 com seis níveis alcança cerca de 6000, o mesmo que a escada de cascatas, "
+                              "com o nível 0 medindo 380 unidades de lado.\n\n"
+                              "Menor deixa a sombra mais nítida aos pés e encurta o alcance total; maior faz "
+                              "o contrário.")
+                     .Min(20.0f)   // SHADOW_MAP_MIN_CLIPMAP_BASE
+                     .Max(2000.0f) // SHADOW_MAP_MAX_CLIPMAP_BASE
+                     .Step(10.0f)
+                     .DefaultValue(190.0f) // SHADOW_MAP_DEFAULT_CLIPMAP_BASE
+                     .Format("%.0f"));
 
     // ===========================================================================================
     // Technique 4 -- cascade split ladder.

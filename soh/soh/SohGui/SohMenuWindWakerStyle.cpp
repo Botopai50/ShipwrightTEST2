@@ -10,15 +10,6 @@ namespace SohGui {
 extern std::shared_ptr<SohMenu> mSohMenu;
 using namespace UIWidgets;
 
-// Offered shadow-map sizes. Keys are the actual resolution, which is what the CVar stores, so the combobox
-// reads and writes the value the renderer uses rather than an index into this list.
-static const std::map<int32_t, const char*> shadowMapResolutionLabels = {
-    { 512, "512" },
-    { 1024, "1024" },
-    { 2048, "2048" },
-    { 4096, "4096" },
-};
-
 // Keyed by ShadowMode (see ToonLighting.h) -- the three shadow systems are mutually exclusive.
 static const std::map<int32_t, const char*> shadowModeLabels = {
     { SHADOW_MODE_VANILLA, "Vanilla" },

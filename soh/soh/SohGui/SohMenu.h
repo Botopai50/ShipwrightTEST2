@@ -26,6 +26,17 @@ static std::map<int32_t, const char*> languages = {
     { LANGUAGE_FRA, "French" },
     { LANGUAGE_JPN, "Japanese" },
 };
+// Offered shadow-map sizes, shared by every panel that sizes one: the cascade ladder's, the actor layer's
+// and the clipmap's. Keys are the actual resolution, which is what the CVar stores, so a combobox reads and
+// writes the value the renderer uses rather than an index into this list.
+//
+// Lives here rather than in one of the menu files because two of them need it, and a `static` copy in each
+// is two lists to keep in step. 8192 is the renderer's ceiling (see SHADOW_MAP_MAX_RESOLUTION) -- feature
+// level 10.0 guarantees it, and this backend will not start below that.
+inline const std::map<int32_t, const char*> shadowMapResolutionLabels = {
+    { 512, "512" }, { 1024, "1024" }, { 2048, "2048" }, { 4096, "4096" }, { 8192, "8192" },
+};
+
 void UpdateMenuTricks();
 void UpdateMenuLocations();
 

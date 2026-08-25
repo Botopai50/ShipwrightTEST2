@@ -513,18 +513,27 @@ void SohMenu::AddMenuShadowQuality() {
         .PreFunc(hideUnlessClipmap)
         .Options(ComboboxOptions()
                      .ComboMap(shadowMapResolutionLabels)
-                     .DefaultIndex(2048) // SHADOW_MAP_DEFAULT_CLIPMAP_RESOLUTION
+                     .DefaultIndex(4096) // SHADOW_MAP_DEFAULT_CLIPMAP_RESOLUTION
                      .Tooltip(
                          "Resolução de cada nível, SEPARADA da Resolução das cascatas.\n\n"
                          "Separada porque as duas querem coisas opostas: um clipmap quer muitos níveis "
                          "pequenos, uma escada de cascatas quer poucos grandes. Compartilhar o número faz um "
                          "passar fome ou o outro estourar a memória.\n\n"
-                         "A memória é níveis x resolução²  x 2 bytes:\n"
-                         "  6 níveis a 4096 = 192 MB       8 níveis a 2048 = 64 MB\n"
-                         "  10 níveis a 2048 = 80 MB       8 níveis a 4096 = 256 MB\n\n"
-                         "Repare que 8 níveis a 2048 dá MAIS alcance e um texel de nível 0 mais fino que a "
-                         "faixa próxima das cascatas, por um terço da memória. Subir a resolução aqui deixa "
-                         "tudo mais nítido de uma vez; subir os Níveis estende o alcance."));
+                         "Unidades de mundo por texel, contra a escada de cascatas na SUA 4096:\n"
+                         "  distância    cascatas   clip 2048   clip 4096\n"
+                         "       150        0,090       0,234       0,117\n"
+                         "       900        0,740       0,938       0,469\n"
+                         "      2000        0,740       3,750       1,875\n"
+                         "      4000        3,600       7,500       3,750\n\n"
+                         "A 2048 o clipmap perde em quase toda distância. Ele precisa da resolução maior por "
+                         "um motivo estrutural: um nível é um QUADRADO CENTRADO NA CÂMERA, enquanto uma "
+                         "cascata é uma laje AJUSTADA AO CAMPO DE VISÃO. A câmera olha para um lado só, "
+                         "então o quadrado gasta a maior parte da área em chão que ninguém está vendo. É o "
+                         "preço das fronteiras que andam com você.\n\n"
+                         "8 níveis a 4096 = 256 MB. A camada de personagens usa só os dois níveis mais "
+                         "internos, então 4096 lá é desperdício -- baixar Resolução (Personagens) para 1024 "
+                         "tira 60 MB do total.\n\n"
+                         "Subir aqui deixa tudo mais nítido de uma vez; subir os Níveis estende o alcance."));
 
     // What the ladder ACTUALLY produced, read back from the renderer rather than recomputed here.
     //

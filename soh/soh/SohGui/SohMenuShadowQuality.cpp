@@ -93,6 +93,7 @@ void SohMenu::AddMenuShadowQuality() {
             CVarClear(CVAR_ENHANCEMENT("Graphics.ShadowQuality.Layout"));
             CVarClear(CVAR_ENHANCEMENT("Graphics.ShadowQuality.ClipmapLevels"));
             CVarClear(CVAR_ENHANCEMENT("Graphics.ShadowQuality.ClipmapBase"));
+            CVarClear(CVAR_ENHANCEMENT("Graphics.ShadowQuality.ClipmapResolution"));
             CVarClear(CVAR_ENHANCEMENT("Graphics.ShadowQuality.EdgeHarden"));
             CVarClear(CVAR_ENHANCEMENT("Graphics.ShadowQuality.EdgeHardness"));
             CVarClear(CVAR_ENHANCEMENT("Graphics.ShadowQuality.EdgeThreshold"));
@@ -405,11 +406,15 @@ void SohMenu::AddMenuShadowQuality() {
         .Options(IntSliderOptions()
                      .Tooltip("Quantos quadrados aninhados. Cada um dobra a extensão do anterior, então N "
                               "níveis alcançam a extensão base vezes 2^(N-1).\n\n"
-                              "Um nível de clipmap é barato justamente porque não precisa ser grande para "
-                              "ser nítido -- diferente de uma cascata.")
+                              "É AQUI que se ganha alcance. Níveis custam LINEAR e compram alcance "
+                              "EXPONENCIAL: um nível a mais dobra o alcance pelo preço de uma fatia -- e uma "
+                              "fatia de clipmap é pequena, porque densidade uniforme significa que nenhum "
+                              "nível precisa ser grande para ser nítido.\n\n"
+                              "Aumentar a Extensão do Nível 0 também estende o alcance, mas às custas da "
+                              "nitidez perto. Mais níveis não tem esse custo.")
                      .Min(1)
-                     .Max(6) // SHADOW_MAP_MAX_CLIPMAP_LEVELS
-                     .DefaultValue(6)); // SHADOW_MAP_DEFAULT_CLIPMAP_LEVELS
+                     .Max(10) // SHADOW_MAP_MAX_CLIPMAP_LEVELS
+                     .DefaultValue(8)); // SHADOW_MAP_DEFAULT_CLIPMAP_LEVELS
     AddWidget(path, "Cache de Casters Estáticos", WIDGET_CVAR_CHECKBOX)
         .CVar(CVAR_ENHANCEMENT("Graphics.ShadowQuality.StaticCache"))
         .RaceDisable(false)
@@ -436,14 +441,14 @@ void SohMenu::AddMenuShadowQuality() {
         .Options(FloatSliderOptions()
                      .Tooltip("Meia-extensão do nível mais interno, em unidades de mundo. Toda a escada "
                               "segue: o nível i é este valor vezes 2^i.\n\n"
-                              "190 com seis níveis alcança cerca de 6000, o mesmo que a escada de cascatas, "
-                              "com o nível 0 medindo 380 unidades de lado.\n\n"
+                              "120 com oito níveis alcança cerca de 15000 -- duas vezes e meia a escada de "
+                              "cascatas -- com o nível 0 medindo 240 unidades de lado.\n\n"
                               "Menor deixa a sombra mais nítida aos pés e encurta o alcance total; maior faz "
                               "o contrário.")
                      .Min(20.0f)   // SHADOW_MAP_MIN_CLIPMAP_BASE
                      .Max(2000.0f) // SHADOW_MAP_MAX_CLIPMAP_BASE
                      .Step(10.0f)
-                     .DefaultValue(190.0f) // SHADOW_MAP_DEFAULT_CLIPMAP_BASE
+                     .DefaultValue(120.0f) // SHADOW_MAP_DEFAULT_CLIPMAP_BASE
                      .Format("%.0f"));
 
     // ===========================================================================================
@@ -501,6 +506,25 @@ void SohMenu::AddMenuShadowQuality() {
                      .Step(5.0f)
                      .DefaultValue(40.0f) // SHADOW_MAP_DEFAULT_LADDER_NEAR
                      .Format("%.0f"));
+
+    AddWidget(path, "Resolução por Nível", WIDGET_CVAR_COMBOBOX)
+        .CVar(CVAR_ENHANCEMENT("Graphics.ShadowQuality.ClipmapResolution"))
+        .RaceDisable(false)
+        .PreFunc(hideUnlessClipmap)
+        .Options(ComboboxOptions()
+                     .ComboMap(shadowMapResolutionLabels)
+                     .DefaultIndex(2048) // SHADOW_MAP_DEFAULT_CLIPMAP_RESOLUTION
+                     .Tooltip(
+                         "Resolução de cada nível, SEPARADA da Resolução das cascatas.\n\n"
+                         "Separada porque as duas querem coisas opostas: um clipmap quer muitos níveis "
+                         "pequenos, uma escada de cascatas quer poucos grandes. Compartilhar o número faz um "
+                         "passar fome ou o outro estourar a memória.\n\n"
+                         "A memória é níveis x resolução²  x 2 bytes:\n"
+                         "  6 níveis a 4096 = 192 MB       8 níveis a 2048 = 64 MB\n"
+                         "  10 níveis a 2048 = 80 MB       8 níveis a 4096 = 256 MB\n\n"
+                         "Repare que 8 níveis a 2048 dá MAIS alcance e um texel de nível 0 mais fino que a "
+                         "faixa próxima das cascatas, por um terço da memória. Subir a resolução aqui deixa "
+                         "tudo mais nítido de uma vez; subir os Níveis estende o alcance."));
 
     // What the ladder ACTUALLY produced, read back from the renderer rather than recomputed here.
     //

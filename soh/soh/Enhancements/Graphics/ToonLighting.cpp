@@ -858,6 +858,9 @@ static void OnToonFrameUpdate() {
                                                    SHADOW_MAP_DEFAULT_CLIPMAP_LEVELS);
             quality.clipmapBase = CVarGetFloat(CVAR_ENHANCEMENT("Graphics.ShadowQuality.ClipmapBase"),
                                                SHADOW_MAP_DEFAULT_CLIPMAP_BASE);
+            quality.clipmapResolution =
+                CVarGetInteger(CVAR_ENHANCEMENT("Graphics.ShadowQuality.ClipmapResolution"),
+                               SHADOW_MAP_DEFAULT_CLIPMAP_RESOLUTION);
             quality.edgeHarden = CVarGetInteger(CVAR_ENHANCEMENT("Graphics.ShadowQuality.EdgeHarden"),
                                                 SHADOW_MAP_DEFAULT_EDGE_HARDEN);
             quality.edgeHardness = CVarGetFloat(CVAR_ENHANCEMENT("Graphics.ShadowQuality.EdgeHardness"),

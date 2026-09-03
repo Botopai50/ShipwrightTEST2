@@ -601,12 +601,15 @@ extern "C" const char* ToonLighting_ShadowMapFilterStatus(void) {
     const double megabytes =
         ((double)resolution * (double)resolution * (double)bytes * (double)(cascades + 1)) / (1024.0 * 1024.0);
 
+    // The budget is read from the renderer, not from SHADOW_MAP_MOMENT_BUDGET_MB: that constant is only the
+    // floor now, and the real figure is a share of this adapter's memory. Printing the constant here would
+    // name a limit the machine is not actually under.
     char line[256];
     snprintf(line, sizeof(line),
-             "NÃO ESTÁ ATIVO. Em %dx%d este modo precisa de %.0f MB, acima do teto de %d MB,\n"
-             "então o renderizador recusou e voltou para profundidade + PCF.\n"
-             "Baixe a Resolução (Wind Waker Style > Actor Shadows) para 2048 ou menos.",
-             resolution, resolution, megabytes, SHADOW_MAP_MOMENT_BUDGET_MB);
+             "NÃO ESTÁ ATIVO. Em %dx%d este modo precisa de %.0f MB, acima dos %d MB que esta placa\n"
+             "reserva para o efeito, então o renderizador recusou e voltou para profundidade + PCF.\n"
+             "Baixe a Resolução (Wind Waker Style > Actor Shadows) até o valor caber.",
+             resolution, resolution, megabytes, rapi->ShadowMapMomentBudgetMb());
     status = line;
     return status.c_str();
 }

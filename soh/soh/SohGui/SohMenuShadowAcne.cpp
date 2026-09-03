@@ -76,10 +76,6 @@ void SohMenu::AddMenuShadowAcne() {
             CVarClear(CVAR_ENHANCEMENT("Graphics.ShadowAcne.Enabled"));
             CVarClear(CVAR_ENHANCEMENT("Graphics.ShadowAcne.NormalOffset"));
             CVarClear(CVAR_ENHANCEMENT("Graphics.ShadowAcne.NormalTexels"));
-            CVarClear(CVAR_ENHANCEMENT("Graphics.ShadowAcne.LightOffset"));
-            CVarClear(CVAR_ENHANCEMENT("Graphics.ShadowAcne.LightWorld"));
-            CVarClear(CVAR_ENHANCEMENT("Graphics.ShadowAcne.DepthBias"));
-            CVarClear(CVAR_ENHANCEMENT("Graphics.ShadowAcne.DepthWorld"));
             CVarClear(CVAR_ENHANCEMENT("Graphics.ShadowAcne.SlopeScaled"));
             CVarClear(CVAR_ENHANCEMENT("Graphics.ShadowAcne.SlopeMax"));
             Ship::Context::GetInstance()->GetWindow()->GetGui()->SaveConsoleVariablesNextFrame();
@@ -127,7 +123,8 @@ void SohMenu::AddMenuShadowAcne() {
         .RaceDisable(false)
         .PreFunc(hideUnlessAcne)
         .Options(CheckboxOptions().DefaultValue(true).Tooltip(
-            "Não é um deslocamento próprio: multiplica os outros três por quão de lado a superfície está "
+            "Não é um deslocamento próprio: multiplica o deslocamento pela normal por quão de lado a "
+            "superfície está "
             "em relação à luz.\n\n"
             "Acne é um problema de ângulo rasante. Uma superfície de frente para a luz não tem nenhum; uma "
             "de lado tem a profundidade disparando ao longo de um texel. Escalar pelo ângulo gasta a "
@@ -145,59 +142,6 @@ void SohMenu::AddMenuShadowAcne() {
                      .Max(10.0f) // SHADOW_MAP_MAX_ACNE_SLOPE_MAX
                      .Step(0.1f)
                      .DefaultValue(3.5f) // SHADOW_MAP_DEFAULT_ACNE_SLOPE_MAX
-                     .Format("%.1f"));
-
-    // ===========================================================================================
-    // Method 3 -- light offset. The classic, and the classic cost.
-    // ===========================================================================================
-    AddWidget(path, "Método 3: Deslocamento pela Luz", WIDGET_SEPARATOR_TEXT).PreFunc(hideUnlessAcne);
-    AddWidget(path, "Ativar Deslocamento pela Luz", WIDGET_CVAR_CHECKBOX)
-        .CVar(CVAR_ENHANCEMENT("Graphics.ShadowAcne.LightOffset"))
-        .RaceDisable(false)
-        .PreFunc(hideUnlessAcne)
-        .Options(CheckboxOptions().DefaultValue(false).Tooltip(
-            "Empurra o ponto de amostragem na direção da luz.\n\n"
-            "Simples e eficaz, e é a causa clássica do \"peter panning\": empurre o suficiente para limpar "
-            "a acne e a sombra visivelmente se solta do pé do objeto que a projeta.\n\n"
-            "Desligado por padrão porque o Deslocamento pela Normal chega no mesmo lugar sem esse custo. "
-            "Use se aquele sozinho não bastar."));
-    AddWidget(path, "Distância: %.1f unidades", WIDGET_CVAR_SLIDER_FLOAT)
-        .CVar(CVAR_ENHANCEMENT("Graphics.ShadowAcne.LightWorld"))
-        .RaceDisable(false)
-        .PreFunc(hideUnlessAcne)
-        .Options(FloatSliderOptions()
-                     .Tooltip("Em unidades de mundo. Para referência, o Link adulto tem cerca de 60.\n\n"
-                              "Aumente devagar: o descolamento da sombra cresce junto.")
-                     .Min(0.0f)
-                     .Max(50.0f) // SHADOW_MAP_MAX_ACNE_LIGHT_WORLD
-                     .Step(0.5f)
-                     .DefaultValue(2.0f) // SHADOW_MAP_DEFAULT_ACNE_LIGHT_WORLD
-                     .Format("%.1f"));
-
-    // ===========================================================================================
-    // Method 4 -- constant depth bias. Cheapest, least discriminating.
-    // ===========================================================================================
-    AddWidget(path, "Método 4: Bias de Profundidade", WIDGET_SEPARATOR_TEXT).PreFunc(hideUnlessAcne);
-    AddWidget(path, "Ativar Bias de Profundidade", WIDGET_CVAR_CHECKBOX)
-        .CVar(CVAR_ENHANCEMENT("Graphics.ShadowAcne.DepthBias"))
-        .RaceDisable(false)
-        .PreFunc(hideUnlessAcne)
-        .Options(CheckboxOptions().DefaultValue(false).Tooltip(
-            "Subtrai da profundidade do receiver depois de projetar.\n\n"
-            "O mais barato e o menos criterioso: age igual numa superfície de frente para a luz, onde nunca "
-            "houve acne para remover, e numa de lado. É o último a que recorrer."));
-    AddWidget(path, "Quantidade: %.1f unidades", WIDGET_CVAR_SLIDER_FLOAT)
-        .CVar(CVAR_ENHANCEMENT("Graphics.ShadowAcne.DepthWorld"))
-        .RaceDisable(false)
-        .PreFunc(hideUnlessAcne)
-        .Options(FloatSliderOptions()
-                     .Tooltip("Em unidades de mundo ao longo da luz, convertidas para a escala de "
-                              "profundidade de cada cascata -- então um número só significa a mesma coisa "
-                              "em todas as faixas.")
-                     .Min(0.0f)
-                     .Max(50.0f) // SHADOW_MAP_MAX_ACNE_DEPTH_WORLD
-                     .Step(0.5f)
-                     .DefaultValue(1.0f) // SHADOW_MAP_DEFAULT_ACNE_DEPTH_WORLD
                      .Format("%.1f"));
 
 }

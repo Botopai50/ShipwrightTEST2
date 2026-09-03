@@ -563,57 +563,6 @@ extern "C" const char* ToonLighting_ShadowMapCasterCensus(void) {
 
 // C-callable export (see ToonLighting.h): lets the decompiled actor draw loop reorder receivers ahead of the
 // shadow flush without pulling the curated id list into the game code.
-// SOH [Enhancement] Why the filterable mode is not running, when it is not.
-//
-// It can be selected and refused: the moment array is one to four times the size of a depth map that is
-// already 160 MB at the default resolution, and there is a ceiling. The refusal is logged and the mode
-// silently becomes depth and PCF -- so the setting appears to do nothing, which is exactly what it looks
-// like when a feature is broken. This is the difference between the two, said where the setting is.
-//
-// The size is recomputed here rather than read back, because the point is to say what the mode WOULD have
-// cost: the backend does not keep the figure for an allocation it declined to make.
-extern "C" const char* ToonLighting_ShadowMapFilterStatus(void) {
-    static std::string status;
-    status.clear();
-
-    const int requested = CVarGetInteger(CVAR_ENHANCEMENT("Graphics.ShadowQuality.FilterMode"),
-                                         SHADOW_MAP_DEFAULT_FILTER_MODE);
-    if (requested == SHADOW_MAP_FILTER_DEPTH) {
-        return status.c_str();
-    }
-    Fast::GfxRenderingAPI* rapi = GetRenderingApi();
-    if (rapi == nullptr || rapi->ShadowMapEffectiveFilterMode() == requested) {
-        return status.c_str();
-    }
-
-    // Bytes per texel by mode, matching ShadowMomentBytesPerTexel in the backend.
-    int bytes = 4;
-    if (requested == SHADOW_MAP_FILTER_VSM) {
-        bytes = 8;
-    } else if (requested == SHADOW_MAP_FILTER_MSM) {
-        bytes = 16;
-    }
-    const int resolution =
-        CVarGetInteger(CVAR_ENHANCEMENT("Graphics.ShadowMap.Resolution"), SHADOW_MAP_DEFAULT_RESOLUTION);
-    const int cascades =
-        CVarGetInteger(CVAR_ENHANCEMENT("Graphics.ShadowMap.CascadeCount"), SHADOW_MAP_DEFAULT_CASCADES);
-    // The scratch slice the separable blur needs is the +1.
-    const double megabytes =
-        ((double)resolution * (double)resolution * (double)bytes * (double)(cascades + 1)) / (1024.0 * 1024.0);
-
-    // The budget is read from the renderer, not from SHADOW_MAP_MOMENT_BUDGET_MB: that constant is only the
-    // floor now, and the real figure is a share of this adapter's memory. Printing the constant here would
-    // name a limit the machine is not actually under.
-    char line[256];
-    snprintf(line, sizeof(line),
-             "NÃO ESTÁ ATIVO. Em %dx%d este modo precisa de %.0f MB, acima dos %d MB que esta placa\n"
-             "reserva para o efeito, então o renderizador recusou e voltou para profundidade + PCF.\n"
-             "Baixe a Resolução (Wind Waker Style > Actor Shadows) até o valor caber.",
-             resolution, resolution, megabytes, rapi->ShadowMapMomentBudgetMb());
-    status = line;
-    return status.c_str();
-}
-
 // SOH [Enhancement] What the cascades actually came out as, for the menu to print.
 //
 // Read from the renderer rather than recomputed from the CVars, and that is the whole point: with the
@@ -844,15 +793,6 @@ static void OnToonFrameUpdate() {
                                                 SHADOW_MAP_DEFAULT_JITTER_TAPS);
             quality.jitterRadius = CVarGetFloat(CVAR_ENHANCEMENT("Graphics.ShadowQuality.JitterRadius"),
                                                 SHADOW_MAP_DEFAULT_JITTER_RADIUS);
-            quality.jitterTemporal = CVarGetInteger(CVAR_ENHANCEMENT("Graphics.ShadowQuality.JitterTemporal"), 0);
-            quality.filterMode = CVarGetInteger(CVAR_ENHANCEMENT("Graphics.ShadowQuality.FilterMode"),
-                                                SHADOW_MAP_DEFAULT_FILTER_MODE);
-            quality.esmExponent = CVarGetFloat(CVAR_ENHANCEMENT("Graphics.ShadowQuality.EsmExponent"),
-                                               SHADOW_MAP_DEFAULT_ESM_EXPONENT);
-            quality.blurRadius = CVarGetFloat(CVAR_ENHANCEMENT("Graphics.ShadowQuality.BlurRadius"),
-                                              SHADOW_MAP_DEFAULT_BLUR_RADIUS);
-            quality.bleedReduction = CVarGetFloat(CVAR_ENHANCEMENT("Graphics.ShadowQuality.BleedReduction"),
-                                                  SHADOW_MAP_DEFAULT_BLEED_REDUCTION);
             quality.layout = CVarGetInteger(CVAR_ENHANCEMENT("Graphics.ShadowQuality.Layout"),
                                             SHADOW_MAP_DEFAULT_LAYOUT);
             quality.staticCache = CVarGetInteger(CVAR_ENHANCEMENT("Graphics.ShadowQuality.StaticCache"),
@@ -886,14 +826,6 @@ static void OnToonFrameUpdate() {
                                                        acneDefaults.normalOffset);
             quality.acne.normalTexels = CVarGetFloat(CVAR_ENHANCEMENT("Graphics.ShadowAcne.NormalTexels"),
                                                      acneDefaults.normalTexels);
-            quality.acne.lightOffset = CVarGetInteger(CVAR_ENHANCEMENT("Graphics.ShadowAcne.LightOffset"),
-                                                      acneDefaults.lightOffset);
-            quality.acne.lightWorld =
-                CVarGetFloat(CVAR_ENHANCEMENT("Graphics.ShadowAcne.LightWorld"), acneDefaults.lightWorld);
-            quality.acne.depthBias =
-                CVarGetInteger(CVAR_ENHANCEMENT("Graphics.ShadowAcne.DepthBias"), acneDefaults.depthBias);
-            quality.acne.depthWorld =
-                CVarGetFloat(CVAR_ENHANCEMENT("Graphics.ShadowAcne.DepthWorld"), acneDefaults.depthWorld);
             quality.acne.slopeScaled = CVarGetInteger(CVAR_ENHANCEMENT("Graphics.ShadowAcne.SlopeScaled"),
                                                       acneDefaults.slopeScaled);
             quality.acne.slopeMax =

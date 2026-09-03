@@ -21,21 +21,13 @@ using namespace UIWidgets;
 // fast/shadow_map.h, matching the convention in SohMenuWindWakerStyle.cpp, and each names the constant it
 // must be kept in step with.
 
-// Keyed by SHADOW_MAP_FILTER_* -- what the depth pass stores, which decides whether the map can be blurred.
-static const std::map<int32_t, const char*> shadowFilterModeLabels = {
-    { 0, "Profundidade (PCF)" }, // SHADOW_MAP_FILTER_DEPTH
-    { 1, "ESM (exponencial)" },  // SHADOW_MAP_FILTER_ESM
-    { 2, "VSM (variância)" },    // SHADOW_MAP_FILTER_VSM
-    { 3, "MSM (4 momentos)" },   // SHADOW_MAP_FILTER_MSM
-};
-
-// Keyed by SHADOW_MAP_LADDER_*.
 // Keyed by SHADOW_MAP_LAYOUT_*.
 static const std::map<int32_t, const char*> shadowLayoutLabels = {
     { 0, "Cascatas" }, // SHADOW_MAP_LAYOUT_CASCADE
     { 1, "Clipmap" },  // SHADOW_MAP_LAYOUT_CLIPMAP
 };
 
+// Keyed by SHADOW_MAP_LADDER_*.
 static const std::map<int32_t, const char*> shadowLadderModeLabels = {
     { 0, "Manual (sliders)" }, // SHADOW_MAP_LADDER_MANUAL
     { 1, "Automática" },       // SHADOW_MAP_LADDER_PRACTICAL
@@ -84,11 +76,6 @@ void SohMenu::AddMenuShadowQuality() {
             CVarClear(CVAR_ENHANCEMENT("Graphics.ShadowQuality.Jitter"));
             CVarClear(CVAR_ENHANCEMENT("Graphics.ShadowQuality.JitterTaps"));
             CVarClear(CVAR_ENHANCEMENT("Graphics.ShadowQuality.JitterRadius"));
-            CVarClear(CVAR_ENHANCEMENT("Graphics.ShadowQuality.JitterTemporal"));
-            CVarClear(CVAR_ENHANCEMENT("Graphics.ShadowQuality.FilterMode"));
-            CVarClear(CVAR_ENHANCEMENT("Graphics.ShadowQuality.EsmExponent"));
-            CVarClear(CVAR_ENHANCEMENT("Graphics.ShadowQuality.BlurRadius"));
-            CVarClear(CVAR_ENHANCEMENT("Graphics.ShadowQuality.BleedReduction"));
             CVarClear(CVAR_ENHANCEMENT("Graphics.ShadowQuality.StaticCache"));
             CVarClear(CVAR_ENHANCEMENT("Graphics.ShadowQuality.Layout"));
             CVarClear(CVAR_ENHANCEMENT("Graphics.ShadowQuality.ClipmapLevels"));
@@ -190,117 +177,6 @@ void SohMenu::AddMenuShadowQuality() {
                      .Step(0.1f)
                      .DefaultValue(2.0f) // SHADOW_MAP_DEFAULT_JITTER_RADIUS
                      .Format("%.2f"));
-    AddWidget(path, "Girar a Cada Quadro", WIDGET_CVAR_CHECKBOX)
-        .CVar(CVAR_ENHANCEMENT("Graphics.ShadowQuality.JitterTemporal"))
-        .RaceDisable(false)
-        .PreFunc(hideUnlessJitter)
-        .Options(CheckboxOptions().DefaultValue(false).Tooltip(
-            "Avança o padrão a cada quadro, então o granulado se move em vez de ficar parado.\n\n"
-            "Desligado por padrão de propósito: um padrão parado é uma textura que o olho para de ver, "
-            "enquanto um que se mexe é um brilho que o olho não consegue ignorar. Sem filtro temporal, "
-            "animar o ruído geralmente piora. Com muitas amostras pode ajudar -- teste."));
-
-    // ===========================================================================================
-    // Technique 1 -- filterable shadow maps.
-    // ===========================================================================================
-    path = { "Qualidade das Sombras", "Mapa Filtrável", SECTION_COLUMN_1 };
-    AddSidebarEntry("Qualidade das Sombras", "Mapa Filtrável", 3);
-
-    auto hideUnlessFilterable = [](WidgetInfo& info) {
-        info.isHidden = CVarGetInteger(CVAR_ENHANCEMENT("Graphics.WorldShadows.Mode"), SHADOW_MODE_VANILLA) !=
-                            SHADOW_MODE_SHADOW_MAP ||
-                        CVarGetInteger(CVAR_ENHANCEMENT("Graphics.ShadowQuality.FilterMode"), 0) == 0;
-    };
-    auto hideUnlessEsm = [](WidgetInfo& info) {
-        info.isHidden = CVarGetInteger(CVAR_ENHANCEMENT("Graphics.WorldShadows.Mode"), SHADOW_MODE_VANILLA) !=
-                            SHADOW_MODE_SHADOW_MAP ||
-                        CVarGetInteger(CVAR_ENHANCEMENT("Graphics.ShadowQuality.FilterMode"), 0) != 1;
-    };
-    auto hideUnlessMoments = [](WidgetInfo& info) {
-        const int32_t mode = CVarGetInteger(CVAR_ENHANCEMENT("Graphics.ShadowQuality.FilterMode"), 0);
-        info.isHidden = CVarGetInteger(CVAR_ENHANCEMENT("Graphics.WorldShadows.Mode"), SHADOW_MODE_VANILLA) !=
-                            SHADOW_MODE_SHADOW_MAP ||
-                        (mode != 2 && mode != 3);
-    };
-
-    AddWidget(path, "O que o Mapa Guarda", WIDGET_CVAR_COMBOBOX)
-        .CVar(CVAR_ENHANCEMENT("Graphics.ShadowQuality.FilterMode"))
-        .RaceDisable(false)
-        .PreFunc(hideUnlessShadowMap)
-        .Options(ComboboxOptions()
-                     .ComboMap(shadowFilterModeLabels)
-                     .DefaultIndex(1) // SHADOW_MAP_DEFAULT_FILTER_MODE (ESM)
-                     .Tooltip(
-                         "Profundidade crua NÃO pode ser borrada: a média de duas profundidades é uma "
-                         "superfície que não existe em nenhuma das duas, e um mapa de profundidade borrado "
-                         "compara errado em todo lugar.\n\n"
-                         "Os outros três guardam algo cuja média faz sentido, o que permite borrar o MAPA. "
-                         "Isso tira o custo da suavização do shader de material e coloca num passe só -- o "
-                         "que importa muito aqui, porque o shader de material é compilado dentro do quadro "
-                         "na primeira vez que cada material aparece.\n\n"
-                         "ESM: mais barato, vaza luz quando o bloqueador está muito à frente.\n"
-                         "VSM: filtrável em hardware, sofre com bloqueadores sobrepostos.\n"
-                         "MSM: o único que aguenta geometria sobreposta (que este jogo tem muita), e o mais "
-                         "caro."));
-    // Says out loud when a selected mode was refused. The refusal only reached the log, so a mode that
-    // could not be allocated looked exactly like a mode that does nothing -- which is what it looked like.
-    AddWidget(path, "", WIDGET_TEXT)
-        .RaceDisable(false)
-        .PreFunc([](WidgetInfo& info) {
-            const char* status = ToonLighting_ShadowMapFilterStatus();
-            const bool quiet = (status == nullptr) || (status[0] == '\0');
-            info.isHidden = quiet ||
-                            CVarGetInteger(CVAR_ENHANCEMENT("Graphics.WorldShadows.Mode"), SHADOW_MODE_VANILLA) !=
-                                SHADOW_MODE_SHADOW_MAP;
-            if (!info.isHidden) {
-                info.name = status;
-            }
-        });
-
-    AddWidget(path, "Raio do Borrão: %.2f texels", WIDGET_CVAR_SLIDER_FLOAT)
-        .CVar(CVAR_ENHANCEMENT("Graphics.ShadowQuality.BlurRadius"))
-        .RaceDisable(false)
-        .PreFunc(hideUnlessFilterable)
-        .Options(FloatSliderOptions()
-                     .Tooltip("O borrão gaussiano aplicado sobre o próprio mapa.\n\n"
-                              "É ESTE ajuste que define a largura da penumbra nos modos filtráveis. Em 0 o "
-                              "formato filtrável não faz nada de útil: o formato é o que torna o borrão "
-                              "legal, o borrão é o que amacia a borda.")
-                     .Min(0.0f)
-                     .Max(8.0f) // SHADOW_MAP_MAX_BLUR_RADIUS
-                     .Step(0.1f)
-                     .DefaultValue(2.0f) // SHADOW_MAP_DEFAULT_BLUR_RADIUS
-                     .Format("%.2f"));
-    AddWidget(path, "Expoente ESM: %.0f", WIDGET_CVAR_SLIDER_FLOAT)
-        .CVar(CVAR_ENHANCEMENT("Graphics.ShadowQuality.EsmExponent"))
-        .RaceDisable(false)
-        .PreFunc(hideUnlessEsm)
-        .Options(FloatSliderOptions()
-                     .Tooltip("Quão abruptamente o degrau reconstruído cai.\n\n"
-                              "Baixo demais e a sombra vira um degradê lavado; alto demais e a exponencial "
-                              "estoura o formato de armazenamento, a borda volta a ficar dura e ganha acne "
-                              "por cima.")
-                     .Min(5.0f)   // SHADOW_MAP_MIN_ESM_EXPONENT
-                     .Max(200.0f) // SHADOW_MAP_MAX_ESM_EXPONENT
-                     .Step(1.0f)
-                     .DefaultValue(80.0f) // SHADOW_MAP_DEFAULT_ESM_EXPONENT
-                     .Format("%.0f"));
-    AddWidget(path, "Redução de Vazamento", WIDGET_CVAR_SLIDER_FLOAT)
-        .CVar(CVAR_ENHANCEMENT("Graphics.ShadowQuality.BleedReduction"))
-        .RaceDisable(false)
-        .PreFunc(hideUnlessMoments)
-        .Options(FloatSliderOptions()
-                     .Tooltip("Corta a cauda baixa da distribuição antes de usar o resultado.\n\n"
-                              "VSM e MSM dão um LIMITE SUPERIOR da fração iluminada, não a fração em si, e "
-                              "onde dois bloqueadores em profundidades diferentes dividem o mesmo texel esse "
-                              "limite fica frouxo -- o que se vê como uma sombra ficando translúcida no meio.\n\n"
-                              "Acima de uns 50% a penumbra começa a endurecer de volta, que é justamente o "
-                              "defeito que o modo existe para remover.")
-                     .Min(0.0f)
-                     .Max(0.99f)
-                     .Step(0.01f)
-                     .DefaultValue(0.20f) // SHADOW_MAP_DEFAULT_BLEED_REDUCTION
-                     .IsPercentage());
 
     // ===========================================================================================
     // Edge hardening -- the control in the other direction from everything above.

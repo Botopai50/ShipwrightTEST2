@@ -750,6 +750,23 @@ void SohMenu::AddMenuWindWakerStyle() {
     // rather than a variable because Tooltip() keeps the raw pointer it is handed -- a std::string built
     // per widget would be freed before the menu ever draws it, while adjacent literals are joined by the
     // compiler and live in static storage.
+
+    // SOH [Enhancement] The three sliders below are CASCADE-ONLY, and hidden rather than left inert in the
+    // clipmap layout.
+    //
+    // The divisor is read in the cascade fit, inside the `else` of the layout branch (see RenderShadowMap in
+    // interpreter.cpp): it freezes a band's matrix on a frame it is not due, and the content key then agrees
+    // the slice already holds what a redraw would produce. The clipmap has no equivalent and needs none --
+    // it snaps each level's centre to that level's own texel, so a camera that has not crossed a texel
+    // produces a bit-identical matrix and the slice is reused with no parking code at all.
+    //
+    // So in clipmap these read as sliders that do nothing, which is how they were reported. Reuse still
+    // happens there; it is simply not what this number controls.
+    auto hideUnlessCascadeLayout = [](WidgetInfo& info) {
+        info.isHidden = CVarGetInteger(CVAR_ENHANCEMENT("Graphics.WorldShadows.Mode"), SHADOW_MODE_VANILLA) !=
+                            SHADOW_MODE_SHADOW_MAP ||
+                        CVarGetInteger(CVAR_ENHANCEMENT("Graphics.ShadowQuality.Layout"), 0) != 0;
+    };
 #define SHADOW_UPDATE_RATE_TOOLTIP_TAIL                                                                      \
     "\n\nPular a reconstrução CONGELA a faixa inteira, matriz inclusive. O mapa guardado foi desenhado com " \
     "a matriz daquele quadro, e lê-lo com outra projetaria a sombra a partir de onde a luz estava — uma "    \
@@ -759,7 +776,7 @@ void SohMenu::AddMenuWindWakerStyle() {
     AddWidget(path, "Atualização da Faixa Próxima: 1 a cada %d quadros", WIDGET_CVAR_SLIDER_INT)
         .CVar(CVAR_ENHANCEMENT("Graphics.ShadowMap.UpdateDivisor0"))
         .RaceDisable(false)
-        .PreFunc(hideUnlessShadowMap)
+        .PreFunc(hideUnlessCascadeLayout)
         .Options(IntSliderOptions()
                      .Tooltip("Com que frequência a faixa mais próxima é redesenhada. 1 é todo quadro "
                               "(60 Hz a 60 fps), 2 é um sim um não (30 Hz).\n\n"
@@ -775,7 +792,7 @@ void SohMenu::AddMenuWindWakerStyle() {
     AddWidget(path, "Atualização da Faixa Média: 1 a cada %d quadros", WIDGET_CVAR_SLIDER_INT)
         .CVar(CVAR_ENHANCEMENT("Graphics.ShadowMap.UpdateDivisor1"))
         .RaceDisable(false)
-        .PreFunc(hideUnlessShadowMap)
+        .PreFunc(hideUnlessCascadeLayout)
         .Options(IntSliderOptions()
                      .Tooltip("Com que frequência a faixa média é redesenhada. 1 é todo quadro (60 Hz a 60 "
                               "fps), 2 é um sim um não (30 Hz).\n\n"
@@ -791,7 +808,7 @@ void SohMenu::AddMenuWindWakerStyle() {
     AddWidget(path, "Atualização da Faixa Distante: 1 a cada %d quadros", WIDGET_CVAR_SLIDER_INT)
         .CVar(CVAR_ENHANCEMENT("Graphics.ShadowMap.UpdateDivisor2"))
         .RaceDisable(false)
-        .PreFunc(hideUnlessShadowMap)
+        .PreFunc(hideUnlessCascadeLayout)
         .Options(IntSliderOptions()
                      .Tooltip("Com que frequência a faixa distante é redesenhada. O padrão é 2 — 30 Hz a "
                               "60 fps, enquanto as outras duas ficam em 60 Hz.\n\n"

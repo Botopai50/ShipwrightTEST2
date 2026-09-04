@@ -991,6 +991,12 @@ static bool ToonClosestPointLight(PlayState* play, Actor* actor, f32 pointRange,
 
     LightNode* node = play->lightCtx.listHead;
     f32 bestDistSq = -1.0f;
+    // The winner, not the winner's outputs. The square root and the six divisions below used to run on
+    // every light that improved on the one before it -- so walking a torchlit room from far to near paid
+    // them again for each -- to produce values all but the last were about to overwrite. The comparison
+    // that picks the winner only ever needed the SQUARED distance, so nothing else has to be computed
+    // until the walk is over. Selection is unchanged: still the first light at the strict minimum.
+    LightInfo* best = NULL;
 
     while (node != NULL) {
         LightInfo* info = node->info;
@@ -1004,16 +1010,24 @@ static bool ToonClosestPointLight(PlayState* play, Actor* actor, f32 pointRange,
 
             if ((radius > 0.0f) && (distSq > 0.0001f) && (distSq < (radius * radius)) &&
                 ((bestDistSq < 0.0f) || (distSq < bestDistSq))) {
-                f32 dist = sqrtf(distSq);
-
                 bestDistSq = distSq;
-                dirOut[0] = dx / dist, dirOut[1] = dy / dist, dirOut[2] = dz / dist;
-                colOut[0] = info->params.point.color[0] / 255.0f;
-                colOut[1] = info->params.point.color[1] / 255.0f;
-                colOut[2] = info->params.point.color[2] / 255.0f;
+                best = info;
             }
         }
         node = node->next;
+    }
+
+    if (best != NULL) {
+        // Recomputed from the same light and the same actor position, neither of which the walk touched,
+        // so these are the values the old code would have left behind on its last improving light.
+        const f32 dx = best->params.point.x - actor->world.pos.x;
+        const f32 dy = best->params.point.y - actor->world.pos.y;
+        const f32 dz = best->params.point.z - actor->world.pos.z;
+        const f32 dist = sqrtf(bestDistSq);
+        dirOut[0] = dx / dist, dirOut[1] = dy / dist, dirOut[2] = dz / dist;
+        colOut[0] = best->params.point.color[0] / 255.0f;
+        colOut[1] = best->params.point.color[1] / 255.0f;
+        colOut[2] = best->params.point.color[2] / 255.0f;
     }
     return bestDistSq >= 0.0f;
 }

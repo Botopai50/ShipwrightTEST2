@@ -36,12 +36,21 @@ jobs:
     # backends, which only build-windows compiles here -- generate-soh-otr builds the asset target and
     # never touches them. A renderer change on such a branch was reaching the remote having been read
     # but never compiled by anything.
+    # `otimiza` is `performance` again, in the language the branches are actually named in. A branch
+    # doing renderer and resource-loading work was pushed six times and skipped six times, because the
+    # opt-in list was English-only while the person naming the branches was not. The substring is there
+    # to describe the WORK, and the work does not change language with the label on it.
+    #
+    # The stem again, per the `shadow` lesson above: `otimiza` covers otimizacao, otimização, otimizar
+    # and otimizada. `contains` is not case sensitive, so the capital O in a name like
+    # `Otimização_Foda` needs nothing extra.
     if: >-
       github.event_name == 'workflow_dispatch'
       || github.ref_name == github.event.repository.default_branch
       || contains(github.ref, 'celshade')
       || contains(github.ref, 'shadow')
       || contains(github.ref, 'performance')
+      || contains(github.ref, 'otimiza')
     runs-on: ubuntu-22.04
     steps:
     - name: Git Checkout

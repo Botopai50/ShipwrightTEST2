@@ -520,8 +520,7 @@ void SohMenu::AddMenuWindWakerStyle() {
                         SHADOW_MODE_SHADOW_MAP;
     };
     AddWidget(path, "Opções", WIDGET_SEPARATOR_TEXT).PreFunc(hideUnlessShadowMap);
-    AddWidget(path, "Perfis: cenário / personagens (modo atual)", WIDGET_SEPARATOR_TEXT)
-        .PreFunc(hideUnlessShadowMap);
+    AddWidget(path, "Perfis: cenário / personagens (modo atual)", WIDGET_SEPARATOR_TEXT).PreFunc(hideUnlessShadowMap);
     struct ResolutionPreset {
         const char* label;
         int world;
@@ -547,7 +546,7 @@ void SohMenu::AddMenuWindWakerStyle() {
                 const bool clipmap = CVarGetInteger(CVAR_ENHANCEMENT("Graphics.ShadowQuality.Layout"),
                                                     SHADOW_MAP_DEFAULT_LAYOUT) == SHADOW_MAP_LAYOUT_CLIPMAP;
                 CVarSetInteger(clipmap ? CVAR_ENHANCEMENT("Graphics.ShadowQuality.ClipmapResolution")
-                                      : CVAR_ENHANCEMENT("Graphics.ShadowMap.Resolution"),
+                                       : CVAR_ENHANCEMENT("Graphics.ShadowMap.Resolution"),
                                preset.world);
                 CVarSetInteger(CVAR_ENHANCEMENT("Graphics.ShadowMap.ActorResolution"), preset.actors);
                 Ship::Context::GetInstance()->GetWindow()->GetGui()->SaveConsoleVariablesNextFrame();

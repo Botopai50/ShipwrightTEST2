@@ -37,7 +37,10 @@ static std::map<int32_t, const char*> languages = {
 // quadruples with each step, so it is 128 MB apiece and puts a clipmap over a gigabyte. Sharper shadows
 // come from more clipmap levels, which cost linearly.
 inline const std::map<int32_t, const char*> shadowMapResolutionLabels = {
-    { 512, "512" }, { 1024, "1024" }, { 2048, "2048" }, { 4096, "4096" },
+    { 512, "512" },
+    { 1024, "1024" },
+    { 2048, "2048" },
+    { 4096, "4096" },
 };
 
 void UpdateMenuTricks();

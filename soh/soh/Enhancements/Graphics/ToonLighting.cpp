@@ -64,9 +64,9 @@ static constexpr float kDefaultShadowOpacity = 0.2f;
 static constexpr float kDefaultShadowLength = 0.2f;
 static constexpr float kDefaultShadowSlabDepth = 8.0f; // stencil-volume depth below the feet (ground band)
 static constexpr float kDefaultShadowSlabRise = 8.0f;  // stencil-volume height above the feet (uphill ground)
-static constexpr int kDefaultShadowEdgeSoftness = 0;  // penumbra rings around the silhouette (0 = hard edge)
-static constexpr int kDefaultShadowMaxDistance = 550; // camera-forward distance past which shadows are culled
-static constexpr float kShadowFadeTime = 0.15f; // seconds to ease the shadow size in/out (anti-pop, like Navi)
+static constexpr int kDefaultShadowEdgeSoftness = 0;   // penumbra rings around the silhouette (0 = hard edge)
+static constexpr int kDefaultShadowMaxDistance = 550;  // camera-forward distance past which shadows are culled
+static constexpr float kShadowFadeTime = 0.15f;        // seconds to ease the shadow size in/out (anti-pop, like Navi)
 
 // Per-frame snapshot of every CVar the per-actor hot path reads. CVarGet* is a string-keyed hash-map
 // lookup that heap-allocates for keys this long, and HandleActorDraw runs for EVERY drawn actor every
@@ -76,7 +76,7 @@ static constexpr float kShadowFadeTime = 0.15f; // seconds to ease the shadow si
 static struct {
     bool cel = true;
     int shadowMode = SHADOW_MODE_VANILLA;
-    bool shadows = false;   // shadowMode == SHADOW_MODE_ACTOR (stencil volumes)
+    bool shadows = false;            // shadowMode == SHADOW_MODE_ACTOR (stencil volumes)
     bool shadowMap = false;          // shadowMode == SHADOW_MODE_SHADOW_MAP (cascaded depth maps)
     bool shadowMapSupported = false; // the running backend implements the depth pass (D3D11 only)
     // Radial distance from the camera past which an actor is not worth capturing as a shadow caster: the
@@ -222,22 +222,21 @@ static void RefreshFrameParams() {
         s32 count = CVarGetInteger(CVAR_ENHANCEMENT("Graphics.ShadowMap.CascadeCount"), SHADOW_MAP_DEFAULT_CASCADES);
         count = count < 1 ? 1 : (count > SHADOW_MAP_MAX_CASCADES ? SHADOW_MAP_MAX_CASCADES : count);
         sParams.shadowMapReach = CVarGetFloat(kSplitCVars[count - 1], kSplitDefaults[count - 1]);
-        sParams.shadowMapCasterFirst =
-            CVarGetInteger(CVAR_ENHANCEMENT("Graphics.ShadowMap.CasterFirst"), 0) != 0;
+        sParams.shadowMapCasterFirst = CVarGetInteger(CVAR_ENHANCEMENT("Graphics.ShadowMap.CasterFirst"), 0) != 0;
         sParams.shadowMapCasterDrawRadius = CVarGetFloat(CVAR_ENHANCEMENT("Graphics.ShadowMap.CasterDrawRadius"),
                                                          SHADOW_MAP_DEFAULT_CASTER_DRAW_RADIUS);
     } else {
         sParams.shadowMapSupported = false;
         sParams.shadowMapCasterDrawRadius = 0.0f;
     }
-    sParams.suppressVanilla =
-        CVarGetInteger(CVAR_ENHANCEMENT("Graphics.WorldShadows.SuppressVanillaShadows"), 1) != 0;
+    sParams.suppressVanilla = CVarGetInteger(CVAR_ENHANCEMENT("Graphics.WorldShadows.SuppressVanillaShadows"), 1) != 0;
     sParams.useNaviLight = CVarGetInteger(CVAR_ENHANCEMENT("Graphics.ToonLighting.UseNaviLight"), 1) != 0;
     sParams.showDebug = CVarGetInteger(CVAR_DEVELOPER_TOOLS("ToonLighting.ShowDebug"), 0) != 0;
     sParams.shadowMapCensus =
         sParams.shadowMap && CVarGetInteger(CVAR_DEVELOPER_TOOLS("ShadowMap.ShowCascadeBounds"), 0) != 0;
     ToonShadowCensusPublish();
-    sParams.pointRange = CVarGetFloat(CVAR_ENHANCEMENT("Graphics.ToonLighting.PointLightRange"), kDefaultPointLightRange);
+    sParams.pointRange =
+        CVarGetFloat(CVAR_ENHANCEMENT("Graphics.ToonLighting.PointLightRange"), kDefaultPointLightRange);
     sParams.transitionTime =
         CVarGetFloat(CVAR_ENHANCEMENT("Graphics.ToonLighting.TransitionTime"), kDefaultTransitionTime);
     sParams.maxDist =
@@ -361,10 +360,10 @@ static bool ToonActorExcluded(Actor* actor) {
         case ACTOR_BG_TREEMOUTH:  // Great Deku Tree (very tall)
         case ACTOR_BG_MIZU_WATER: // water-box surfaces
         case ACTOR_BG_HAKA_WATER:
-        case ACTOR_EN_WOOD02:     // trees / bushes / leaf scenery
-        case ACTOR_OBJ_SWITCH:    // floor/crystal/eye switches -- environment fixtures, not relit objects.
-        case ACTOR_OBJ_BEAN:      // magic bean plant/platform -- same. Both are also RECEIVERS below, so
-                                  // they still catch other actors' shadows like the ground does.
+        case ACTOR_EN_WOOD02:  // trees / bushes / leaf scenery
+        case ACTOR_OBJ_SWITCH: // floor/crystal/eye switches -- environment fixtures, not relit objects.
+        case ACTOR_OBJ_BEAN:   // magic bean plant/platform -- same. Both are also RECEIVERS below, so
+                               // they still catch other actors' shadows like the ground does.
             return true;
         default:
             break;
@@ -526,7 +525,7 @@ static bool ToonShadowExcluded(Actor* actor) {
         // harmless while the caster marker only reached the opaque display list; she is in the translucent
         // one, and now that the marker reaches there too she has to be named.
         case ACTOR_EN_ELF:
-        case ACTOR_EN_KUSA:      // small cuttable grass -- everywhere and tiny, a blob per tuft reads wrong
+        case ACTOR_EN_KUSA: // small cuttable grass -- everywhere and tiny, a blob per tuft reads wrong
         // Ambient critters. Same argument as the grass: sprite-sized, spawned in swarms (Obj_Mure drops
         // them a dozen at a time across a field), and every one of them lands in the world caster layer by
         // default, so a meadow comes out speckled with little dark diamonds that track nothing the player
@@ -589,9 +588,9 @@ extern "C" const char* ToonLighting_ShadowMapCascadeReport(void) {
         return report.c_str();
     }
 
-    const f32 blend = CLAMP(CVarGetFloat(CVAR_ENHANCEMENT("Graphics.ShadowMap.BlendFraction"),
-                                         SHADOW_MAP_DEFAULT_BLEND_FRACTION),
-                            0.0f, 1.0f);
+    const f32 blend =
+        CLAMP(CVarGetFloat(CVAR_ENHANCEMENT("Graphics.ShadowMap.BlendFraction"), SHADOW_MAP_DEFAULT_BLEND_FRACTION),
+              0.0f, 1.0f);
     char line[192];
     for (int i = 0; i < count; i++) {
         const float nearEdge = (i == 0) ? 0.0f : splits[i - 1];
@@ -648,7 +647,6 @@ static std::shared_ptr<Fast::Interpreter> GetInterpreter() {
 static bool sHaveLastKey = false;
 static s8 sLastKeyDir[3];
 static u8 sLastKeyCol[3];
-
 
 static void ToonClearKeyStates(); // defined with the key-state map below
 
@@ -726,12 +724,9 @@ static void OnToonFrameUpdate() {
         // one is the cheapest to halve, since it covers the most ground per texel and so changes the least
         // between frames, while sweeping in the most casters to draw.
         int cascadeDivisors[SHADOW_MAP_MAX_CASCADES] = {
-            CVarGetInteger(CVAR_ENHANCEMENT("Graphics.ShadowMap.UpdateDivisor0"),
-                           SHADOW_MAP_DEFAULT_CASCADE_DIVISOR_0),
-            CVarGetInteger(CVAR_ENHANCEMENT("Graphics.ShadowMap.UpdateDivisor1"),
-                           SHADOW_MAP_DEFAULT_CASCADE_DIVISOR_1),
-            CVarGetInteger(CVAR_ENHANCEMENT("Graphics.ShadowMap.UpdateDivisor2"),
-                           SHADOW_MAP_DEFAULT_CASCADE_DIVISOR_2)
+            CVarGetInteger(CVAR_ENHANCEMENT("Graphics.ShadowMap.UpdateDivisor0"), SHADOW_MAP_DEFAULT_CASCADE_DIVISOR_0),
+            CVarGetInteger(CVAR_ENHANCEMENT("Graphics.ShadowMap.UpdateDivisor1"), SHADOW_MAP_DEFAULT_CASCADE_DIVISOR_1),
+            CVarGetInteger(CVAR_ENHANCEMENT("Graphics.ShadowMap.UpdateDivisor2"), SHADOW_MAP_DEFAULT_CASCADE_DIVISOR_2)
         };
         for (int i = 0; i < SHADOW_MAP_MAX_CASCADES; i++) {
             cascadeDivisors[i] = CLAMP(cascadeDivisors[i], 1, SHADOW_MAP_MAX_CASCADE_DIVISOR);
@@ -755,8 +750,8 @@ static void OnToonFrameUpdate() {
         // below it, so that is what this does.
         // Same shape as the stencil volumes' Length control, but with its own value: a depth map can afford
         // longer shadows than a flattened silhouette can.
-        f32 minElev = CVarGetFloat(CVAR_ENHANCEMENT("Graphics.ShadowMap.MinElevation"),
-                                   SHADOW_MAP_DEFAULT_MIN_ELEVATION);
+        f32 minElev =
+            CVarGetFloat(CVAR_ENHANCEMENT("Graphics.ShadowMap.MinElevation"), SHADOW_MAP_DEFAULT_MIN_ELEVATION);
         minElev = CLAMP(minElev, 0.05f, 0.99f);
         // Negated on the way out: the toon convention points from the surface toward the light, while a
         // shadow projection needs the direction the light travels.
@@ -789,45 +784,44 @@ static void OnToonFrameUpdate() {
             quality.analyticEdgeWidth = CVarGetFloat(CVAR_ENHANCEMENT("Graphics.ShadowQuality.AnalyticEdgeWidth"),
                                                      SHADOW_MAP_DEFAULT_ANALYTIC_EDGE_WIDTH);
             quality.jitter = CVarGetInteger(CVAR_ENHANCEMENT("Graphics.ShadowQuality.Jitter"), 0);
-            quality.jitterTaps = CVarGetInteger(CVAR_ENHANCEMENT("Graphics.ShadowQuality.JitterTaps"),
-                                                SHADOW_MAP_DEFAULT_JITTER_TAPS);
-            quality.jitterRadius = CVarGetFloat(CVAR_ENHANCEMENT("Graphics.ShadowQuality.JitterRadius"),
-                                                SHADOW_MAP_DEFAULT_JITTER_RADIUS);
-            quality.layout = CVarGetInteger(CVAR_ENHANCEMENT("Graphics.ShadowQuality.Layout"),
-                                            SHADOW_MAP_DEFAULT_LAYOUT);
-            quality.staticCache = CVarGetInteger(CVAR_ENHANCEMENT("Graphics.ShadowQuality.StaticCache"),
-                                                 SHADOW_MAP_DEFAULT_STATIC_CACHE);
+            quality.jitterTaps =
+                CVarGetInteger(CVAR_ENHANCEMENT("Graphics.ShadowQuality.JitterTaps"), SHADOW_MAP_DEFAULT_JITTER_TAPS);
+            quality.jitterRadius =
+                CVarGetFloat(CVAR_ENHANCEMENT("Graphics.ShadowQuality.JitterRadius"), SHADOW_MAP_DEFAULT_JITTER_RADIUS);
+            quality.layout =
+                CVarGetInteger(CVAR_ENHANCEMENT("Graphics.ShadowQuality.Layout"), SHADOW_MAP_DEFAULT_LAYOUT);
+            quality.staticCache =
+                CVarGetInteger(CVAR_ENHANCEMENT("Graphics.ShadowQuality.StaticCache"), SHADOW_MAP_DEFAULT_STATIC_CACHE);
             quality.clipmapLevels = CVarGetInteger(CVAR_ENHANCEMENT("Graphics.ShadowQuality.ClipmapLevels"),
                                                    SHADOW_MAP_DEFAULT_CLIPMAP_LEVELS);
-            quality.clipmapBase = CVarGetFloat(CVAR_ENHANCEMENT("Graphics.ShadowQuality.ClipmapBase"),
-                                               SHADOW_MAP_DEFAULT_CLIPMAP_BASE);
-            quality.clipmapResolution =
-                CVarGetInteger(CVAR_ENHANCEMENT("Graphics.ShadowQuality.ClipmapResolution"),
-                               SHADOW_MAP_DEFAULT_CLIPMAP_RESOLUTION);
-            quality.edgeHarden = CVarGetInteger(CVAR_ENHANCEMENT("Graphics.ShadowQuality.EdgeHarden"),
-                                                SHADOW_MAP_DEFAULT_EDGE_HARDEN);
-            quality.edgeHardness = CVarGetFloat(CVAR_ENHANCEMENT("Graphics.ShadowQuality.EdgeHardness"),
-                                                SHADOW_MAP_DEFAULT_EDGE_HARDNESS);
+            quality.clipmapBase =
+                CVarGetFloat(CVAR_ENHANCEMENT("Graphics.ShadowQuality.ClipmapBase"), SHADOW_MAP_DEFAULT_CLIPMAP_BASE);
+            quality.clipmapResolution = CVarGetInteger(CVAR_ENHANCEMENT("Graphics.ShadowQuality.ClipmapResolution"),
+                                                       SHADOW_MAP_DEFAULT_CLIPMAP_RESOLUTION);
+            quality.edgeHarden =
+                CVarGetInteger(CVAR_ENHANCEMENT("Graphics.ShadowQuality.EdgeHarden"), SHADOW_MAP_DEFAULT_EDGE_HARDEN);
+            quality.edgeHardness =
+                CVarGetFloat(CVAR_ENHANCEMENT("Graphics.ShadowQuality.EdgeHardness"), SHADOW_MAP_DEFAULT_EDGE_HARDNESS);
             quality.edgeThreshold = CVarGetFloat(CVAR_ENHANCEMENT("Graphics.ShadowQuality.EdgeThreshold"),
                                                  SHADOW_MAP_DEFAULT_EDGE_THRESHOLD);
-            quality.ladderMode = CVarGetInteger(CVAR_ENHANCEMENT("Graphics.ShadowQuality.LadderMode"),
-                                                SHADOW_MAP_DEFAULT_LADDER_MODE);
-            quality.ladderLambda = CVarGetFloat(CVAR_ENHANCEMENT("Graphics.ShadowQuality.LadderLambda"),
-                                                SHADOW_MAP_DEFAULT_LADDER_LAMBDA);
-            quality.ladderNear = CVarGetFloat(CVAR_ENHANCEMENT("Graphics.ShadowQuality.LadderNear"),
-                                              SHADOW_MAP_DEFAULT_LADDER_NEAR);
+            quality.ladderMode =
+                CVarGetInteger(CVAR_ENHANCEMENT("Graphics.ShadowQuality.LadderMode"), SHADOW_MAP_DEFAULT_LADDER_MODE);
+            quality.ladderLambda =
+                CVarGetFloat(CVAR_ENHANCEMENT("Graphics.ShadowQuality.LadderLambda"), SHADOW_MAP_DEFAULT_LADDER_LAMBDA);
+            quality.ladderNear =
+                CVarGetFloat(CVAR_ENHANCEMENT("Graphics.ShadowQuality.LadderNear"), SHADOW_MAP_DEFAULT_LADDER_NEAR);
             // SOH [Enhancement] Shadow acne (see fast/shadow_map.h and the "Correção de Acne" menu tab).
             // Defaults come from the header rather than being written twice, so the menu's "restore
             // defaults" and the renderer's fallback cannot drift apart.
             const ShadowMapAcne acneDefaults = ShadowMapQualityDefaults().acne;
             quality.acne.enabled =
                 CVarGetInteger(CVAR_ENHANCEMENT("Graphics.ShadowAcne.Enabled"), acneDefaults.enabled);
-            quality.acne.normalOffset = CVarGetInteger(CVAR_ENHANCEMENT("Graphics.ShadowAcne.NormalOffset"),
-                                                       acneDefaults.normalOffset);
-            quality.acne.normalTexels = CVarGetFloat(CVAR_ENHANCEMENT("Graphics.ShadowAcne.NormalTexels"),
-                                                     acneDefaults.normalTexels);
-            quality.acne.slopeScaled = CVarGetInteger(CVAR_ENHANCEMENT("Graphics.ShadowAcne.SlopeScaled"),
-                                                      acneDefaults.slopeScaled);
+            quality.acne.normalOffset =
+                CVarGetInteger(CVAR_ENHANCEMENT("Graphics.ShadowAcne.NormalOffset"), acneDefaults.normalOffset);
+            quality.acne.normalTexels =
+                CVarGetFloat(CVAR_ENHANCEMENT("Graphics.ShadowAcne.NormalTexels"), acneDefaults.normalTexels);
+            quality.acne.slopeScaled =
+                CVarGetInteger(CVAR_ENHANCEMENT("Graphics.ShadowAcne.SlopeScaled"), acneDefaults.slopeScaled);
             quality.acne.slopeMax =
                 CVarGetFloat(CVAR_ENHANCEMENT("Graphics.ShadowAcne.SlopeMax"), acneDefaults.slopeMax);
             interp->SetShadowMapQuality(quality);
@@ -836,14 +830,11 @@ static void OnToonFrameUpdate() {
             shadowMapOn,
             CVarGetInteger(CVAR_ENHANCEMENT("Graphics.ShadowMap.CascadeCount"), SHADOW_MAP_DEFAULT_CASCADES),
             CVarGetInteger(CVAR_ENHANCEMENT("Graphics.ShadowMap.Resolution"), SHADOW_MAP_DEFAULT_RESOLUTION),
-            CVarGetInteger(CVAR_ENHANCEMENT("Graphics.ShadowMap.ActorResolution"),
-                           SHADOW_MAP_DEFAULT_ACTOR_RESOLUTION),
-            splits,
-            lightDir, CVarGetFloat(CVAR_ENHANCEMENT("Graphics.ShadowMap.BlendFraction"),
-                                   SHADOW_MAP_DEFAULT_BLEND_FRACTION),
+            CVarGetInteger(CVAR_ENHANCEMENT("Graphics.ShadowMap.ActorResolution"), SHADOW_MAP_DEFAULT_ACTOR_RESOLUTION),
+            splits, lightDir,
+            CVarGetFloat(CVAR_ENHANCEMENT("Graphics.ShadowMap.BlendFraction"), SHADOW_MAP_DEFAULT_BLEND_FRACTION),
             CVarGetFloat(CVAR_ENHANCEMENT("Graphics.ShadowMap.Strength"), SHADOW_MAP_DEFAULT_STRENGTH),
-            CVarGetFloat(CVAR_ENHANCEMENT("Graphics.ShadowMap.MinCasterSize"),
-                         SHADOW_MAP_DEFAULT_MIN_CASTER_SIZE),
+            CVarGetFloat(CVAR_ENHANCEMENT("Graphics.ShadowMap.MinCasterSize"), SHADOW_MAP_DEFAULT_MIN_CASTER_SIZE),
             // Debug view selector. Passed through as an integer-valued float and not clamped here: the
             // shader owns the list, so a value it does not recognise falls through to normal shading rather
             // than being silently remapped to a view the user did not ask for.
@@ -864,13 +855,11 @@ static void OnToonFrameUpdate() {
     // black (shadow) so it is obvious which draws receive toon lighting (e.g. confirming whether large
     // water/lava surfaces are being relit and causing the ramp edge to flicker across them).
     f32 debugBands = CVarGetInteger(CVAR_DEVELOPER_TOOLS("ToonLighting.HighlightBands"), 0) ? 1.0f : 0.0f;
-    rapi->SetToonRamp(CVarGetFloat(CVAR_ENHANCEMENT("Graphics.ToonLighting.RampCenter"), kDefaultRampCenter),
-                      CVarGetFloat(CVAR_ENHANCEMENT("Graphics.ToonLighting.RampSoftness"), kDefaultRampSoftness),
-                      CVarGetFloat(CVAR_ENHANCEMENT("Graphics.ToonLighting.HighlightIntensity"),
-                                   kDefaultHighlightIntensity),
-                      CVarGetFloat(CVAR_ENHANCEMENT("Graphics.ToonLighting.ShadowIntensity"),
-                                   kDefaultShadowIntensity),
-                      debugBands);
+    rapi->SetToonRamp(
+        CVarGetFloat(CVAR_ENHANCEMENT("Graphics.ToonLighting.RampCenter"), kDefaultRampCenter),
+        CVarGetFloat(CVAR_ENHANCEMENT("Graphics.ToonLighting.RampSoftness"), kDefaultRampSoftness),
+        CVarGetFloat(CVAR_ENHANCEMENT("Graphics.ToonLighting.HighlightIntensity"), kDefaultHighlightIntensity),
+        CVarGetFloat(CVAR_ENHANCEMENT("Graphics.ToonLighting.ShadowIntensity"), kDefaultShadowIntensity), debugBands);
 }
 
 // ---------------------------------------------------------------------------------------------------
@@ -1059,10 +1048,8 @@ static void ToonEnvKey(PlayState* play, f32 dirOut[3], f32 colOut[3]) {
 // ray" pointing from an actor toward a light.
 static Vtx sToonRayVtx[5] = {
     VTX(-1, 0, -1, 0, 0, 0xFF, 0xFF, 0xFF, 0xFF), // base
-    VTX(1, 0, -1, 0, 0, 0xFF, 0xFF, 0xFF, 0xFF),
-    VTX(1, 0, 1, 0, 0, 0xFF, 0xFF, 0xFF, 0xFF),
-    VTX(-1, 0, 1, 0, 0, 0xFF, 0xFF, 0xFF, 0xFF),
-    VTX(0, 1, 0, 0, 0, 0xFF, 0xFF, 0xFF, 0xFF), // tip
+    VTX(1, 0, -1, 0, 0, 0xFF, 0xFF, 0xFF, 0xFF),  VTX(1, 0, 1, 0, 0, 0xFF, 0xFF, 0xFF, 0xFF),
+    VTX(-1, 0, 1, 0, 0, 0xFF, 0xFF, 0xFF, 0xFF),  VTX(0, 1, 0, 0, 0, 0xFF, 0xFF, 0xFF, 0xFF), // tip
 };
 
 static Gfx sToonRayDL[] = {
@@ -1119,8 +1106,7 @@ static void DrawDebugRay(PlayState* play, Vec3f* base, f32 dir[3], u8 r, u8 g, u
 
     gDPPipeSync(POLY_XLU_DISP++);
     gSPClearGeometryMode(POLY_XLU_DISP++, G_LIGHTING | G_CULL_BACK | G_CULL_FRONT);
-    gDPSetCombineLERP(POLY_XLU_DISP++, 0, 0, 0, PRIMITIVE, 0, 0, 0, PRIMITIVE, 0, 0, 0, PRIMITIVE, 0, 0, 0,
-                      PRIMITIVE);
+    gDPSetCombineLERP(POLY_XLU_DISP++, 0, 0, 0, PRIMITIVE, 0, 0, 0, PRIMITIVE, 0, 0, 0, PRIMITIVE, 0, 0, 0, PRIMITIVE);
     gDPSetRenderMode(POLY_XLU_DISP++, G_RM_AA_XLU_SURF, G_RM_AA_XLU_SURF2);
     gDPSetPrimColor(POLY_XLU_DISP++, 0, 0, r, g, b, 200);
 
@@ -1151,8 +1137,7 @@ static void DrawDebugRing(PlayState* play, Vec3f* center, f32 radius, u8 r, u8 g
 
     gDPPipeSync(POLY_XLU_DISP++);
     gSPClearGeometryMode(POLY_XLU_DISP++, G_LIGHTING | G_CULL_BACK | G_CULL_FRONT);
-    gDPSetCombineLERP(POLY_XLU_DISP++, 0, 0, 0, PRIMITIVE, 0, 0, 0, PRIMITIVE, 0, 0, 0, PRIMITIVE, 0, 0, 0,
-                      PRIMITIVE);
+    gDPSetCombineLERP(POLY_XLU_DISP++, 0, 0, 0, PRIMITIVE, 0, 0, 0, PRIMITIVE, 0, 0, 0, PRIMITIVE, 0, 0, 0, PRIMITIVE);
     gDPSetRenderMode(POLY_XLU_DISP++, G_RM_AA_XLU_SURF, G_RM_AA_XLU_SURF2);
     gDPSetPrimColor(POLY_XLU_DISP++, 0, 0, r, g, b, a);
 
@@ -1210,8 +1195,9 @@ static void DrawDebugOverlay(PlayState* play, Actor* actor, f32 pointRange, f32 
                 f32 dist = sqrtf(dsq);
                 f32 scale = 1.0f - ((dist / radius) * (dist / radius));
                 f32 att = 0.5f + (0.5f * scale); // distance falloff, just for the visual length
-                f32 plum = ((info->params.point.color[0] + info->params.point.color[1] +
-                             info->params.point.color[2]) / (3.0f * 255.0f)) * att;
+                f32 plum = ((info->params.point.color[0] + info->params.point.color[1] + info->params.point.color[2]) /
+                            (3.0f * 255.0f)) *
+                           att;
 
                 if (dist > 0.001f) {
                     cdir[0] = dx / dist, cdir[1] = dy / dist, cdir[2] = dz / dist;

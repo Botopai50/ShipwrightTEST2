@@ -41,7 +41,7 @@ extern "C" {
 
 // Slider defaults — mirror the GUI slider DefaultValue()s so a fresh install (CVar unset) renders the same as
 // the slider's default position.
-static constexpr int kDefaultStarCount = 1000;   // WW's cap; scaled down by the time-of-day fade
+static constexpr int kDefaultStarCount = 1000;    // WW's cap; scaled down by the time-of-day fade
 static constexpr float kDefaultBrightness = 1.0f; // overall star alpha multiplier
 static constexpr float kDefaultTwinkleSpeed = 1.0f;
 
@@ -78,8 +78,8 @@ static constexpr float kPi = 3.14159265358979323846f;
 
 // WW's fixed constellation ("hokuto") — 16 bright stars. Values are camera-relative offsets (pre-scale).
 static const Vec3f sHokutoPos[16] = {
-    { 13000, 10500, -16000 }, { 9400, 9800, -12646 }, { 10200, 11800, -13525 }, { 10300, 13450, -13525 },
-    { 15000, 18400, -16162 }, { 12500, 19800, -15000 }, { 9179, 17200, -14404 }, { 9500, 9800, -12646 },
+    { 13000, 10500, -16000 }, { 9400, 9800, -12646 },   { 10200, 11800, -13525 }, { 10300, 13450, -13525 },
+    { 15000, 18400, -16162 }, { 12500, 19800, -15000 }, { 9179, 17200, -14404 },  { 9500, 9800, -12646 },
     { -7421, 31005, 18798 },  { -10937, 28000, 15000 }, { -10000, 24902, 18400 }, { -9400, 22500, 15900 },
     { -9179, 21300, 14300 },  { -10300, 22000, 21000 }, { -16000, 25500, 20000 }, { 0, 30000, 19000 },
 };
@@ -153,8 +153,7 @@ static void WriteStar(Vtx* buf, int base, Vec3f center, float half, Vec3f b, Vec
     // Triangle 1 at +half, triangle 2 at -half (a six-pointed star). A near-zero half makes the star vanish,
     // which is exactly how the small stars twinkle off.
     const Vec3f offsets[6] = {
-        VScale(b, half),  VScale(c, half),  VScale(d, half),
-        VScale(b, -half), VScale(c, -half), VScale(d, -half),
+        VScale(b, half), VScale(c, half), VScale(d, half), VScale(b, -half), VScale(c, -half), VScale(d, -half),
     };
     for (int i = 0; i < 6; i++) {
         Vec3f p = VAdd(center, offsets[i]);
@@ -252,7 +251,7 @@ static int BuildStars(Vtx* buf, int starCount, const View* view, float alphaMul)
 // Emit the star display list
 // ---------------------------------------------------------------------------------------------------
 
-#define STARS_PER_CHUNK 5             // 5 stars × 6 verts = 30 ≤ the 32-vertex cache load limit
+#define STARS_PER_CHUNK 5 // 5 stars × 6 verts = 30 ≤ the 32-vertex cache load limit
 #define VERTS_PER_CHUNK (STARS_PER_CHUNK * 6)
 
 static void EmitStars(GraphicsContext* gfxCtx, View* view, Vtx* buf, int starCount) {

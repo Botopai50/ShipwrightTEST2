@@ -1589,8 +1589,8 @@ void Play_Draw(PlayState* play) {
         // by jumping past the room. Execution therefore runs room-then-actors, which is exactly vanilla,
         // while the opaque halves keep the order the shadow pass needs. Three commands, no allocation, and
         // the translucent stream's internal order is byte-for-byte what it was.
-        Gfx* shadowXluJumpToRoom = NULL;  // patched to where the room's translucent block begins
-        Gfx* shadowXluActorStart = NULL;  // where the actors' translucent block begins
+        Gfx* shadowXluJumpToRoom = NULL;   // patched to where the room's translucent block begins
+        Gfx* shadowXluActorStart = NULL;   // where the actors' translucent block begins
         Gfx* shadowXluJumpPastRoom = NULL; // patched past the room's block, ending the detour
 
         if (shadowMapCasterFirst && ((HREG(80) != 10) || (HREG(85) != 0))) {

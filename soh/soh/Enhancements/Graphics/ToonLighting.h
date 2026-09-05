@@ -29,12 +29,12 @@ typedef enum {
 // Cached once-per-frame feature switches (refreshed from the CVars at the top of each game frame).
 // The draw code asks these instead of reading CVars per actor: a CVarGet* is a string-keyed hash
 // lookup, far too expensive to repeat for every drawn actor every frame.
-int ToonLighting_FeaturesActive(void);         // cel relight OR a non-vanilla shadow mode (gates the draw hook)
-int ToonLighting_CelEnabled(void);             // cel relight on (gates the toon bracket)
-int ToonLighting_ShadowsEnabled(void);         // stencil-volume (Actor Shadows) mode on, specifically --
-                                               // callers that mean "any system that needs casters marked"
-                                               // must also test ToonLighting_ShadowMapEnabled()
-int ToonLighting_ShadowMapEnabled(void);       // shadow-map mode on (gates the depth-pass capture)
+int ToonLighting_FeaturesActive(void);   // cel relight OR a non-vanilla shadow mode (gates the draw hook)
+int ToonLighting_CelEnabled(void);       // cel relight on (gates the toon bracket)
+int ToonLighting_ShadowsEnabled(void);   // stencil-volume (Actor Shadows) mode on, specifically --
+                                         // callers that mean "any system that needs casters marked"
+                                         // must also test ToonLighting_ShadowMapEnabled()
+int ToonLighting_ShadowMapEnabled(void); // shadow-map mode on (gates the depth-pass capture)
 // Whether shadow-map mode also reorders the frame so the actor loop draws before the room (z_play.c). That
 // reorder is what takes a frame of lag off a moving character's shadow, and it is the only thing this mode
 // changes about draw ORDER -- so it is also the switch to try when something composites wrongly with
@@ -78,7 +78,6 @@ const char* ToonLighting_ShadowMapCasterCensus(void);
 // are. A ladder the player cannot inspect is one they have to guess at, and the texel size in particular
 // is recovered from the projection matrix inside the renderer and is knowable nowhere else.
 const char* ToonLighting_ShadowMapCascadeReport(void);
-
 
 #ifdef __cplusplus
 }

@@ -42,21 +42,21 @@ extern "C" {
 
 // Slider defaults — match the GUI slider DefaultValue()s so a fresh install (CVar unset) renders the
 // same as the slider's default position.
-static constexpr float kDefaultSphereSize = 0.5f;     // × a light's radius (its own slider; typically
-                                                      //   smaller than the cel-shading point-light range)
-static constexpr float kDefaultRotationSpeed = 1.0f;  // × the Wind Waker two-axis tumble rate (1 = authentic)
+static constexpr float kDefaultSphereSize = 0.5f;    // × a light's radius (its own slider; typically
+                                                     //   smaller than the cel-shading point-light range)
+static constexpr float kDefaultRotationSpeed = 1.0f; // × the Wind Waker two-axis tumble rate (1 = authentic)
 // Wind Waker Bonbori spin rates (rad/s), scaled by the Rotation Speed slider. Two non-harmonic axes (no
 // Z) tumble the low-poly silhouette so it never looks like it's just spinning in place.
-static constexpr float kWWRotYRate = 0.598f; // 0xD0 units/frame @ 30 Hz = 34.28°/s
-static constexpr float kWWRotXRate = 0.736f; // 0x100 units/frame @ 30 Hz = 42.19°/s
-static constexpr float kDefaultIntensity = 0.2f;        // brightness of the cast pool
-static constexpr float kDefaultNaviSphereSize = 0.75f;  // Navi's pool size (× radius), separate from torches
-static constexpr float kDefaultNaviIntensity = 0.2f;     // Navi's pool brightness
+static constexpr float kWWRotYRate = 0.598f;                // 0xD0 units/frame @ 30 Hz = 34.28°/s
+static constexpr float kWWRotXRate = 0.736f;                // 0x100 units/frame @ 30 Hz = 42.19°/s
+static constexpr float kDefaultIntensity = 0.2f;            // brightness of the cast pool
+static constexpr float kDefaultNaviSphereSize = 0.75f;      // Navi's pool size (× radius), separate from torches
+static constexpr float kDefaultNaviIntensity = 0.2f;        // Navi's pool brightness
 static constexpr float kDefaultWildFairySphereSize = 0.75f; // wild fairies' pool size (× radius), separate again
 static constexpr float kDefaultWildFairyIntensity = 0.2f;   // wild fairies' pool brightness
 static constexpr float kDefaultDekuStickSphereSize = 0.5f;  // held Deku stick's pool size (× radius)
-static constexpr float kDefaultSizeFlicker = 1.0f;        // depth of the Wind Waker size pulse (1 = authentic ±5%)
-static constexpr float kDefaultFlickerSpeed = 1.0f;       // Wind Waker flame flicker rate (new target ~ every 0.25s / speed)
+static constexpr float kDefaultSizeFlicker = 1.0f;          // depth of the Wind Waker size pulse (1 = authentic ±5%)
+static constexpr float kDefaultFlickerSpeed = 1.0f; // Wind Waker flame flicker rate (new target ~ every 0.25s / speed)
 
 // ---------------------------------------------------------------------------------------------------
 // Wind Waker flame flicker (replaces the game's per-frame white-noise torch flicker)
@@ -227,15 +227,15 @@ static void BuildIcosphere() {
 
     const f32 t = 1.618033988749895f; // golden ratio — icosahedron vertex constant
     const f32 base[12][3] = {
-        { -1, t, 0 }, { 1, t, 0 },  { -1, -t, 0 }, { 1, -t, 0 }, { 0, -1, t },  { 0, 1, t },
+        { -1, t, 0 },  { 1, t, 0 },  { -1, -t, 0 }, { 1, -t, 0 }, { 0, -1, t },  { 0, 1, t },
         { 0, -1, -t }, { 0, 1, -t }, { t, 0, -1 },  { t, 0, 1 },  { -t, 0, -1 }, { -t, 0, 1 },
     };
     // The 20 icosahedron faces, wound outward (CCW), so back/front culling is meaningful for the stencil
     // passes to come.
     const s32 faces[20][3] = {
-        { 0, 11, 5 }, { 0, 5, 1 },  { 0, 1, 7 },   { 0, 7, 10 }, { 0, 10, 11 }, { 1, 5, 9 },  { 5, 11, 4 },
-        { 11, 10, 2 }, { 10, 7, 6 }, { 7, 1, 8 },  { 3, 9, 4 },   { 3, 4, 2 },  { 3, 2, 6 },   { 3, 6, 8 },
-        { 3, 8, 9 },  { 4, 9, 5 },  { 2, 4, 11 },  { 6, 2, 10 }, { 8, 6, 7 },   { 9, 8, 1 },
+        { 0, 11, 5 },  { 0, 5, 1 },  { 0, 1, 7 },  { 0, 7, 10 }, { 0, 10, 11 }, { 1, 5, 9 }, { 5, 11, 4 },
+        { 11, 10, 2 }, { 10, 7, 6 }, { 7, 1, 8 },  { 3, 9, 4 },  { 3, 4, 2 },   { 3, 2, 6 }, { 3, 6, 8 },
+        { 3, 8, 9 },   { 4, 9, 5 },  { 2, 4, 11 }, { 6, 2, 10 }, { 8, 6, 7 },   { 9, 8, 1 },
     };
 
     // A fixed direction in the sphere's own space: each face's flat brightness is its outward direction dotted
@@ -265,8 +265,7 @@ static void BuildIcosphere() {
             f32 cy = sub[s][0][1] + sub[s][1][1] + sub[s][2][1];
             f32 cz = sub[s][0][2] + sub[s][1][2] + sub[s][2][2];
             f32 clen = sqrtf((cx * cx) + (cy * cy) + (cz * cz));
-            f32 dot =
-                (clen > 0.0001f) ? ((cx * shadeDir[0] + cy * shadeDir[1] + cz * shadeDir[2]) / clen) : 0.0f;
+            f32 dot = (clen > 0.0001f) ? ((cx * shadeDir[0] + cy * shadeDir[1] + cz * shadeDir[2]) / clen) : 0.0f;
             u8 shade = (u8)((0.5f + (0.25f * (dot + 1.0f))) * 255.0f); // [0.5, 1.0] across the sphere
             for (s32 v = 0; v < 3; v++) {
                 IcoWriteVert(w++, sub[s][v][0], sub[s][v][1], sub[s][v][2], shade);
@@ -306,7 +305,7 @@ static void EmitIcosphere(GraphicsContext* gfxCtx) {
 // Per-light animation state (Wind Waker tumble + flicker random-walks). Keyed by the actor-owned,
 // frame-stable LightInfo pointer; entries for lights that vanish are pruned each frame by generation.
 typedef struct {
-    f32 angleY, angleX; // Wind Waker two-axis tumble (accumulated radians)
+    f32 angleY, angleX;                    // Wind Waker two-axis tumble (accumulated radians)
     f32 sizeCur, sizeTarget, sizeTimer;    // WW size flicker: eased random-walk (the dominant pulse)
     f32 alphaCur, alphaTarget, alphaTimer; // WW brightness flicker: subtle eased random-walk
     f32 spawnRadius;                       // Navi only: eased pool radius, so she fades in/out vs popping
@@ -384,8 +383,7 @@ static void WorldLightMaskPass(PlayState* play, s32 stencilMode, u32 cullMode) {
     gDPPipeSync(POLY_OPA_DISP++);
     gSPClearGeometryMode(POLY_OPA_DISP++, G_LIGHTING | G_CULL_FRONT | G_CULL_BACK);
     gSPSetGeometryMode(POLY_OPA_DISP++, G_ZBUFFER | cullMode);
-    gDPSetCombineLERP(POLY_OPA_DISP++, 0, 0, 0, PRIMITIVE, 0, 0, 0, PRIMITIVE, 0, 0, 0, PRIMITIVE, 0, 0, 0,
-                      PRIMITIVE);
+    gDPSetCombineLERP(POLY_OPA_DISP++, 0, 0, 0, PRIMITIVE, 0, 0, 0, PRIMITIVE, 0, 0, 0, PRIMITIVE, 0, 0, 0, PRIMITIVE);
     gDPSetRenderMode(POLY_OPA_DISP++, G_RM_AA_ZB_XLU_SURF, G_RM_AA_ZB_XLU_SURF2); // z-test, no z-write
     gDPSetPrimColor(POLY_OPA_DISP++, 0, 0, 0, 0, 0, 0);                           // alpha 0 → invisible
     CLOSE_DISPS(play->state.gfxCtx);
@@ -402,8 +400,7 @@ static void WorldLightCompositePass(PlayState* play, const u8 col[3], u8 alpha) 
     gDPPipeSync(POLY_OPA_DISP++);
     gSPClearGeometryMode(POLY_OPA_DISP++, G_LIGHTING | G_ZBUFFER | G_CULL_BACK);
     gSPSetGeometryMode(POLY_OPA_DISP++, G_CULL_FRONT); // back faces, no depth test
-    gDPSetCombineLERP(POLY_OPA_DISP++, 0, 0, 0, PRIMITIVE, 0, 0, 0, PRIMITIVE, 0, 0, 0, PRIMITIVE, 0, 0, 0,
-                      PRIMITIVE);
+    gDPSetCombineLERP(POLY_OPA_DISP++, 0, 0, 0, PRIMITIVE, 0, 0, 0, PRIMITIVE, 0, 0, 0, PRIMITIVE, 0, 0, 0, PRIMITIVE);
     gDPSetRenderMode(POLY_OPA_DISP++, G_RM_AA_XLU_SURF, G_RM_AA_XLU_SURF2); // no z-test
     gDPSetPrimColor(POLY_OPA_DISP++, 0, 0, col[0], col[1], col[2], alpha);
     CLOSE_DISPS(play->state.gfxCtx);
@@ -481,8 +478,9 @@ static void DrawWorldLights(void* playPtr) {
     // "Use Wind Waker default movement" pins the tumble + size pulse to the authentic 1x (and the GUI
     // disables those two sliders); otherwise the sliders drive them.
     bool wwMovement = CVarGetInteger(CVAR_ENHANCEMENT("Graphics.WorldLighting.WWDefaultMovement"), 1);
-    f32 rotSpeed =
-        wwMovement ? 1.0f : CVarGetFloat(CVAR_ENHANCEMENT("Graphics.WorldLighting.RotationSpeed"), kDefaultRotationSpeed);
+    f32 rotSpeed = wwMovement
+                       ? 1.0f
+                       : CVarGetFloat(CVAR_ENHANCEMENT("Graphics.WorldLighting.RotationSpeed"), kDefaultRotationSpeed);
     f32 sizeFlicker =
         wwMovement ? 1.0f : CVarGetFloat(CVAR_ENHANCEMENT("Graphics.WorldLighting.SizeFlicker"), kDefaultSizeFlicker);
     f32 intensity = CVarGetFloat(CVAR_ENHANCEMENT("Graphics.WorldLighting.Intensity"), kDefaultIntensity);
@@ -522,9 +520,10 @@ static void DrawWorldLights(void* playPtr) {
     // Wild fairies (Kokiri Forest ambient + healing fairies) emit light only when OtherFairyLights is on, via
     // their no-glow LightInfo (set in EnElf_Update). Collect those by address so they get their own pool size +
     // intensity, separate from torches and Navi. They're not flames, so (like Navi) they get a steady pool.
-    f32 wildSize = CVarGetFloat(CVAR_ENHANCEMENT("Graphics.WorldLighting.WildFairySphereSize"), kDefaultWildFairySphereSize);
-    u8 wildAlpha =
-        WorldLightAlpha(CVarGetFloat(CVAR_ENHANCEMENT("Graphics.WorldLighting.WildFairyIntensity"), kDefaultWildFairyIntensity));
+    f32 wildSize =
+        CVarGetFloat(CVAR_ENHANCEMENT("Graphics.WorldLighting.WildFairySphereSize"), kDefaultWildFairySphereSize);
+    u8 wildAlpha = WorldLightAlpha(
+        CVarGetFloat(CVAR_ENHANCEMENT("Graphics.WorldLighting.WildFairyIntensity"), kDefaultWildFairyIntensity));
     std::unordered_set<LightInfo*> wildFairyLights;
 
     // The held Deku stick's flame light (DekuStickLight.cpp) is a flame like a torch, so it gets the same
@@ -537,9 +536,8 @@ static void DrawWorldLights(void* playPtr) {
     if (CVarGetInteger(CVAR_ENHANCEMENT("Graphics.WorldLighting.OtherFairyLights"), 0)) {
         Actor* a = play->actorCtx.actorLists[ACTORCAT_ITEMACTION].head;
         while (a != NULL) {
-            if ((a->id == ACTOR_EN_ELF) &&
-                ((a->params == FAIRY_KOKIRI) || (a->params == FAIRY_HEAL) || (a->params == FAIRY_HEAL_BIG) ||
-                 (a->params == FAIRY_HEAL_TIMED))) {
+            if ((a->id == ACTOR_EN_ELF) && ((a->params == FAIRY_KOKIRI) || (a->params == FAIRY_HEAL) ||
+                                            (a->params == FAIRY_HEAL_BIG) || (a->params == FAIRY_HEAL_TIMED))) {
                 wildFairyLights.insert(&((EnElf*)a)->lightInfoNoGlow);
             }
             a = a->next;
@@ -589,7 +587,7 @@ static void DrawWorldLights(void* playPtr) {
                 } else {
                     s->sizeTimer -= dt;
                     if (s->sizeTimer <= 0.0f) {
-                        s->sizeTimer = 0.10f + (Rand_ZeroOne() * 0.20f);                       // [0.10, 0.30) s
+                        s->sizeTimer = 0.10f + (Rand_ZeroOne() * 0.20f);                        // [0.10, 0.30) s
                         s->sizeTarget = 1.0f + ((Rand_ZeroOne() - 0.5f) * 0.10f * sizeFlicker); // ±5% × depth
                     }
                     s->sizeCur = WWEase(s->sizeCur, s->sizeTarget, 0.4f, 0.05f, dt);

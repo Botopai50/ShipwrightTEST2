@@ -41,3 +41,23 @@ ctest --test-dir build-resource-tests -C Release --output-on-failure
 
 O resultado de alocações comprova a remoção daquele custo específico. Não é uma medição de FPS do
 jogo. A compilação completa e o teste visual em Direct3D 11 são validações separadas dos testes acima.
+
+## Otimizações 4–6
+
+4. **Shaders:** o backend DirectX 11 mantém cache persistente do bytecode em `shadercache-dx11`, com
+   chave derivada do HLSL expandido, flags, perfil e variante do kernel de sombras. O pré-aquecimento
+   compila variantes previsíveis em threads auxiliares antes de ativar uma opção que as exigirá; falhas
+   continuam sendo tratadas pelo caminho normal de compilação.
+5. **Leitura de profundidade:** consultas visuais do brilho de sol/tochas podem reutilizar o resultado
+   imediatamente anterior quando as coordenadas permanecem iguais. Um anel de três buffers e queries
+   `D3D11_QUERY_EVENT` evita `Map` bloqueante; coordenadas novas ou resultados expirados usam a leitura
+   síncrona para preservar a resposta correta. A opção `Graphics.AsyncDepthReadback` fica disponível nas
+   configurações avançadas e vem ativada por padrão no DirectX 11.
+6. **Perfis de sombras:** o menu Wind Waker Style oferece perfis rápidos para 1024/512, 2048/1024 e
+   4096/4096 (cenário/personagens). Eles alteram somente as resoluções das camadas do Shadow Map e
+   preservam cascatas, alcance e número de faixas. A resolução do clipmap continua independente no menu
+   Qualidade das Sombras.
+
+O teste independente `libultraship/tests/depth_readback` usa um dispositivo D3D11 WARP e cobre fallback
+síncrono, reaproveitamento com atraso, conclusão do anel, mudança de coordenadas, expiração, reset,
+modo desativado e lotes inválidos. Ele foi compilado em Release com MSVC e passou no `ctest` local.

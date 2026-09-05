@@ -520,12 +520,41 @@ void SohMenu::AddMenuWindWakerStyle() {
                         SHADOW_MODE_SHADOW_MAP;
     };
     AddWidget(path, "Opções", WIDGET_SEPARATOR_TEXT).PreFunc(hideUnlessShadowMap);
+    struct ResolutionPreset {
+        const char* label;
+        int world;
+        int actors;
+        const char* tooltip;
+    };
+    const ResolutionPreset resolutionPresets[] = {
+        { "Economia: 1024 / 512", 1024, 512,
+          "Mapas do cenário em 1024 e dos personagens em 512. Usa menos memória e reduz o custo das "
+          "sombras, com contornos menos detalhados. Mantém o alcance e a quantidade de faixas." },
+        { "Equilibrado: 2048 / 1024", 2048, 1024,
+          "Mapas do cenário em 2048 e dos personagens em 1024. Equilibra detalhe e desempenho. "
+          "Mantém o alcance e a quantidade de faixas." },
+        { "Alta resolução: 4096 / 4096", 4096, 4096,
+          "Mapas do cenário e dos personagens em 4096. Mais detalhe nos contornos, com maior consumo "
+          "de memória e processamento. Mantém o alcance e a quantidade de faixas." },
+    };
+    for (const auto& preset : resolutionPresets) {
+        AddWidget(path, preset.label, WIDGET_BUTTON)
+            .PreFunc(hideUnlessShadowMap)
+            .RaceDisable(false)
+            .Callback([preset](WidgetInfo&) {
+                CVarSetInteger(CVAR_ENHANCEMENT("Graphics.ShadowMap.Resolution"), preset.world);
+                CVarSetInteger(CVAR_ENHANCEMENT("Graphics.ShadowMap.ActorResolution"), preset.actors);
+                Ship::Context::GetInstance()->GetWindow()->GetGui()->SaveConsoleVariablesNextFrame();
+            })
+            .Options(ButtonOptions().Tooltip(preset.tooltip));
+    }
     AddWidget(path, "Restaurar Tudo ao Padrão", WIDGET_BUTTON)
         .PreFunc(hideUnlessShadowMap)
         .Callback([](WidgetInfo& info) {
             CVarClear(CVAR_ENHANCEMENT("Graphics.ShadowMap.Strength"));
             CVarClear(CVAR_ENHANCEMENT("Graphics.ShadowMap.Resolution"));
             CVarClear(CVAR_ENHANCEMENT("Graphics.ShadowMap.ActorResolution"));
+            CVarClear(CVAR_ENHANCEMENT("Graphics.ShadowQuality.ClipmapResolution"));
             CVarClear(CVAR_ENHANCEMENT("Graphics.ShadowMap.CascadeCount"));
             CVarClear(CVAR_ENHANCEMENT("Graphics.ShadowMap.Split0"));
             CVarClear(CVAR_ENHANCEMENT("Graphics.ShadowMap.Split1"));

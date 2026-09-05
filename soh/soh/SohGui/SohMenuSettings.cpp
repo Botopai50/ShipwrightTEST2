@@ -569,6 +569,13 @@ void SohMenu::AddMenuSettings() {
 
     path.column = SECTION_COLUMN_2;
     AddWidget(path, "Advanced Graphics Options", WIDGET_SEPARATOR_TEXT);
+    AddWidget(path, "Adaptive Glow Readback (DirectX)", WIDGET_CVAR_CHECKBOX)
+        .CVar(CVAR_SETTING("Graphics.AsyncDepthReadback"))
+        .RaceDisable(false)
+        .Options(CheckboxOptions().DefaultValue(true).Tooltip(
+            "Reduces GPU readback waits when glow sample positions are unchanged. Sun and torch glows may "
+            "react one game update later. Moving samples use immediate results. Disable for immediate "
+            "occlusion response at all times. DirectX 11 only."));
 
     // Controls
     path.sidebarName = "Controls";

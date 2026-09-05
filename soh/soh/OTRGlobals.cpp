@@ -1834,6 +1834,12 @@ extern "C" uint16_t OTRGetPixelDepth(float x, float y) {
         return 0;
     }
 
+    // These queries feed sun/torch glow visibility, not game collision. D3D11 can reuse a recent
+    // result when the sample coordinates are unchanged, with synchronous fallback during movement.
+    if (auto interpreter = wnd->GetInterpreterWeak().lock()) {
+        interpreter->GetCurrentRenderingAPI()->SetAsyncDepthReadbackEnabled(
+            CVarGetInteger(CVAR_SETTING("Graphics.AsyncDepthReadback"), 1) != 0);
+    }
     return wnd->GetPixelDepth(x, y);
 }
 

@@ -189,6 +189,16 @@ jobs:
         path: vcpkg
     - name: Configure Developer Command Prompt
       uses: ilammy/msvc-dev-cmd@v1
+    - name: Test DirectX optimizations
+      run: |
+        foreach ($suite in @("shader_cache", "depth_readback")) {
+          cmake -S "libultraship/tests/$suite" -B "build-tests/$suite" -G Ninja -DCMAKE_BUILD_TYPE=Release
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          cmake --build "build-tests/$suite" --config Release --parallel 2
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          ctest --test-dir "build-tests/$suite" -C Release --output-on-failure
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+        }
     - name: Download soh.o2r
       uses: actions/download-artifact@v7
       with:

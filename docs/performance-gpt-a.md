@@ -48,16 +48,29 @@ jogo. A compilação completa e o teste visual em Direct3D 11 são validações 
    chave derivada do HLSL expandido, flags, perfil e variante do kernel de sombras. O pré-aquecimento
    compila variantes previsíveis em threads auxiliares antes de ativar uma opção que as exigirá; falhas
    continuam sendo tratadas pelo caminho normal de compilação.
+   Essa estrutura já existia na base. A revisão GPT.A adiciona verificação de integridade do bytecode,
+   valida o tamanho completo do arquivo e mantém a substituição de entradas antigas/danificadas. Temporários
+   incluem o identificador do processo para não colidir entre duas instâncias. O formato passa a ser v2:
+   entradas v1 são recompiladas uma vez e substituídas, preservando a reutilização nas sessões seguintes.
 5. **Leitura de profundidade:** consultas visuais do brilho de sol/tochas podem reutilizar o resultado
    imediatamente anterior quando as coordenadas permanecem iguais. Um anel de três buffers e queries
    `D3D11_QUERY_EVENT` evita `Map` bloqueante; coordenadas novas ou resultados expirados usam a leitura
    síncrona para preservar a resposta correta. A opção `Graphics.AsyncDepthReadback` fica disponível nas
    configurações avançadas e vem ativada por padrão no DirectX 11.
+   Os vetores de coordenadas e resultados agora mantêm capacidade entre consultas, evitando recriá-los
+   em cada lote. A leitura ainda pode bloquear no fallback; não é uma promessa de eliminar toda espera.
 6. **Perfis de sombras:** o menu Wind Waker Style oferece perfis rápidos para 1024/512, 2048/1024 e
    4096/4096 (cenário/personagens). Eles alteram somente as resoluções das camadas do Shadow Map e
-   preservam cascatas, alcance e número de faixas. A resolução do clipmap continua independente no menu
-   Qualidade das Sombras.
+   preservam cascatas, alcance e número de faixas. O perfil aplica a resolução do cenário ao modo atual
+   (Cascatas ou Clipmap); a resolução do modo inativo permanece guardada. A resolução dos personagens é
+   limitada pela resolução do cenário do modo ativo, evitando que uma configuração antiga de Cascatas
+   reduza a qualidade dos personagens no Clipmap.
 
 O teste independente `libultraship/tests/depth_readback` usa um dispositivo D3D11 WARP e cobre fallback
 síncrono, reaproveitamento com atraso, conclusão do anel, mudança de coordenadas, expiração, reset,
 modo desativado e lotes inválidos. Ele foi compilado em Release com MSVC e passou no `ctest` local.
+
+`libultraship/tests/shader_cache` compila as rotinas de IO extraídas do backend de produção e testa
+leitura/gravação, invalidação por chave/tamanho/versão, corrupção, truncamento, substituição de arquivo
+e acesso concorrente no Windows. As duas suítes são executadas também antes da compilação Windows no CI.
+Esses testes não medem FPS; a comparação visual e de tempo de frame no jogo continua necessária.

@@ -50,8 +50,7 @@ void SohMenu::AddMenuShadowAcne() {
     AddWidget(path, "O que é acne", WIDGET_SEPARATOR_TEXT).PreFunc(hideUnlessShadowMap);
     AddWidget(path, "Uma superfície fazendo sombra em si mesma: listras escuras no chão que, num", WIDGET_TEXT)
         .PreFunc(hideUnlessShadowMap);
-    AddWidget(path, "ângulo rasante, viram raios convergindo no horizonte.", WIDGET_TEXT)
-        .PreFunc(hideUnlessShadowMap);
+    AddWidget(path, "ângulo rasante, viram raios convergindo no horizonte.", WIDGET_TEXT).PreFunc(hideUnlessShadowMap);
     AddWidget(path, "A defesa padrão é o slope bias do rasterizador, aplicado enquanto o mapa de", WIDGET_TEXT)
         .PreFunc(hideUnlessShadowMap);
     AddWidget(path, "profundidade é escrito, e normalmente ela basta. Estes métodos são para onde não", WIDGET_TEXT)
@@ -143,6 +142,5 @@ void SohMenu::AddMenuShadowAcne() {
                      .Step(0.1f)
                      .DefaultValue(3.5f) // SHADOW_MAP_DEFAULT_ACNE_SLOPE_MAX
                      .Format("%.1f"));
-
 }
 } // namespace SohGui

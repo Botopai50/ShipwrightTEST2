@@ -154,14 +154,13 @@ void SohMenu::AddMenuDevTools() {
     AddWidget(path, "Mostrar FPS no canto", WIDGET_CVAR_CHECKBOX)
         .CVar(CVAR_WINDOW("FpsOverlay"))
         .RaceDisable(false)
-        .Options(CheckboxOptions()
-                     .DefaultValue(false)
-                     .Tooltip("Mostra os quadros por segundo e o tempo de cada quadro no canto superior "
-                              "esquerdo, sobre um fundo levemente transparente.\n\n"
-                              "O número em milissegundos é o mais útil para comparar builds: quadros por "
-                              "segundo é um inverso, então a mesma queda nele significa quantidades de "
-                              "trabalho bem diferentes a 30 e a 120.\n\n"
-                              "O painel não recebe cliques — o que estiver atrás dele continua acessível."));
+        .Options(CheckboxOptions().DefaultValue(false).Tooltip(
+            "Mostra os quadros por segundo e o tempo de cada quadro no canto superior "
+            "esquerdo, sobre um fundo levemente transparente.\n\n"
+            "O número em milissegundos é o mais útil para comparar builds: quadros por "
+            "segundo é um inverso, então a mesma queda nele significa quantidades de "
+            "trabalho bem diferentes a 30 e a 120.\n\n"
+            "O painel não recebe cliques — o que estiver atrás dele continua acessível."));
 
     // Console
     path.sidebarName = "Console";

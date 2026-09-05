@@ -83,14 +83,14 @@ static constexpr int kLayers = 3;
 // One cloud (WW VRKUMO_EFF). position.y is recomputed every frame from the distance falloff.
 struct VrKumo {
     float posX, posY, posZ;
-    float speed;     // per-cloud drift multiplier
-    float height;    // small vertical size jitter
-    float alpha;     // eased 0..1
+    float speed;  // per-cloud drift multiplier
+    float height; // small vertical size jitter
+    float alpha;  // eased 0..1
     float distFalloff;
 };
 static VrKumo sClouds[kMaxClouds];
 static bool sInit = false;
-static float sStrength = 0.0f;      // weather cloudiness 0..1 (v1: driven by the Coverage slider)
+static float sStrength = 0.0f; // weather cloudiness 0..1 (v1: driven by the Coverage slider)
 static float sBounceTimer = 0.0f;
 
 // Vertex buffers: one per texture layer, 2 triangles (6 verts) per cloud, rebuilt each frame.
@@ -202,7 +202,6 @@ static void InitClouds() {
     }
     sInit = true;
 }
-
 
 // Advance all clouds one frame: noclip's vrkumo_move, verbatim.
 static void UpdateClouds(PlayState* play, float dt, int count, float driftTrim) {
@@ -359,8 +358,8 @@ static int BuildClouds(float opacity, const u8 edge[3], const u8 center[3], cons
                       ClampU8(edge[2] + (center[2] - edge[2]) * t), ClampU8(255.0f * k->alpha * opacity) };
 
         for (int textureIdx = 0; textureIdx < kLayers; textureIdx++) {
-            float size = k->distFalloff * (1.0f - powf(((textureIdx + i) & 0x0F) / 16.0f, 3.0f)) *
-                         (0.45f + sStrength * 0.55f);
+            float size =
+                k->distFalloff * (1.0f - powf(((textureIdx + i) & 0x0F) / 16.0f, 3.0f)) * (0.45f + sStrength * 0.55f);
             float bounce = sinf(textureIdx + 0.0001f * sBounceTimer);
             float sizeAnim = size + 0.06f * size * bounce * k->distFalloff;
             float height = sizeAnim + sizeAnim * k->height;
@@ -479,8 +478,8 @@ static void EmitBand(PlayState* play, const WWCloudTexture bandTex[2]) {
     // Two copies of the strip: TEXEL0 static, TEXEL1 scrolled (via tile 1's uls). Cycle 0 mirrors WW's TEV:
     // rgb = (1-T0)·T1 + T0 (screen blend), alpha = T0·T1. Cycle 1 tints by shade (vrKumoCol stand-in +
     // opacity). 2-cycle must be set explicitly — see the cycle-type note in EmitClouds.
-    gDPSetCombineLERP(POLY_OPA_DISP++, 1, TEXEL0, TEXEL1, TEXEL0, TEXEL0, 0, TEXEL1, 0, COMBINED, 0, SHADE, 0,
-                      COMBINED, 0, SHADE, 0);
+    gDPSetCombineLERP(POLY_OPA_DISP++, 1, TEXEL0, TEXEL1, TEXEL0, TEXEL0, 0, TEXEL1, 0, COMBINED, 0, SHADE, 0, COMBINED,
+                      0, SHADE, 0);
     gDPSetCycleType(POLY_OPA_DISP++, G_CYC_2CYCLE);
     gDPSetRenderMode(POLY_OPA_DISP++, G_RM_PASS, G_RM_XLU_SURF2);
     gDPSetAlphaCompare(POLY_OPA_DISP++, G_AC_NONE);

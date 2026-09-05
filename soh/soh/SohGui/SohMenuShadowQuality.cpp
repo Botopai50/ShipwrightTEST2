@@ -162,7 +162,7 @@ void SohMenu::AddMenuShadowQuality() {
                               "o que decide se o resultado é lido como suavidade ou como chiado. Mais "
                               "amostras = mais suave e mais caro.")
                      .Min(1)
-                     .Max(16) // SHADOW_MAP_MAX_JITTER_TAPS
+                     .Max(16)           // SHADOW_MAP_MAX_JITTER_TAPS
                      .DefaultValue(8)); // SHADOW_MAP_DEFAULT_JITTER_TAPS
     AddWidget(path, "Raio: %.2f texels", WIDGET_CVAR_SLIDER_FLOAT)
         .CVar(CVAR_ENHANCEMENT("Graphics.ShadowQuality.JitterRadius"))
@@ -245,10 +245,10 @@ void SohMenu::AddMenuShadowQuality() {
     AddSidebarEntry("Qualidade das Sombras", "Formato do Mapa", 3);
 
     auto hideUnlessClipmap = [](WidgetInfo& info) {
-        info.isHidden = CVarGetInteger(CVAR_ENHANCEMENT("Graphics.WorldShadows.Mode"), SHADOW_MODE_VANILLA) !=
-                            SHADOW_MODE_SHADOW_MAP ||
-                        CVarGetInteger(CVAR_ENHANCEMENT("Graphics.ShadowQuality.Layout"), 0) !=
-                            1; // SHADOW_MAP_LAYOUT_CLIPMAP
+        info.isHidden =
+            CVarGetInteger(CVAR_ENHANCEMENT("Graphics.WorldShadows.Mode"), SHADOW_MODE_VANILLA) !=
+                SHADOW_MODE_SHADOW_MAP ||
+            CVarGetInteger(CVAR_ENHANCEMENT("Graphics.ShadowQuality.Layout"), 0) != 1; // SHADOW_MAP_LAYOUT_CLIPMAP
     };
 
     AddWidget(path, "Formato", WIDGET_CVAR_COMBOBOX)
@@ -258,23 +258,22 @@ void SohMenu::AddMenuShadowQuality() {
         .Options(ComboboxOptions()
                      .ComboMap(shadowLayoutLabels)
                      .DefaultIndex(0) // SHADOW_MAP_DEFAULT_LAYOUT
-                     .Tooltip(
-                         "Como o mapa é distribuído pelo mundo. É a única opção desta aba que muda a FORMA "
-                         "do sistema, não o acabamento dele.\n\n"
-                         "CASCATAS: faixas ajustadas a fatias do campo de visão. O que existe hoje. A razão "
-                         "de texel entre faixas vizinhas é de 3 a 8 vezes, e é esse salto que a transição "
-                         "precisa esconder.\n\n"
-                         "CLIPMAP: quadrados aninhados centrados na CÂMERA, cada um com o dobro da extensão "
-                         "do anterior. A razão de texel entre níveis vizinhos é exatamente 2, e as "
-                         "fronteiras são círculos que andam COM você em vez de varrerem o mundo quando a "
-                         "câmera gira.\n\n"
-                         "É a metade direcional do Virtual Shadow Map da Unreal -- a parte que dá para "
-                         "portar. A paginação de memória dela não dá: precisa de compute, indirect draw e "
-                         "um passe de profundidade prévio.\n\n"
-                         "TROCA: o nível 0 do clipmap é mais grosso que a cascata 0 (0,37 contra 0,09 "
-                         "unidade por texel a 1024). A cascata 0 é fina além do que se enxerga àquela "
-                         "distância; é justamente esse desperdício que o clipmap remove. Se a sombra aos "
-                         "pés do Link ficar grosseira, suba a Resolução."));
+                     .Tooltip("Como o mapa é distribuído pelo mundo. É a única opção desta aba que muda a FORMA "
+                              "do sistema, não o acabamento dele.\n\n"
+                              "CASCATAS: faixas ajustadas a fatias do campo de visão. O que existe hoje. A razão "
+                              "de texel entre faixas vizinhas é de 3 a 8 vezes, e é esse salto que a transição "
+                              "precisa esconder.\n\n"
+                              "CLIPMAP: quadrados aninhados centrados na CÂMERA, cada um com o dobro da extensão "
+                              "do anterior. A razão de texel entre níveis vizinhos é exatamente 2, e as "
+                              "fronteiras são círculos que andam COM você em vez de varrerem o mundo quando a "
+                              "câmera gira.\n\n"
+                              "É a metade direcional do Virtual Shadow Map da Unreal -- a parte que dá para "
+                              "portar. A paginação de memória dela não dá: precisa de compute, indirect draw e "
+                              "um passe de profundidade prévio.\n\n"
+                              "TROCA: o nível 0 do clipmap é mais grosso que a cascata 0 (0,37 contra 0,09 "
+                              "unidade por texel a 1024). A cascata 0 é fina além do que se enxerga àquela "
+                              "distância; é justamente esse desperdício que o clipmap remove. Se a sombra aos "
+                              "pés do Link ficar grosseira, suba a Resolução."));
     AddWidget(path, "Níveis: %d", WIDGET_CVAR_SLIDER_INT)
         .CVar(CVAR_ENHANCEMENT("Graphics.ShadowQuality.ClipmapLevels"))
         .RaceDisable(false)
@@ -289,7 +288,7 @@ void SohMenu::AddMenuShadowQuality() {
                               "Aumentar a Extensão do Nível 0 também estende o alcance, mas às custas da "
                               "nitidez perto. Mais níveis não tem esse custo.")
                      .Min(1)
-                     .Max(10) // SHADOW_MAP_MAX_CLIPMAP_LEVELS
+                     .Max(10)           // SHADOW_MAP_MAX_CLIPMAP_LEVELS
                      .DefaultValue(8)); // SHADOW_MAP_DEFAULT_CLIPMAP_LEVELS
     AddWidget(path, "Cache de Casters Estáticos", WIDGET_CVAR_CHECKBOX)
         .CVar(CVAR_ENHANCEMENT("Graphics.ShadowQuality.StaticCache"))
@@ -390,26 +389,25 @@ void SohMenu::AddMenuShadowQuality() {
         .Options(ComboboxOptions()
                      .ComboMap(shadowMapResolutionLabels)
                      .DefaultIndex(4096) // SHADOW_MAP_DEFAULT_CLIPMAP_RESOLUTION
-                     .Tooltip(
-                         "Resolução de cada nível, SEPARADA da Resolução das cascatas.\n\n"
-                         "Separada porque as duas querem coisas opostas: um clipmap quer muitos níveis "
-                         "pequenos, uma escada de cascatas quer poucos grandes. Compartilhar o número faz um "
-                         "passar fome ou o outro estourar a memória.\n\n"
-                         "Unidades de mundo por texel, contra a escada de cascatas na SUA 4096:\n"
-                         "  distância    cascatas   clip 2048   clip 4096\n"
-                         "       150        0,090       0,234       0,117\n"
-                         "       900        0,740       0,938       0,469\n"
-                         "      2000        0,740       3,750       1,875\n"
-                         "      4000        3,600       7,500       3,750\n\n"
-                         "A 2048 o clipmap perde em quase toda distância. Ele precisa da resolução maior por "
-                         "um motivo estrutural: um nível é um QUADRADO CENTRADO NA CÂMERA, enquanto uma "
-                         "cascata é uma laje AJUSTADA AO CAMPO DE VISÃO. A câmera olha para um lado só, "
-                         "então o quadrado gasta a maior parte da área em chão que ninguém está vendo. É o "
-                         "preço das fronteiras que andam com você.\n\n"
-                         "8 níveis a 4096 = 256 MB. A camada de personagens usa só os dois níveis mais "
-                         "internos, então 4096 lá é desperdício -- baixar Resolução (Personagens) para 1024 "
-                         "tira 60 MB do total.\n\n"
-                         "Subir aqui deixa tudo mais nítido de uma vez; subir os Níveis estende o alcance."));
+                     .Tooltip("Resolução de cada nível, SEPARADA da Resolução das cascatas.\n\n"
+                              "Separada porque as duas querem coisas opostas: um clipmap quer muitos níveis "
+                              "pequenos, uma escada de cascatas quer poucos grandes. Compartilhar o número faz um "
+                              "passar fome ou o outro estourar a memória.\n\n"
+                              "Unidades de mundo por texel, contra a escada de cascatas na SUA 4096:\n"
+                              "  distância    cascatas   clip 2048   clip 4096\n"
+                              "       150        0,090       0,234       0,117\n"
+                              "       900        0,740       0,938       0,469\n"
+                              "      2000        0,740       3,750       1,875\n"
+                              "      4000        3,600       7,500       3,750\n\n"
+                              "A 2048 o clipmap perde em quase toda distância. Ele precisa da resolução maior por "
+                              "um motivo estrutural: um nível é um QUADRADO CENTRADO NA CÂMERA, enquanto uma "
+                              "cascata é uma laje AJUSTADA AO CAMPO DE VISÃO. A câmera olha para um lado só, "
+                              "então o quadrado gasta a maior parte da área em chão que ninguém está vendo. É o "
+                              "preço das fronteiras que andam com você.\n\n"
+                              "8 níveis a 4096 = 256 MB. A camada de personagens usa só os dois níveis mais "
+                              "internos, então 4096 lá é desperdício -- baixar Resolução (Personagens) para 1024 "
+                              "tira 60 MB do total.\n\n"
+                              "Subir aqui deixa tudo mais nítido de uma vez; subir os Níveis estende o alcance."));
 
     // What the ladder ACTUALLY produced, read back from the renderer rather than recomputed here.
     //
@@ -421,16 +419,14 @@ void SohMenu::AddMenuShadowQuality() {
     // WIDGET_TEXT draws widget.name and PreFunc runs first, so rewriting the name each frame is what makes
     // it live.
     AddWidget(path, "Resultado", WIDGET_SEPARATOR_TEXT).PreFunc(hideUnlessShadowMap);
-    AddWidget(path, "Cascatas em uso:", WIDGET_TEXT)
-        .RaceDisable(false)
-        .PreFunc([](WidgetInfo& info) {
-            info.isHidden = CVarGetInteger(CVAR_ENHANCEMENT("Graphics.WorldShadows.Mode"), SHADOW_MODE_VANILLA) !=
-                            SHADOW_MODE_SHADOW_MAP;
-            if (!info.isHidden) {
-                const char* report = ToonLighting_ShadowMapCascadeReport();
-                info.name = std::string("Cascatas em uso:\n") + (report != nullptr ? report : "");
-            }
-        });
+    AddWidget(path, "Cascatas em uso:", WIDGET_TEXT).RaceDisable(false).PreFunc([](WidgetInfo& info) {
+        info.isHidden = CVarGetInteger(CVAR_ENHANCEMENT("Graphics.WorldShadows.Mode"), SHADOW_MODE_VANILLA) !=
+                        SHADOW_MODE_SHADOW_MAP;
+        if (!info.isHidden) {
+            const char* report = ToonLighting_ShadowMapCascadeReport();
+            info.name = std::string("Cascatas em uso:\n") + (report != nullptr ? report : "");
+        }
+    });
 
     // The cross-fade between cascades. It has always existed and has never been reachable from the menu --
     // only from the console -- which is why a hard cascade seam had no control to soften it.
@@ -451,7 +447,5 @@ void SohMenu::AddMenuShadowQuality() {
                      .Step(0.01f)
                      .DefaultValue(0.2f) // SHADOW_MAP_DEFAULT_BLEND_FRACTION
                      .IsPercentage());
-
-
 }
 } // namespace SohGui

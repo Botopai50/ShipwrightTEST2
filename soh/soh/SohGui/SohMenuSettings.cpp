@@ -401,20 +401,19 @@ void SohMenu::AddMenuSettings() {
                 wnd->SetFxaaEnabled(on);
             }
         })
-        .Options(CheckboxOptions()
-                     .DefaultValue(false)
-                     .Tooltip("Smooths jagged edges by filtering the FINISHED image instead of by sampling the "
-                              "geometry several times.\n\n"
-                              "The difference from MSAA is what it costs and what it catches. MSAA takes several "
-                              "samples per pixel wherever two polygons meet, so it costs more the more geometry "
-                              "and the more resolution there is, and it cannot see an edge that lives inside a "
-                              "texture. FXAA is one pass over the frame at a fixed cost no matter how busy the "
-                              "scene is, and it catches texture and cutout edges -- foliage, railings, the "
-                              "lettering on signs -- that MSAA leaves jagged.\n\n"
-                              "The price is that it works from the image alone and cannot tell a jagged edge "
-                              "from a detail that is meant to be sharp, so it softens the picture slightly.\n\n"
-                              "Turning this on sets MSAA back to 1x: paying for both would soften the result "
-                              "and cost twice. Direct3D 11 only; elsewhere the frame is shown unfiltered."));
+        .Options(CheckboxOptions().DefaultValue(false).Tooltip(
+            "Smooths jagged edges by filtering the FINISHED image instead of by sampling the "
+            "geometry several times.\n\n"
+            "The difference from MSAA is what it costs and what it catches. MSAA takes several "
+            "samples per pixel wherever two polygons meet, so it costs more the more geometry "
+            "and the more resolution there is, and it cannot see an edge that lives inside a "
+            "texture. FXAA is one pass over the frame at a fixed cost no matter how busy the "
+            "scene is, and it catches texture and cutout edges -- foliage, railings, the "
+            "lettering on signs -- that MSAA leaves jagged.\n\n"
+            "The price is that it works from the image alone and cannot tell a jagged edge "
+            "from a detail that is meant to be sharp, so it softens the picture slightly.\n\n"
+            "Turning this on sets MSAA back to 1x: paying for both would soften the result "
+            "and cost twice. Direct3D 11 only; elsewhere the frame is shown unfiltered."));
 #endif
     // How much graphics memory the texture cache may hold. A ceiling, not a reservation.
     //
@@ -522,19 +521,18 @@ void SohMenu::AddMenuSettings() {
         .CVar(CVAR_MIPMAPS)
         .RaceDisable(false)
         .Callback([](WidgetInfo&) { ApplyMipmapSettings(); })
-        .Options(CheckboxOptions()
-                     .DefaultValue(false)
-                     .Tooltip("Builds a chain of progressively smaller copies of large textures and lets the "
-                              "GPU pick the one that matches how small the surface is on screen.\n\n"
-                              "What it is FOR is texture packs. The game's own textures are capped at 4 KB by "
-                              "the N64's texture memory -- around 64 by 64 -- and one that small already sits "
-                              "entirely in the GPU's cache, so there is no traffic left for this to save. At "
-                              "any modern resolution they are being magnified anyway, and magnification always "
-                              "reads the full-size copy. A 1024-square replacement texture on a distant wall "
-                              "is the opposite case, and there this saves a great deal.\n\n"
-                              "It also removes the shimmer on distant ground and on surfaces seen at a grazing "
-                              "angle, whatever the texture size -- but only large textures are given a chain, "
-                              "so on stock assets expect the quality change and not the frames."));
+        .Options(CheckboxOptions().DefaultValue(false).Tooltip(
+            "Builds a chain of progressively smaller copies of large textures and lets the "
+            "GPU pick the one that matches how small the surface is on screen.\n\n"
+            "What it is FOR is texture packs. The game's own textures are capped at 4 KB by "
+            "the N64's texture memory -- around 64 by 64 -- and one that small already sits "
+            "entirely in the GPU's cache, so there is no traffic left for this to save. At "
+            "any modern resolution they are being magnified anyway, and magnification always "
+            "reads the full-size copy. A 1024-square replacement texture on a distant wall "
+            "is the opposite case, and there this saves a great deal.\n\n"
+            "It also removes the shimmer on distant ground and on surfaces seen at a grazing "
+            "angle, whatever the texture size -- but only large textures are given a chain, "
+            "so on stock assets expect the quality change and not the frames."));
     AddWidget(path, "Mipmap LOD Bias: %.1f", WIDGET_CVAR_SLIDER_FLOAT)
         .CVar(CVAR_MIPMAP_LOD_BIAS)
         .RaceDisable(false)

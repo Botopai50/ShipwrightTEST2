@@ -198,8 +198,7 @@ void SohMenu::AddMenuWindWakerStyle() {
         .CVar(CVAR_ENHANCEMENT("Graphics.WorldLighting.FlickerSpeed"))
         .RaceDisable(false)
         .PreFunc([](WidgetInfo& info) {
-            info.options->disabled =
-                !CVarGetInteger(CVAR_ENHANCEMENT("Graphics.WorldLighting.ImproveFlameFlicker"), 1);
+            info.options->disabled = !CVarGetInteger(CVAR_ENHANCEMENT("Graphics.WorldLighting.ImproveFlameFlicker"), 1);
             info.options->disabledTooltip = "Enable \"Improve Flame Flicker\" to adjust this.";
         })
         .Options(FloatSliderOptions()
@@ -303,12 +302,12 @@ void SohMenu::AddMenuWindWakerStyle() {
                      .Min(0.0f)
                      .Max(3.0f)
                      .DefaultValue(1.0f));
-    addSliderWithReset("Cast Size", CVAR_ENHANCEMENT("Graphics.WorldLighting.SphereSize"), 0.1f, 4.0f, 0.5f,
-                       "%.2fx", false, hideUnlessLightCastEnabled,
+    addSliderWithReset("Cast Size", CVAR_ENHANCEMENT("Graphics.WorldLighting.SphereSize"), 0.1f, 4.0f, 0.5f, "%.2fx",
+                       false, hideUnlessLightCastEnabled,
                        "Size of each light's cast pool, as a multiplier on the light's radius. Smaller keeps "
                        "the pool tight around the source; larger spreads it wider.");
-    addSliderWithReset("Light Intensity", CVAR_ENHANCEMENT("Graphics.WorldLighting.Intensity"), 0.0f, 2.0f,
-                       0.2f, nullptr, true, hideUnlessLightCastEnabled, "Brightness of the cast light pools.");
+    addSliderWithReset("Light Intensity", CVAR_ENHANCEMENT("Graphics.WorldLighting.Intensity"), 0.0f, 2.0f, 0.2f,
+                       nullptr, true, hideUnlessLightCastEnabled, "Brightness of the cast light pools.");
 
     // Navi
     AddWidget(path, "WWLSepNavi", WIDGET_SEPARATOR).RaceDisable(false).PreFunc(hideUnlessLightCastEnabled);
@@ -318,12 +317,12 @@ void SohMenu::AddMenuWindWakerStyle() {
         .PreFunc(hideUnlessLightCastEnabled)
         .Options(CheckboxOptions().DefaultValue(true).Tooltip(
             "Also cast a pool from Link's fairy (Navi). Navi darts around quickly, so her pool moves a lot."));
-    addSliderWithReset("Navi Cast Size", CVAR_ENHANCEMENT("Graphics.WorldLighting.NaviSphereSize"), 0.1f, 4.0f,
-                       0.75f, "%.2fx", false, hideUnlessNaviCast,
+    addSliderWithReset("Navi Cast Size", CVAR_ENHANCEMENT("Graphics.WorldLighting.NaviSphereSize"), 0.1f, 4.0f, 0.75f,
+                       "%.2fx", false, hideUnlessNaviCast,
                        "Navi's pool size, separate from the main Cast Size, so you can keep Navi tight "
                        "without shrinking the torches.");
-    addSliderWithReset("Navi Light Intensity", CVAR_ENHANCEMENT("Graphics.WorldLighting.NaviIntensity"), 0.0f,
-                       2.0f, 0.2f, nullptr, true, hideUnlessNaviCast,
+    addSliderWithReset("Navi Light Intensity", CVAR_ENHANCEMENT("Graphics.WorldLighting.NaviIntensity"), 0.0f, 2.0f,
+                       0.2f, nullptr, true, hideUnlessNaviCast,
                        "Navi's pool brightness, separate from the main Light Intensity.");
 
     // Other fairies
@@ -337,12 +336,12 @@ void SohMenu::AddMenuWindWakerStyle() {
             "like Kokiri Forest, and the healing fairies found out in the world (the magic one casts a wider "
             "pool). Since it turns them into real light sources, they then cast light pools AND can light nearby "
             "objects via Cel Shading, the same as Navi. A cluster of them can make the lighting busy."));
-    addSliderWithReset("Other Fairy Cast Size", CVAR_ENHANCEMENT("Graphics.WorldLighting.WildFairySphereSize"),
-                       0.1f, 4.0f, 0.75f, "%.2fx", false, hideUnlessWildFairyCast,
+    addSliderWithReset("Other Fairy Cast Size", CVAR_ENHANCEMENT("Graphics.WorldLighting.WildFairySphereSize"), 0.1f,
+                       4.0f, 0.75f, "%.2fx", false, hideUnlessWildFairyCast,
                        "Pool size for non-Navi fairies (Kokiri Forest fairies + the healing fairies), separate "
                        "from torches and Navi. The magic (big) fairy is already larger than the rest.");
-    addSliderWithReset("Other Fairy Intensity", CVAR_ENHANCEMENT("Graphics.WorldLighting.WildFairyIntensity"),
-                       0.0f, 2.0f, 0.2f, nullptr, true, hideUnlessWildFairyCast,
+    addSliderWithReset("Other Fairy Intensity", CVAR_ENHANCEMENT("Graphics.WorldLighting.WildFairyIntensity"), 0.0f,
+                       2.0f, 0.2f, nullptr, true, hideUnlessWildFairyCast,
                        "Pool brightness for non-Navi fairies, separate from the main Light Intensity.");
 
     AddWidget(path, "Debug", WIDGET_SEPARATOR_TEXT).PreFunc(hideUnlessLightCastEnabled);
@@ -366,8 +365,8 @@ void SohMenu::AddMenuWindWakerStyle() {
             "Makes a lit, held Deku stick a real light source at its burning tip (it isn't in vanilla). Like a "
             "torch it lights nearby objects via Cel Shading and casts their shadows, and -- with Light Casting "
             "on -- casts its own pool on the world. This one toggle controls all three."));
-    addSliderWithReset("Deku Stick Cast Size", CVAR_ENHANCEMENT("Graphics.WorldLighting.DekuStickSphereSize"),
-                       0.1f, 4.0f, 0.5f, "%.2fx", false, hideUnlessDekuStickCast,
+    addSliderWithReset("Deku Stick Cast Size", CVAR_ENHANCEMENT("Graphics.WorldLighting.DekuStickSphereSize"), 0.1f,
+                       4.0f, 0.5f, "%.2fx", false, hideUnlessDekuStickCast,
                        "The held Deku stick's pool size, separate from torches, so you can size the stick's "
                        "pool on its own.");
 
@@ -379,12 +378,12 @@ void SohMenu::AddMenuWindWakerStyle() {
     // The tuning sliders below shape the stencil-volume silhouettes, so they only apply to Actor Shadows --
     // not to Vanilla (nothing to tune) and not to Shadow Map (its own cascade settings).
     auto hideUnlessShadowsEnabled = [](WidgetInfo& info) {
-        info.isHidden = CVarGetInteger(CVAR_ENHANCEMENT("Graphics.WorldShadows.Mode"), SHADOW_MODE_VANILLA) !=
-                        SHADOW_MODE_ACTOR;
+        info.isHidden =
+            CVarGetInteger(CVAR_ENHANCEMENT("Graphics.WorldShadows.Mode"), SHADOW_MODE_VANILLA) != SHADOW_MODE_ACTOR;
     };
     auto hideUnlessAnyShadowSystem = [](WidgetInfo& info) {
-        info.isHidden = CVarGetInteger(CVAR_ENHANCEMENT("Graphics.WorldShadows.Mode"), SHADOW_MODE_VANILLA) ==
-                        SHADOW_MODE_VANILLA;
+        info.isHidden =
+            CVarGetInteger(CVAR_ENHANCEMENT("Graphics.WorldShadows.Mode"), SHADOW_MODE_VANILLA) == SHADOW_MODE_VANILLA;
     };
     path.sidebarName = "Actor Shadows";
     path.column = SECTION_COLUMN_1;
@@ -580,7 +579,8 @@ void SohMenu::AddMenuWindWakerStyle() {
         .RaceDisable(false)
         .PreFunc(hideUnlessShadowMap)
         .Options(FloatSliderOptions()
-                     .Tooltip("O quão escura fica uma superfície totalmente na sombra.\n\n0% = nenhuma sombra visível; 100% = preto.")
+                     .Tooltip("O quão escura fica uma superfície totalmente na sombra.\n\n0% = nenhuma sombra visível; "
+                              "100% = preto.")
                      .Min(0.0f)
                      .Max(1.0f)
                      .DefaultValue(0.5f) // SHADOW_MAP_DEFAULT_STRENGTH
@@ -723,7 +723,6 @@ void SohMenu::AddMenuWindWakerStyle() {
                      .Max(12000.0f)
                      .DefaultValue(6000.0f)); // SHADOW_MAP_DEFAULT_SPLIT_2
 
-
     AddWidget(path, "Luz e Alcance", WIDGET_SEPARATOR_TEXT).PreFunc(hideUnlessShadowMap);
     AddWidget(path, "Altura Mínima do Sol", WIDGET_CVAR_SLIDER_FLOAT)
         .CVar(CVAR_ENHANCEMENT("Graphics.ShadowMap.MinElevation"))
@@ -803,11 +802,11 @@ void SohMenu::AddMenuWindWakerStyle() {
                             SHADOW_MODE_SHADOW_MAP ||
                         CVarGetInteger(CVAR_ENHANCEMENT("Graphics.ShadowQuality.Layout"), 0) != 0;
     };
-#define SHADOW_UPDATE_RATE_TOOLTIP_TAIL                                                                      \
+#define SHADOW_UPDATE_RATE_TOOLTIP_TAIL                                                                        \
     "\n\nPular a reconstrução CONGELA a faixa inteira, matriz inclusive. O mapa guardado foi desenhado com " \
-    "a matriz daquele quadro, e lê-lo com outra projetaria a sombra a partir de onde a luz estava — uma "    \
-    "sombra atrasada vira uma sombra no lugar errado, que é pior do que o custo economizado. Por isso o "    \
-    "preço aqui é atraso, não deslocamento: a sombra desta faixa reage um quadro depois, e isso aparece "    \
+    "a matriz daquele quadro, e lê-lo com outra projetaria a sombra a partir de onde a luz estava — uma "   \
+    "sombra atrasada vira uma sombra no lugar errado, que é pior do que o custo economizado. Por isso o "     \
+    "preço aqui é atraso, não deslocamento: a sombra desta faixa reage um quadro depois, e isso aparece "   \
     "principalmente ao girar a câmera rápido."
     AddWidget(path, "Atualização da Faixa Próxima: 1 a cada %d quadros", WIDGET_CVAR_SLIDER_INT)
         .CVar(CVAR_ENHANCEMENT("Graphics.ShadowMap.UpdateDivisor0"))
@@ -821,7 +820,7 @@ void SohMenu::AddMenuWindWakerStyle() {
                               "Economizar aqui rende quase nada e o atraso é visto "
                               "imediatamente." SHADOW_UPDATE_RATE_TOOLTIP_TAIL)
                      .Min(1)
-                     .Max(4) // SHADOW_MAP_MAX_CASCADE_DIVISOR
+                     .Max(4)          // SHADOW_MAP_MAX_CASCADE_DIVISOR
                      .DefaultValue(1) // SHADOW_MAP_DEFAULT_CASCADE_DIVISOR_0
                      .ShowButtons(true)
                      .Format("%d"));
@@ -837,7 +836,7 @@ void SohMenu::AddMenuWindWakerStyle() {
                               "depois de já ter subido a faixa distante e ainda precisar de "
                               "FPS." SHADOW_UPDATE_RATE_TOOLTIP_TAIL)
                      .Min(1)
-                     .Max(4) // SHADOW_MAP_MAX_CASCADE_DIVISOR
+                     .Max(4)          // SHADOW_MAP_MAX_CASCADE_DIVISOR
                      .DefaultValue(1) // SHADOW_MAP_DEFAULT_CASCADE_DIVISOR_1
                      .ShowButtons(true)
                      .Format("%d"));
@@ -854,13 +853,13 @@ void SohMenu::AddMenuWindWakerStyle() {
                               "uma fração de célula), e é a mais cara de preencher, porque a área grande "
                               "varre o maior número de objetos." SHADOW_UPDATE_RATE_TOOLTIP_TAIL)
                      .Min(1)
-                     .Max(4) // SHADOW_MAP_MAX_CASCADE_DIVISOR
+                     .Max(4)          // SHADOW_MAP_MAX_CASCADE_DIVISOR
                      .DefaultValue(2) // SHADOW_MAP_DEFAULT_CASCADE_DIVISOR_2
                      .ShowButtons(true)
                      .Format("%d"));
 #undef SHADOW_UPDATE_RATE_TOOLTIP_TAIL
 
-AddWidget(path, "Depuração", WIDGET_SEPARATOR_TEXT).PreFunc(hideUnlessShadowMap);
+    AddWidget(path, "Depuração", WIDGET_SEPARATOR_TEXT).PreFunc(hideUnlessShadowMap);
     // Live readout of which light won the frame. A lot of policy decides the single direction the cascades
     // get, so without this a hierarchy that picked the wrong light is indistinguishable from one that
     // picked the right light and aimed it badly. Same live-name trick as the caster census below.
@@ -948,17 +947,15 @@ AddWidget(path, "Depuração", WIDGET_SEPARATOR_TEXT).PreFunc(hideUnlessShadowMa
     // Live list of what the world (green) caster layer is actually made of, so a stray green blob in the
     // debug view can be named instead of guessed at. WIDGET_TEXT draws widget.name, and PreFunc runs first,
     // so rewriting the name each frame is what makes it live.
-    AddWidget(path, "Cenário projetando (média/frame):", WIDGET_TEXT)
-        .RaceDisable(false)
-        .PreFunc([](WidgetInfo& info) {
-            info.isHidden = CVarGetInteger(CVAR_ENHANCEMENT("Graphics.WorldShadows.Mode"), SHADOW_MODE_VANILLA) !=
-                                SHADOW_MODE_SHADOW_MAP ||
-                            CVarGetInteger(CVAR_DEVELOPER_TOOLS("ShadowMap.ShowCascadeBounds"), 0) == 0;
-            if (!info.isHidden) {
-                const char* census = ToonLighting_ShadowMapCasterCensus();
-                info.name = std::string("Cenário projetando (média/frame):\n") + (census != nullptr ? census : "");
-            }
-        });
+    AddWidget(path, "Cenário projetando (média/frame):", WIDGET_TEXT).RaceDisable(false).PreFunc([](WidgetInfo& info) {
+        info.isHidden = CVarGetInteger(CVAR_ENHANCEMENT("Graphics.WorldShadows.Mode"), SHADOW_MODE_VANILLA) !=
+                            SHADOW_MODE_SHADOW_MAP ||
+                        CVarGetInteger(CVAR_DEVELOPER_TOOLS("ShadowMap.ShowCascadeBounds"), 0) == 0;
+        if (!info.isHidden) {
+            const char* census = ToonLighting_ShadowMapCasterCensus();
+            info.name = std::string("Cenário projetando (média/frame):\n") + (census != nullptr ? census : "");
+        }
+    });
 
     // ===========================================================================================
     // Sky — the Wind Waker-style sky replacement: gradient dome + drifting clouds + night stars.

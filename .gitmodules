@@ -1,7 +1,7 @@
 [submodule "libultraship"]
 	path = libultraship
 	url = https://github.com/Botopai50/libultrashipTEST2.git
-	branch = claude/shadow-map-system-analysis-4dxo27
+	branch = Otimização_Foda_GPT.A
 [submodule "ZAPDTR"]
 	path = ZAPDTR
 	url = https://github.com/harbourmasters/ZAPDTR

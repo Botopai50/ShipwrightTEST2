@@ -197,7 +197,7 @@ void SohMenu::AddMenuShadows() {
     auto advOnly = [](WidgetInfo& info) { info.isHidden = ShadowAdvancedOff(); };
 
     WidgetPath path = { "Sombras", "Geral", SECTION_COLUMN_1 };
-    AddSidebarEntry("Sombras", "Geral", 3);
+    AddSidebarEntry("Sombras", path.sidebarName, 3);
 
     AddWidget(path, "Shadow System", WIDGET_CVAR_COMBOBOX)
         .CVar(CVAR_ENHANCEMENT("Graphics.WorldShadows.Mode"))
@@ -370,7 +370,7 @@ void SohMenu::AddMenuShadows() {
                                          "o sistema nem troca o modo."));
 
     path = { "Sombras", "Sombras de Ator", SECTION_COLUMN_1 };
-    AddSidebarEntry("Sombras", "Sombras de Ator", 3);
+    AddSidebarEntry("Sombras", path.sidebarName, 3);
 
     AddWidget(path, "Length", WIDGET_CVAR_SLIDER_FLOAT)
         .CVar(CVAR_ENHANCEMENT("Graphics.WorldShadows.Length"))
@@ -435,7 +435,7 @@ void SohMenu::AddMenuShadows() {
             "blue side walls. The ground inside this volume is what gets shadowed."));
 
     path = { "Sombras", "Mapa e Faixas", SECTION_COLUMN_1 };
-    AddSidebarEntry("Sombras", "Mapa e Faixas", 3);
+    AddSidebarEntry("Sombras", path.sidebarName, 3);
 
     AddWidget(path, "Resolução", WIDGET_CVAR_COMBOBOX)
         .CVar(CVAR_ENHANCEMENT("Graphics.ShadowMap.Resolution"))
@@ -628,7 +628,7 @@ void SohMenu::AddMenuShadows() {
             "primeira coisa a desligar."));
 
     path = { "Sombras", "Desempenho", SECTION_COLUMN_1 };
-    AddSidebarEntry("Sombras", "Desempenho", 3);
+    AddSidebarEntry("Sombras", path.sidebarName, 3);
 
     AddWidget(path, "Desempenho", WIDGET_SEPARATOR_TEXT).PreFunc(advOnly);
     // Shared tooltip tail: the trade-off is identical for all three, only the cascade differs. A macro
@@ -709,7 +709,7 @@ void SohMenu::AddMenuShadows() {
 #undef SHADOW_UPDATE_RATE_TOOLTIP_TAIL
 
     path = { "Sombras", "Depuração", SECTION_COLUMN_1 };
-    AddSidebarEntry("Sombras", "Depuração", 3);
+    AddSidebarEntry("Sombras", path.sidebarName, 3);
 
     AddWidget(path, "Depuração", WIDGET_SEPARATOR_TEXT).PreFunc(advOnly);
     // Live readout of which light won the frame. A lot of policy decides the single direction the cascades
@@ -809,7 +809,7 @@ void SohMenu::AddMenuShadows() {
     });
 
     path = { "Sombras", "Borda", SECTION_COLUMN_1 };
-    AddSidebarEntry("Sombras", "Borda", 3);
+    AddSidebarEntry("Sombras", path.sidebarName, 3);
 
     auto hideUnlessAnalytic = [](WidgetInfo& info) {
         info.isHidden =
@@ -891,7 +891,7 @@ void SohMenu::AddMenuShadows() {
     // ===========================================================================================
     // Edge hardening -- the control in the other direction from everything above.
     // ===========================================================================================
-    path = { "Sombras", "", SECTION_COLUMN_1 };
+    path = { "Sombras", "Borda", SECTION_COLUMN_1 };
 
     auto hideUnlessHarden = [](WidgetInfo& info) {
         info.isHidden =
@@ -949,10 +949,9 @@ void SohMenu::AddMenuShadows() {
     // ===========================================================================================
     // Layout -- the ladder, or the clipmap. The one setting here that changes the SHAPE of the system.
     // ===========================================================================================
-    path = { "Sombras", "", SECTION_COLUMN_1 };
 
     path = { "Sombras", "Forma do Mapa", SECTION_COLUMN_1 };
-    AddSidebarEntry("Sombras", "Forma do Mapa", 3);
+    AddSidebarEntry("Sombras", path.sidebarName, 3);
 
     auto hideUnlessClipmap = [](WidgetInfo& info) {
         info.isHidden = ShadowAdvancedOff() || CVarGetInteger(CVAR_ENHANCEMENT("Graphics.ShadowQuality.Layout"), 0) !=
@@ -1158,7 +1157,7 @@ void SohMenu::AddMenuShadows() {
         info.isHidden = ShadowAdvancedOff() || !CVarGetInteger(CVAR_ENHANCEMENT("Graphics.ShadowAcne.Enabled"), 1);
     };
     path = { "Sombras", "Acne", SECTION_COLUMN_1 };
-    AddSidebarEntry("Sombras", "Acne", 3);
+    AddSidebarEntry("Sombras", path.sidebarName, 3);
 
     AddWidget(path, "O que é acne", WIDGET_SEPARATOR_TEXT).PreFunc(advOnly);
     AddWidget(path, "Uma superfície fazendo sombra em si mesma: listras escuras no chão que, num", WIDGET_TEXT)

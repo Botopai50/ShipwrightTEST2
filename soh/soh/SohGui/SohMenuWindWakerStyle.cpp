@@ -29,7 +29,7 @@ void SohMenu::AddMenuWindWakerStyle() {
         .CVar(CVAR_ENHANCEMENT("Graphics.ToonLighting.Enabled"))
         .RaceDisable(false)
         .Options(CheckboxOptions().DefaultValue(true).Tooltip(
-            "Re-lights actors and objects with a single dominant light and a soft Wind Waker-style ramp. "
+            "Re-lights actors and objects with a soft Wind Waker-style ramp and optional local lights. "
             "Only affects objects, not the static scene. Pairs well with cel-shaded texture packs."));
     AddWidget(path, "Options", WIDGET_SEPARATOR_TEXT).PreFunc(hideUnlessCelEnabled);
     AddWidget(path, "Reset All to Defaults", WIDGET_BUTTON)
@@ -41,6 +41,8 @@ void SohMenu::AddMenuWindWakerStyle() {
             CVarClear(CVAR_ENHANCEMENT("Graphics.ToonLighting.RampSoftness"));
             CVarClear(CVAR_ENHANCEMENT("Graphics.ToonLighting.HighlightIntensity"));
             CVarClear(CVAR_ENHANCEMENT("Graphics.ToonLighting.ShadowIntensity"));
+            CVarClear(CVAR_ENHANCEMENT("Graphics.ToonLighting.MultipleLights"));
+            CVarClear(CVAR_ENHANCEMENT("Graphics.ToonLighting.LocalIntensity"));
             CVarClear(CVAR_ENHANCEMENT("Graphics.ToonLighting.PointLightRange"));
             CVarClear(CVAR_ENHANCEMENT("Graphics.ToonLighting.UseNaviLight"));
             CVarClear(CVAR_ENHANCEMENT("Graphics.ToonLighting.TransitionTime"));
@@ -90,15 +92,28 @@ void SohMenu::AddMenuWindWakerStyle() {
                      .Max(1.0f)
                      .DefaultValue(0.6f)
                      .IsPercentage());
+    AddWidget(path, "Multiple Light Sources", WIDGET_CVAR_CHECKBOX)
+        .CVar(CVAR_ENHANCEMENT("Graphics.ToonLighting.MultipleLights"))
+        .RaceDisable(false)
+        .PreFunc(hideUnlessCelEnabled)
+        .Options(CheckboxOptions().DefaultValue(true).Tooltip(
+            "Keep sun/moon as the main light and add up to four nearby lights per object. "
+            "Local lights fade with distance and can illuminate actors in solar shadow. "
+            "Does not add shadows from torches or fairies. Disable for the previous single-key lighting."));
+    AddWidget(path, "Local Light Intensity", WIDGET_CVAR_SLIDER_FLOAT)
+        .CVar(CVAR_ENHANCEMENT("Graphics.ToonLighting.LocalIntensity"))
+        .RaceDisable(false)
+        .PreFunc(hideUnlessCelEnabled)
+        .Options(FloatSliderOptions().Min(0.0f).Max(1.0f).DefaultValue(0.5f).IsPercentage()
+            .Tooltip("Strength of additional toon lights. Lower this if overlapping sources wash out colors."));
     AddWidget(path, "Point Light Range", WIDGET_CVAR_SLIDER_FLOAT)
         .CVar(CVAR_ENHANCEMENT("Graphics.ToonLighting.PointLightRange"))
         .RaceDisable(false)
         .PreFunc(hideUnlessCelEnabled)
         .Options(FloatSliderOptions()
-                     .Tooltip("Extends how far a point light can remain an object's key light, as a "
-                              "multiplier on its actual radius (key selection only -- the game's real "
-                              "lighting is unchanged). Raise it so an orbiting fairy keeps lighting nearby "
-                              "objects even when it swings to its far side. 1x = the light's literal range.")
+                     .Tooltip("Multiplier on each local light's radius for toon lighting. In multi-light mode, "
+                              "contributions fade to zero at this range; in single-key mode it controls selection. "
+                              "Does not change the static scene's light pools.")
                      .Format("%.1fx")
                      .Min(1.0f)
                      .Max(4.0f)
@@ -108,9 +123,8 @@ void SohMenu::AddMenuWindWakerStyle() {
         .RaceDisable(false)
         .PreFunc(hideUnlessCelEnabled)
         .Options(CheckboxOptions().DefaultValue(true).Tooltip(
-            "Let Navi count as a candidate key light for cel shading. Navi blinks on/off and orbits Link, so "
-            "leaving this on makes the lighting on nearby objects shift around with her. Turn it off to ignore "
-            "Navi and keep the key light steady (the sun/moon or a torch wins instead)."));
+            "Include Navi's active lights in cel shading. Multi-light mode adds them to the sun/moon; "
+            "single-key mode allows Navi to replace the key. Turn this off to exclude both Navi sources."));
     AddWidget(path, "Transition Time", WIDGET_CVAR_SLIDER_FLOAT)
         .CVar(CVAR_ENHANCEMENT("Graphics.ToonLighting.TransitionTime"))
         .RaceDisable(false)

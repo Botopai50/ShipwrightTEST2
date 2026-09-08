@@ -1,9 +1,10 @@
 // Wind Waker-style toon lighting -- game-side policy.
 //
 // libultraship owns the per-pixel transport: it relights the draws SoH brackets with gSPToon, using
-// one dominant light (gSPToonKey) and a generic ramp (SetToonRamp). This module owns the OoT-specific
+// a directional key, optional local contributions and a generic ramp (SetToonRamp).
+// This module owns the OoT-specific
 // policy that the framework must never know about:
-//   - which light is the key (closest in-range point light, else the day/night sun/moon),
+//   - sun/moon plus up to four local lights, or the legacy closest-light key,
 //   - how the key eases from one source to another (per-actor persistent state),
 //   - the look tuning (ramp parameters), pushed once per frame.
 // The framework never reads SoH's CVars; everything it needs is pushed from here.
@@ -105,6 +106,8 @@ static struct {
     f32 shadowMapLightDir[3] = { 0.0f, -1.0f, 0.0f };
     bool suppressVanilla = true;
     bool useNaviLight = true;
+    bool multipleLights = true;
+    f32 localIntensity = 0.5f;
     bool showDebug = false;
     // The shadow-map debug view (ShadowMap.ShowCascadeBounds). Non-zero also turns on the scenery-caster
     // census below -- the view says SOMETHING is casting, the census says what.
@@ -230,6 +233,9 @@ static void RefreshFrameParams() {
         sParams.shadowMapCasterDrawRadius = 0.0f;
     }
     sParams.suppressVanilla = CVarGetInteger(CVAR_ENHANCEMENT("Graphics.WorldShadows.SuppressVanillaShadows"), 1) != 0;
+    sParams.multipleLights = CVarGetInteger(CVAR_ENHANCEMENT("Graphics.ToonLighting.MultipleLights"), 1) != 0;
+    sParams.localIntensity = std::clamp(
+        CVarGetFloat(CVAR_ENHANCEMENT("Graphics.ToonLighting.LocalIntensity"), 0.5f), 0.0f, 1.0f);
     sParams.useNaviLight = CVarGetInteger(CVAR_ENHANCEMENT("Graphics.ToonLighting.UseNaviLight"), 1) != 0;
     sParams.showDebug = CVarGetInteger(CVAR_DEVELOPER_TOOLS("ToonLighting.ShowDebug"), 0) != 0;
     sParams.shadowMapCensus =
@@ -873,6 +879,8 @@ typedef struct {
     f32 dir[3];
     f32 col[3];
     f32 colVel[3];
+    const LightInfo* localSources[TOON_LOCAL_LIGHT_MAX]{}; // compared only against this frame
+    bool multipleLights = false;
     f32 shadowScale;    // actor-shadow size, eased 0..1 so it grows in / shrinks out instead of popping
     f32 shadowScaleVel; // SmoothDamp velocity for shadowScale
     // Cached floor raycast, for actors that never run a bg check (floorPoly stays NULL): a static
@@ -1019,6 +1027,65 @@ static bool ToonClosestPointLight(PlayState* play, Actor* actor, f32 pointRange,
         colOut[2] = best->params.point.color[2] / 255.0f;
     }
     return bestDistSq >= 0.0f;
+}
+
+// Select at most four live local sources. The 20% retention bonus avoids swaps
+// caused by torch flicker. Stored pointers are identity hints only, never dereferenced.
+static void EmitToonLocalLights(PlayState* play, Actor* actor, ToonKeyState& state, bool enabled) {
+    struct Candidate {
+        LightInfo* info;
+        float score;
+        float attenuation;
+        float distance2;
+    } best[TOON_LOCAL_LIGHT_MAX]{};
+    if (enabled) {
+        for (LightNode* node = play->lightCtx.listHead; node != nullptr; node = node->next) {
+            LightInfo* info = node->info;
+            if (info == nullptr || info->type == LIGHT_DIRECTIONAL || info == sNaviGlow || info == sNaviNoGlow) {
+                continue;
+            }
+            const auto& p = info->params.point;
+            float dx = p.x - actor->world.pos.x, dy = p.y - actor->world.pos.y, dz = p.z - actor->world.pos.z;
+            float distance2 = dx * dx + dy * dy + dz * dz;
+            float attenuation = ToonLocalLightAttenuation(distance2, p.radius * sParams.pointRange);
+            float score = attenuation * (0.2126f * p.color[0] + 0.7152f * p.color[1] + 0.0722f * p.color[2]);
+            if (!(score > 0.0f)) {
+                continue;
+            }
+            for (const LightInfo* previous : state.localSources) {
+                if (previous == info) {
+                    score *= 1.2f;
+                    break;
+                }
+            }
+            Candidate candidate{info, score, attenuation, distance2};
+            for (int i = 0; i < TOON_LOCAL_LIGHT_MAX; ++i) {
+                if (candidate.score > best[i].score) {
+                    std::swap(candidate, best[i]);
+                }
+            }
+        }
+    }
+    OPEN_DISPS(play->state.gfxCtx);
+    gSPToonLocalLightsReset(POLY_OPA_DISP++, enabled);
+    gSPToonLocalLightsReset(POLY_XLU_DISP++, enabled);
+    for (int i = 0; i < TOON_LOCAL_LIGHT_MAX; ++i) {
+        state.localSources[i] = best[i].info;
+        if (best[i].info == nullptr) {
+            continue;
+        }
+        const auto& p = best[i].info->params.point;
+        float invDistance = best[i].distance2 > 0.0001f ? 1.0f / sqrtf(best[i].distance2) : 0.0f;
+        // A source exactly at the object origin has no direction; choose up consistently.
+        s8 dx = (s8)((p.x - actor->world.pos.x) * invDistance * 127.0f);
+        s8 dy = invDistance > 0.0f ? (s8)((p.y - actor->world.pos.y) * invDistance * 127.0f) : 127;
+        s8 dz = (s8)((p.z - actor->world.pos.z) * invDistance * 127.0f);
+        float strength = best[i].attenuation * sParams.localIntensity;
+        u8 r = (u8)(p.color[0] * strength), g = (u8)(p.color[1] * strength), b = (u8)(p.color[2] * strength);
+        gSPToonLocalLight(POLY_OPA_DISP++, i, dx, dy, dz, r, g, b);
+        gSPToonLocalLight(POLY_XLU_DISP++, i, dx, dy, dz, r, g, b);
+    }
+    CLOSE_DISPS(play->state.gfxCtx);
 }
 
 // Key light from the environment directionals: the sun or the moon, whichever is currently brighter
@@ -1304,20 +1371,23 @@ static void HandleActorDraw(void* actorPtr) {
 
     OPEN_DISPS(play->state.gfxCtx);
 
-    // Closest in-range point light wins outright; with none in range, fall back to the sun/moon.
-    if (!ToonClosestPointLight(play, actor, pointRange, targetDir, targetCol)) {
+    // Multi-light keeps the environment key. Legacy mode lets the closest local source replace it.
+    const bool multipleLights = celEnabled && wantToon && sParams.multipleLights;
+    if (multipleLights || !ToonClosestPointLight(play, actor, pointRange, targetDir, targetCol)) {
         ToonEnvKey(play, targetDir, targetCol);
     }
 
     // Animate the key toward the chosen light with an eased "travel" (per-actor persistent state).
     auto [it, isNew] = sToonKeyStates.try_emplace(actor);
     ToonKeyState& st = it->second;
-    if (isNew) {
+    if (isNew || st.multipleLights != multipleLights) {
         st.colVel[0] = st.colVel[1] = st.colVel[2] = 0.0f;
         st.dir[0] = targetDir[0], st.dir[1] = targetDir[1], st.dir[2] = targetDir[2];
         st.col[0] = targetCol[0], st.col[1] = targetCol[1], st.col[2] = targetCol[2];
-        st.shadowScale = 0.0f, st.shadowScaleVel = 0.0f; // grows in on first appearance
-        st.floorSampled = 0, st.floorValid = 0;
+        if (isNew) {
+            st.shadowScale = 0.0f, st.shadowScaleVel = 0.0f; // grows in on first appearance
+            st.floorSampled = 0, st.floorValid = 0;
+        }
     } else {
         // Eased travel using the frame-constant dt/alpha computed in OnToonFrameUpdate (frame
         // interpolation replays this draw without re-running it, so they can't vary per actor anyway).
@@ -1328,6 +1398,11 @@ static void HandleActorDraw(void* actorPtr) {
         for (s32 i = 0; i < 3; i++) {
             st.col[i] = ToonSmoothDamp(st.col[i], targetCol[i], &st.colVel[i], transitionTime, sToonKeyDt);
         }
+    }
+
+    st.multipleLights = multipleLights;
+    if (!castWithoutRelight) {
+        EmitToonLocalLights(play, actor, st, multipleLights);
     }
 
     {

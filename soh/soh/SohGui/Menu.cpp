@@ -656,6 +656,24 @@ void Menu::DrawElement() {
     ImGui::PushFont(OTRGlobals::Instance->fontStandardLargest);
     ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(10.0f, 8.0f));
     std::string headerIndex = CVarGetString(headerCvar, "Settings");
+    // The stored header can name a menu that no longer exists. This CVar remembers which top-level tab was
+    // open across runs, so a build that removes or renames one leaves it pointing at nothing -- and every
+    // use of it below is an `.at()`, which throws out_of_range and takes the whole game down the first time
+    // the menu is drawn. Worse than the throw: `sidebar` is only assigned inside the loop that matches this
+    // name against the registered ones, so a value that matches none would leave it uninitialised and the
+    // crash would be the lucky outcome.
+    //
+    // The sidebar's own stored value is already guarded exactly this way further down ("if the saved
+    // section is not in this menu, take the first one"). This is that guard, one level up, and it was the
+    // missing half: a config written before "Qualidade das Sombras" and "Correção de Acne" were merged into
+    // "Sombras" still names one of them, and the menu could not be opened again.
+    //
+    // Written back, not just corrected locally, so the repair happens once instead of on every draw.
+    if (!menuOrder.empty() && !menuEntries.contains(headerIndex)) {
+        headerIndex = menuOrder.at(0);
+        CVarSetString(headerCvar, headerIndex.c_str());
+        CVarSave();
+    }
     ImVec2 pos = window->DC.CursorPos;
     float centerX = pos.x + windowWidth / 2 - (style.ItemSpacing.x * (menuEntries.size() + 1));
     std::vector<ImVec2> headerSizes;

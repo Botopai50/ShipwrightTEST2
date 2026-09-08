@@ -875,7 +875,7 @@ static void OnToonFrameUpdate() {
 // The key light animates smoothly toward its target, so the transition persists across frames. State
 // is keyed by the actor pointer and evicted on the actor's destroy hook, so two live actors never
 // collide and stale pointers never linger.
-typedef struct {
+struct ToonKeyState {
     f32 dir[3];
     f32 col[3];
     f32 colVel[3];
@@ -889,7 +889,7 @@ typedef struct {
     f32 floorPos[3]; // world position the raycast was sampled at
     u8 floorValid;   // the cached raycast hit a floor
     u8 floorSampled; // a raycast has been cached
-} ToonKeyState;
+};
 
 static std::unordered_map<Actor*, ToonKeyState> sToonKeyStates;
 

@@ -80,6 +80,13 @@ jobs:
           ${{ runner.os }}-otr-ccache
     - name: Install dependencies
       run: |
+        # Chrome is preinstalled on hosted runners but is not a build dependency.
+        # Ignore its repository to avoid unrelated index hash mismatches.
+        for source in /etc/apt/sources.list.d/google-chrome.list /etc/apt/sources.list.d/google-chrome.sources; do
+          if [ -f "$source" ]; then
+            sudo mv "$source" "$source.disabled"
+          fi
+        done
         sudo apt-get update
         sudo apt-get install -y $(cat .github/workflows/apt-deps.txt) libzip-dev zipcmp zipmerge ziptool
     - name: Restore Cached deps folder

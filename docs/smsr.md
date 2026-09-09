@@ -98,11 +98,34 @@ cmake --build build-shadow-light --config Release
 ctest --test-dir build-shadow-light -C Release --output-on-failure
 ```
 
+## Estabilidade da grade e da profundidade
+
+A orientação dos eixos do mapa agora acompanha a mudança de direção da luz pela menor rotação,
+preservando a orientação anterior. Recalcular os eixos a partir do eixo vertical do mundo provocava
+rotação adicional perto do sol alto e uma mudança brusca ao trocar o eixo de referência. Isso altera
+a posição dos texels sobre os contornos mesmo quando a luz muda pouco. A mesma base é usada para
+desenhar e consultar o mapa em Cascatas e Clipmap, com o método original ou SMSR.
+
+No teste da órbita perto do meio-dia, o deslocamento acumulado do eixo da grade caiu de 0,35629 para
+0,058273, aproximadamente seis vezes menor. A direção da luz continua em movimento; não há retenção
+angular, filtro temporal nem desfocagem. Uma luz parada mantém a base idêntica para preservar o cache.
+Isso reduz uma fonte de instabilidade, mas não garante eliminar todo aliasing temporal de uma borda
+binária reconstruída de um mapa de resolução finita.
+
+O rasterizador também aplica uma margem de dois incrementos D16 para evitar que uma superfície se
+auto-sombreie quando o arredondamento muda. O limite de bias usa a precisão D16 e não pode mais virar
+zero, valor que desativava o limite no DirectX. Nos mapas muito extensos, a margem mínima pode exceder
+o limite nominal em unidades de mundo devido à precisão disponível. O teste planar reproduziu
+auto-sombreamento em 32/64 frames sem margem e 0/64 com ela, preservando a oclusão de outra superfície.
+
+Esses testes são isolados; não medem a tremulação na imagem enviada pelo usuário. A comparação visual
+da cena do portão continua necessária. As alterações não aumentam a resolução nem criam passes extras.
+
 ## Validação local
 
 ```sh
 cmake -S libultraship/tests/smsr -B build-smsr
-cmake --build build-smsr --config Release --target smsr_tests smsr_prism_driver smsr_clipmap_tests smsr_upload_tests
+cmake --build build-smsr --config Release --target smsr_tests smsr_prism_driver smsr_clipmap_tests smsr_upload_tests smsr_light_frame_tests smsr_depth_tests
 ctest --test-dir build-smsr -C Release -R "^smsr_" --output-on-failure
 ```
 

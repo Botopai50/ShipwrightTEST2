@@ -24,6 +24,7 @@
 #include "soh/frame_interpolation.h"
 
 #include <memory>
+#include <nlohmann/json.hpp>
 #include <unordered_map>
 #include <vector>
 #include <string>
@@ -666,6 +667,20 @@ void ToonLighting_BeginShadowLightFrame(void) {
 }
 
 int ToonLighting_SampleShadowLight(float fraction, float direction[3]) {
+    // Record at the rendered subframe, not when the capture button was clicked.
+    if (CVarGetInteger(SHADOW_MAP_CAPTURE_REQUEST_CVAR, 0) != 0) {
+        nlohmann::json context;
+        context["scene_id"] = gPlayState != nullptr ? int(gPlayState->sceneNum) : -1;
+        context["day_time_u16"] = gSaveContext.dayTime;
+        context["automatic_sun"] = sShadowSun.valid;
+        context["moon"] = sShadowSun.moon;
+        context["sun_time_previous"] = sShadowSun.previous;
+        context["sun_time_current"] = sShadowSun.current;
+        context["render_fraction"] = fraction;
+        context["minimum_elevation"] = CVarGetFloat(CVAR_ENHANCEMENT("Graphics.ShadowMap.MinElevation"),
+                                                    SHADOW_MAP_DEFAULT_MIN_ELEVATION);
+        CVarSetString(SHADOW_MAP_CAPTURE_CONTEXT_CVAR, context.dump().c_str());
+    }
     if (!sShadowSun.valid) {
         return 0;
     }

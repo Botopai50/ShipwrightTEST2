@@ -224,3 +224,9 @@ As suítes isoladas usam MSVC e Direct3D 11 WARP:
 SMSR acrescenta buscas junto às bordas: não representa ganho garantido de FPS na mesma resolução.
 Pode permitir experimentar mapas menores com melhor silhueta, mas o custo e a aparência precisam ser
 comparados no jogo. Nenhum build SoH/Windows ou GitHub Actions foi acompanhado.
+
+A captura também registra `game_context`: cena, relógio bruto do jogo (`day_time_u16`, escala
+0–65535 para 24 horas), horários anterior/atual da interpolação solar, fração do quadro renderizado,
+seleção automática sol/lua e elevação mínima configurada. Esses valores são lidos no subquadro da
+captura, não no clique do menu. A direção efetiva da luz permanece registrada nos eixos/matrizes
+exportados, inclusive quando a iluminação automática está desativada.

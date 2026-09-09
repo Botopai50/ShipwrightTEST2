@@ -871,21 +871,18 @@ void SohMenu::AddMenuShadows() {
         .RaceDisable(false)
         .PreFunc(advOnly)
         .Options(CheckboxOptions().DefaultValue(true).Tooltip(
-            "Calcula onde a borda da sombra CRUZA o texel, em vez de misturar as quatro comparações.\n\n"
-            "Usa exatamente as mesmas quatro leituras que já são feitas: não custa nenhuma leitura extra "
-            "de textura, só aritmética.\n\n"
-            "É a opção mais barata da aba e a que ataca o serrilhado diretamente. Exata para uma borda reta "
-            "(paredes, degraus, telhados, plataformas); em folhagem ela volta sozinha ao comportamento "
-            "antigo."));
+            "Suaviza o contorno usando as quatro comparações de sombra.\n\n"
+            "Não mistura profundidades de superfícies diferentes, o que pode deslocar a borda. "
+            "Reutiliza as leituras existentes e não aumenta a resolução do mapa.\n\n"
+            "É uma aproximação da cobertura; não recupera a silhueta geométrica exata."));
     AddWidget(path, "Largura da Rampa: %.2f texels", WIDGET_CVAR_SLIDER_FLOAT)
         .CVar(CVAR_ENHANCEMENT("Graphics.ShadowQuality.AnalyticEdgeWidth"))
         .RaceDisable(false)
         .PreFunc(hideUnlessAnalytic)
         .Options(FloatSliderOptions()
                      .Tooltip("Quantos texels a transição ocupa.\n\n"
-                              "1.00 é a resposta geométrica: a rampa ocupa exatamente o texel que a borda "
-                              "atravessa. Acima disso a borda é suavizada de propósito -- é o amaciamento "
-                              "mais barato do sistema, porque custa conta e nenhuma leitura.")
+                              "Controla a largura aproximada da transição. Valores maiores suavizam "
+                              "mais a borda, sem leituras adicionais de textura.")
                      .Min(0.25f)
                      .Max(4.0f) // SHADOW_MAP_MAX_ANALYTIC_EDGE_WIDTH
                      .Step(0.05f)

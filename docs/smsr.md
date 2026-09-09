@@ -136,6 +136,25 @@ compilaram em VS/PS 4.0 e 4.1. O SMSR já fazia comparação no plano e não foi
 os seus testes existentes passam, mas não reproduzem as pontas mostradas pelo usuário. Esse sintoma
 ainda precisa de investigação; não se trata de uma correção comprovada das fotos no modo SMSR.
 
+## Contorno no modo original: descontinuidade entre superfícies
+
+A borda analítica comparava profundidades e interpolava a magnitude das diferenças. Quando texels
+vizinhos pertencem ao oclusor e à parede receptora, eles não descrevem uma superfície contínua.
+Essa interpolação deslocava o contorno conforme a distância entre as superfícies ou a margem de bias.
+Agora a rampa é calculada sobre a visibilidade binária das quatro comparações. Não há novas leituras,
+aumento de resolução ou alteração automática das configurações. A opção continua sendo uma aproximação
+de cobertura, e as descrições do menu deixaram de prometer recuperação geométrica exata.
+
+Um teste WARP mantém uma borda vertical e altera apenas as profundidades de suas amostras. A versão
+anterior falha; a corrigida preserva a mesma cobertura nos 2048 pixels comparados, além dos interiores
+iluminados e sombreados. Isso demonstra o defeito do filtro, mas não reproduz a cena do portão.
+A alteração atua no modo Original, tanto em cascatas quanto em clipmap. O SMSR ignora essa função;
+as pontas relatadas nesse modo ainda não têm causa confirmada.
+
+Também foi testada a escolha de cascatas com triângulos em perspectiva: o DirectX WARP entrega em
+SV_Position.w a profundidade interpolada esperada nos 1024 pixels verificados. Inverter esse valor
+seria um erro. A hipótese foi descartada e a seleção de produção foi preservada.
+
 ## Validação local
 
 ```sh

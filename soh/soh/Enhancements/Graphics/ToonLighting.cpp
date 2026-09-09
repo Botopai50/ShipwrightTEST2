@@ -786,6 +786,12 @@ static void OnToonFrameUpdate() {
         // five and is fitted on the CPU -- is in effect for the splits that arrive with them.
         {
             ShadowMapQuality quality = ShadowMapQualityDefaults();
+            quality.smsr = CVarGetInteger(CVAR_ENHANCEMENT("Graphics.ShadowQuality.SMSR"),
+                                          SHADOW_MAP_DEFAULT_SMSR);
+            quality.smsrMaxSteps = CVarGetInteger(CVAR_ENHANCEMENT("Graphics.ShadowQuality.SMSRMaxSteps"),
+                                                  SHADOW_MAP_DEFAULT_SMSR_STEPS);
+            quality.smsrEpsilon = CVarGetFloat(CVAR_ENHANCEMENT("Graphics.ShadowQuality.SMSREpsilon"),
+                                               SHADOW_MAP_DEFAULT_SMSR_EPSILON);
             quality.analyticEdge = CVarGetInteger(CVAR_ENHANCEMENT("Graphics.ShadowQuality.AnalyticEdge"), 0);
             quality.analyticEdgeWidth = CVarGetFloat(CVAR_ENHANCEMENT("Graphics.ShadowQuality.AnalyticEdgeWidth"),
                                                      SHADOW_MAP_DEFAULT_ANALYTIC_EDGE_WIDTH);

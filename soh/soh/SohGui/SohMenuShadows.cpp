@@ -5,6 +5,7 @@
 #include "soh/OTRGlobals.h"
 #include "UIWidgets.hpp"
 #include "soh/Enhancements/Graphics/ToonLighting.h"
+#include "fast/shadow_map.h"
 
 namespace SohGui {
 
@@ -38,6 +39,11 @@ static const std::map<int32_t, const char*> shadowModeLabels = {
 static const std::map<int32_t, const char*> shadowLayoutLabels = {
     { 0, "Cascatas" }, // SHADOW_MAP_LAYOUT_CASCADE
     { 1, "Clipmap" },  // SHADOW_MAP_LAYOUT_CLIPMAP
+};
+
+static const std::map<int32_t, const char*> shadowSilhouetteLabels = {
+    { 0, "Shadow Map original" },
+    { 1, "Shadow Map + SMSR" },
 };
 
 // Keyed by SHADOW_MAP_LADDER_*.
@@ -260,6 +266,22 @@ void SohMenu::AddMenuShadows() {
                               "NÃO mexe na Intensidade. O quão escura você quer a sombra é gosto, não "
                               "qualidade, e nenhum perfil tem o direito de sobrescrever isso."));
 
+    AddWidget(path, "Silhueta", WIDGET_CVAR_COMBOBOX)
+        .CVar(CVAR_ENHANCEMENT("Graphics.ShadowQuality.SMSR"))
+        .RaceDisable(false)
+        .PreFunc([](WidgetInfo& info) {
+            info.isHidden = ShadowMapOff();
+            const int value = CVarGetInteger(CVAR_ENHANCEMENT("Graphics.ShadowQuality.SMSR"), 0);
+            if (value != 0 && value != 1) {
+                CVarSetInteger(CVAR_ENHANCEMENT("Graphics.ShadowQuality.SMSR"), value != 0 ? 1 : 0);
+            }
+        })
+        .Options(ComboboxOptions().ComboMap(shadowSilhouetteLabels).DefaultIndex(SHADOW_MAP_DEFAULT_SMSR).Tooltip(
+            "Compara o Shadow Map existente com SMSR na mesma resolução.\n\n"
+            "SMSR reconstrói segmentos da borda dentro dos texels e mantém sombras duras. "
+            "Ignora PCF, jitter, borda analítica, endurecimento e mistura entre cascatas; "
+            "as configurações dessas opções ficam guardadas para o modo original."));
+
     AddWidget(path, "Intensidade", WIDGET_CVAR_SLIDER_FLOAT)
         .CVar(CVAR_ENHANCEMENT("Graphics.ShadowMap.Strength"))
         .RaceDisable(false)
@@ -339,6 +361,9 @@ void SohMenu::AddMenuShadows() {
                 CVAR_ENHANCEMENT("Graphics.ShadowMap.UpdateDivisor2"),
                 CVAR_ENHANCEMENT("Graphics.ShadowMap.BlendFraction"),
                 CVAR_ENHANCEMENT("Graphics.ShadowQuality.AnalyticEdge"),
+                CVAR_ENHANCEMENT("Graphics.ShadowQuality.SMSR"),
+                CVAR_ENHANCEMENT("Graphics.ShadowQuality.SMSRMaxSteps"),
+                CVAR_ENHANCEMENT("Graphics.ShadowQuality.SMSREpsilon"),
                 CVAR_ENHANCEMENT("Graphics.ShadowQuality.AnalyticEdgeWidth"),
                 CVAR_ENHANCEMENT("Graphics.ShadowQuality.Jitter"),
                 CVAR_ENHANCEMENT("Graphics.ShadowQuality.JitterTaps"),
@@ -810,6 +835,31 @@ void SohMenu::AddMenuShadows() {
 
     path = { "Sombras", "Borda", SECTION_COLUMN_1 };
     AddSidebarEntry("Sombras", path.sidebarName, 3);
+
+    auto hideUnlessSMSR = [](WidgetInfo& info) {
+        info.isHidden = ShadowAdvancedOff() ||
+                        !CVarGetInteger(CVAR_ENHANCEMENT("Graphics.ShadowQuality.SMSR"), SHADOW_MAP_DEFAULT_SMSR);
+    };
+    AddWidget(path, "Busca SMSR: %d texels", WIDGET_CVAR_SLIDER_INT)
+        .CVar(CVAR_ENHANCEMENT("Graphics.ShadowQuality.SMSRMaxSteps"))
+        .RaceDisable(false)
+        .PreFunc(hideUnlessSMSR)
+        .Options(IntSliderOptions().Min(1).Max(SHADOW_MAP_MAX_SMSR_STEPS)
+                     .DefaultValue(SHADOW_MAP_DEFAULT_SMSR_STEPS).Tooltip(
+                         "Limite da travessia em cada sentido da borda. Começa em 16 texels. "
+                         "Buscas maiores reconhecem segmentos mais longos e custam mais leituras. "
+                         "Uma busca incompleta preserva a sombra original dura."));
+    AddWidget(path, "Epsilon SMSR: %.6f", WIDGET_CVAR_SLIDER_FLOAT)
+        .CVar(CVAR_ENHANCEMENT("Graphics.ShadowQuality.SMSREpsilon"))
+        .RaceDisable(false)
+        .PreFunc(hideUnlessSMSR)
+        .Options(FloatSliderOptions().Min(0.0f).Max(SHADOW_MAP_MAX_SMSR_EPSILON).Step(0.000001f)
+                     .DefaultValue(SHADOW_MAP_DEFAULT_SMSR_EPSILON).Tooltip(
+                         "Tolerância de igualdade na profundidade normalizada do Shadow Map. "
+                         "A busca acompanha a inclinação do receptor. Esta tolerância corrige diferenças "
+                         "numéricas pequenas; valores altos podem apagar detalhes da sombra."));
+    AddWidget(path, "SMSR mantém a borda dura e ignora as opções de filtragem abaixo.", WIDGET_TEXT)
+        .PreFunc(hideUnlessSMSR);
 
     auto hideUnlessAnalytic = [](WidgetInfo& info) {
         info.isHidden =

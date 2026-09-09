@@ -79,6 +79,10 @@ const char* ToonLighting_ShadowMapCasterCensus(void);
 // is recovered from the projection matrix inside the renderer and is knowable nowhere else.
 const char* ToonLighting_ShadowMapCascadeReport(void);
 
+// Called once per game display list, then sampled at each rendered frame's interpolation fraction.
+void ToonLighting_BeginShadowLightFrame(void);
+int ToonLighting_SampleShadowLight(float fraction, float direction[3]);
+
 #ifdef __cplusplus
 }
 #endif

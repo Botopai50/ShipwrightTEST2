@@ -32,6 +32,7 @@
 #include "Enhancements/randomizer/static_data.h"
 #include "Enhancements/gameplaystats.h"
 #include "frame_interpolation.h"
+#include "Enhancements/Graphics/ToonLighting.h"
 #include "SohGui/SohMenu.h"
 #include "SohGui/SohGui.hpp"
 #include "variables.h"
@@ -1704,7 +1705,8 @@ extern "C" void Graph_StartFrame() {
 // SOH [Enhancement] `count` rather than mtx_replacements.size(): the vector is kept alive between frames
 // so its maps hold on to their memory, which means it can be longer than the number of frames this call
 // actually produced.
-void RunCommands(Gfx* Commands, const std::vector<std::unordered_map<Mtx*, MtxF>>& mtx_replacements, size_t count) {
+void RunCommands(Gfx* Commands, const std::vector<std::unordered_map<Mtx*, MtxF>>& mtx_replacements,
+                 const std::vector<float>& frameFractions, size_t count) {
     auto wnd = std::dynamic_pointer_cast<Fast::Fast3dWindow>(OTRGlobals::Instance->context->GetWindow());
 
     if (wnd == nullptr) {
@@ -1720,7 +1722,12 @@ void RunCommands(Gfx* Commands, const std::vector<std::unordered_map<Mtx*, MtxF>
     UIWidgets::Colors themeColor =
         static_cast<UIWidgets::Colors>(CVarGetInteger(CVAR_SETTING("Menu.Theme"), UIWidgets::Colors::LightBlue));
     ImGui::PushStyleColor(ImGuiCol_TitleBgActive, UIWidgets::ColorValues.at(themeColor));
+    ToonLighting_BeginShadowLightFrame();
     for (size_t i = 0; i < count; i++) {
+        float shadowLight[3];
+        if (ToonLighting_SampleShadowLight(frameFractions[i], shadowLight)) {
+            intp->SetShadowMapLightDirection(shadowLight);
+        }
         wnd->DrawAndRunGraphicsCommands(Commands, mtx_replacements[i]);
         intp->mInterpolationIndex++;
     }
@@ -1740,12 +1747,15 @@ extern "C" void Graph_ProcessGfxCommands(Gfx* commands) {
     // their bucket arrays, so filling them no longer walks the whole rehash sequence every frame.
     // `mtx_used` is how many of them this frame filled -- the vector itself is never shortened.
     static std::vector<std::unordered_map<Mtx*, MtxF>> mtx_replacements;
+    static std::vector<float> frameFractions;
+    frameFractions.clear();
     size_t mtx_used = 0;
-    auto next_replacement = [&]() -> std::unordered_map<Mtx*, MtxF>& {
+    auto next_replacement = [&](float fraction) -> std::unordered_map<Mtx*, MtxF>& {
         if (mtx_used == mtx_replacements.size()) {
             mtx_replacements.emplace_back();
         }
         // clear() drops the entries but keeps the buckets, which is the whole point.
+        frameFractions.push_back(fraction);
         auto& m = mtx_replacements[mtx_used++];
         m.clear();
         return m;
@@ -1772,10 +1782,11 @@ extern "C" void Graph_ProcessGfxCommands(Gfx* commands) {
     while (time + original_fps <= next_original_frame) {
         time += original_fps;
         if (time != next_original_frame) {
-            FrameInterpolation_Interpolate((float)time / next_original_frame, next_replacement());
+            const float fraction = (float)time / next_original_frame;
+            FrameInterpolation_Interpolate(fraction, next_replacement(fraction));
         } else {
             // The original frame itself: no replacements, just an empty map.
-            next_replacement();
+            next_replacement(1.0f);
         }
     }
 
@@ -1788,10 +1799,11 @@ extern "C" void Graph_ProcessGfxCommands(Gfx* commands) {
     // When the gfx debugger is active, only run with the final mtx
     if (GfxDebuggerIsDebugging()) {
         mtx_used = 0;
-        next_replacement();
+        frameFractions.clear();
+        next_replacement(1.0f);
     }
 
-    RunCommands(commands, mtx_replacements, mtx_used);
+    RunCommands(commands, mtx_replacements, frameFractions, mtx_used);
 
     last_fps = fps;
     last_update_rate = R_UPDATE_RATE;

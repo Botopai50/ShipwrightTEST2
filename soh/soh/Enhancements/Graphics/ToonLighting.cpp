@@ -32,6 +32,7 @@
 
 extern "C" {
 #include "z64.h"
+#include "ShadowSun.h"
 #include "macros.h"
 #include "functions.h"
 #include "variables.h"
@@ -645,6 +646,32 @@ static std::shared_ptr<Fast::Interpreter> GetInterpreter() {
         return nullptr;
     }
     return wnd->GetInterpreterWeak().lock();
+}
+
+static ShadowSun sShadowSun;
+
+void ToonLighting_BeginShadowLightFrame(void) {
+    PlayState* play = gPlayState;
+    // Match the environment's automatic outdoor sun path. Authored indoor, override and debug lights
+    // retain their existing directions; never replace them with a guessed solar direction.
+    const bool automatic = play != nullptr && ToonLighting_ShadowMapEnabled() && !play->envCtx.indoors &&
+                           play->envCtx.unk_BF == 0xFF && R_ENV_DISABLE_DBG;
+    bool moon = false;
+    if (automatic) {
+        const auto& sunColor = play->envCtx.dirLight1.params.dir.color;
+        const auto& moonColor = play->envCtx.dirLight2.params.dir.color;
+        moon = moonColor[0] + moonColor[1] + moonColor[2] > sunColor[0] + sunColor[1] + sunColor[2];
+    }
+    sShadowSun.Begin(gSaveContext.dayTime, play != nullptr ? play->sceneNum : -1, automatic, moon);
+}
+
+int ToonLighting_SampleShadowLight(float fraction, float direction[3]) {
+    if (!sShadowSun.valid) {
+        return 0;
+    }
+    const float elevation = CVarGetFloat(CVAR_ENHANCEMENT("Graphics.ShadowMap.MinElevation"),
+                                         SHADOW_MAP_DEFAULT_MIN_ELEVATION);
+    return sShadowSun.Sample(fraction, elevation, direction);
 }
 
 // The last toon key emitted this pass, as the quantized bytes gSPToonKey carries (s8 dir, u8 color).

@@ -1,0 +1,7 @@
+cmake_minimum_required(VERSION 3.24)
+project(ShadowLightTests LANGUAGES CXX)
+set(CMAKE_CXX_STANDARD 17)
+add_executable(shadow_light_tests shadow_light_tests.cpp)
+target_include_directories(shadow_light_tests PRIVATE ../../soh/soh/Enhancements/Graphics)
+enable_testing()
+add_test(NAME shadow_solar_motion COMMAND shadow_light_tests)

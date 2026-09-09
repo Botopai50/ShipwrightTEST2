@@ -70,6 +70,34 @@ com Shadow Map original ou SMSR. Geometria inalterada continua reaproveitando o 
 divisores configurados nem a ordem de desenho. O teste reproduz a falha nos buffers; confirmar se ela
 explica os saltos observados pelo usuário ainda exige comparação na mesma cena do jogo.
 
+## Movimento do sol com a câmera parada
+
+A direção usada pelo Shadow Map anteriormente vinha dos comandos de iluminação de 8 bits do jogo.
+Esses valores podem permanecer iguais por vários quadros da lógica antes de mudar uma unidade: uma
+sombra longa de uma parede ou torre fica parada e depois salta. O interpretador também retinha pequenas
+mudanças angulares. Reduzir o intervalo das cascatas para 1 não recuperava a precisão perdida na origem.
+
+Para a iluminação solar automática externa, o Shadow Map agora calcula a mesma órbita do ambiente em
+ponto flutuante e amostra o horário com a mesma fração de interpolação usada pelas matrizes do frame.
+O interpretador não retém mais pequenas mudanças de direção. A seleção entre sol e lua e a altura mínima
+da luz são preservadas. Interiores, iluminação sobrescrita e ajustes do depurador mantêm o caminho existente.
+
+A interpolação trata a passagem pela meia-noite nos dois sentidos e reinicia em trocas de cena, grandes
+saltos de horário, troca entre sol e lua e reativação. Horário parado não produz movimento artificial.
+O reaproveitamento de geometria permanece; mapas cuja projeção muda com a luz precisam ser redesenhados,
+portanto esta correção de fluidez pode aumentar o custo na GPU. A aparência e o FPS ainda precisam ser
+comparados no jogo. Os intervalos de cascatas configurados pelo usuário continuam valendo.
+
+O teste isolado `tests/shadow_light` simula uma câmera e uma parede paradas: em 40 quadros de lógica,
+a direção quantizada mudou apenas 5 vezes, enquanto o novo caminho movimentou a ponta da sombra nos
+120 frames renderizados. Também verifica pausa, volta do relógio, mudanças de cena e troca de modo.
+
+```sh
+cmake -S tests/shadow_light -B build-shadow-light
+cmake --build build-shadow-light --config Release
+ctest --test-dir build-shadow-light -C Release --output-on-failure
+```
+
 ## Validação local
 
 ```sh

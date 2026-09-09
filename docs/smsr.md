@@ -121,6 +121,21 @@ auto-sombreamento em 32/64 frames sem margem e 0/64 com ela, preservando a oclus
 Esses testes são isolados; não medem a tremulação na imagem enviada pelo usuário. A comparação visual
 da cena do portão continua necessária. As alterações não aumentam a resolução nem criam passes extras.
 
+## Comparações sobre paredes inclinadas
+
+O modo original filtrado agora usa a profundidade do plano geométrico da parede em cada texel consultado.
+Antes, os quatro texels eram comparados com uma só profundidade do pixel receptor, produzindo falsa
+oclusão em superfícies inclinadas em relação à luz. Os deslocamentos do filtro com jitter também deslocam
+a referência de profundidade. A reconstrução analítica recebe a diferença entre as profundidades de cada
+amostra. A comparação inclui uma margem de um incremento D16 para arredondamento.
+
+A alteração não acrescenta leituras de textura ou passes. Acrescenta o cálculo do plano e a correção das
+referências. Um teste HLSL em 64 posições subtexel reproduz falsa oclusão na comparação antiga e verifica
+as referências corrigidas, preservando a oclusão de outra superfície. As seis variantes completas
+compilaram em VS/PS 4.0 e 4.1. O SMSR já fazia comparação no plano e não foi alterado por esta correção:
+os seus testes existentes passam, mas não reproduzem as pontas mostradas pelo usuário. Esse sintoma
+ainda precisa de investigação; não se trata de uma correção comprovada das fotos no modo SMSR.
+
 ## Validação local
 
 ```sh

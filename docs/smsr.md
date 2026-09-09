@@ -155,6 +155,24 @@ Também foi testada a escolha de cascatas com triângulos em perspectiva: o Dire
 SV_Position.w a profundidade interpolada esperada nos 1024 pixels verificados. Inverter esse valor
 seria um erro. A hipótese foi descartada e a seleção de produção foi preservada.
 
+## Texels vazios em receptores rasantes
+
+A captura de diagnóstico 2 enviada pelo usuário mostra as pontas em verde, na camada do cenário.
+A investigação encontrou uma falha comum ao Original e ao SMSR: ao estender o plano receptor até
+os texels consultados, a profundidade pode ultrapassar 1 em ângulos rasantes. Comparar esse valor
+com um texel limpo (profundidade 1) criava oclusão onde não havia geometria no mapa.
+
+Agora o valor exato de limpeza permanece iluminado. No Original, a regra é aplicada às quatro
+comparações antes do PCF ou da rampa analítica; no SMSR, antes de classificar a descontinuidade.
+Profundidades reais abaixo de 1 continuam sendo comparadas normalmente. Não há aumento de resolução,
+passes ou leituras de textura.
+
+O teste WARP com textura R16 vazia e receptor rasante falhou antes da correção e passou depois.
+Também verifica a camada de personagens, gradientes positivos/negativos nas comparações filtradas,
+oclusores reais e profundidades próximas do limite distante. As variantes completas HLSL são validadas
+separadamente. O caso sintético não reproduz a geometria do portão: a correção dessa falha está
+verificada, mas a eliminação de todas as pontas da captura ainda depende de comparação no jogo.
+
 ## Validação local
 
 ```sh

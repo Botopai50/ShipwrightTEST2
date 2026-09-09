@@ -58,15 +58,27 @@ de níveis podem consumir mais memória e renderização do que na implementaç�
 As alterações experimentais anteriores de compactação/estabilização de Clipmap não foram transplantadas
 sobre esta base.
 
+## Atualização do cache do cenário
+
+O cache de upload DirectX 11 agora acompanha a versão da geometria do cenário. Comparar apenas o endereço
+do buffer e a quantidade de vértices podia manter dados antigos na GPU: após capturas sem envio, uma nova
+captura pode reutilizar uma alocação antiga com conteúdo diferente. O mapa era então redesenhado usando
+vértices desatualizados, mesmo com o intervalo de atualização em 1 quadro.
+
+A invalidação por versão cobre geometria opaca e recortes por transparência, nas Cascatas e no Clipmap,
+com Shadow Map original ou SMSR. Geometria inalterada continua reaproveitando o upload. Não muda os
+divisores configurados nem a ordem de desenho. O teste reproduz a falha nos buffers; confirmar se ela
+explica os saltos observados pelo usuário ainda exige comparação na mesma cena do jogo.
+
 ## Validação local
 
 ```sh
 cmake -S libultraship/tests/smsr -B build-smsr
-cmake --build build-smsr --config Release --target smsr_tests smsr_prism_driver smsr_clipmap_tests
+cmake --build build-smsr --config Release --target smsr_tests smsr_prism_driver smsr_clipmap_tests smsr_upload_tests
 ctest --test-dir build-smsr -C Release -R "^smsr_" --output-on-failure
 ```
 
-As três suítes passaram com MSVC e Direct3D 11 WARP:
+As suítes isoladas usam MSVC e Direct3D 11 WARP:
 
 - Os 12 casos, igualdade na fronteira, normalização orientada e fallback de busca truncada.
 - Revectorização de uma borda analítica em oito orientações, visibilidade estritamente 0/1 e preservação
@@ -75,6 +87,8 @@ As três suítes passaram com MSVC e Direct3D 11 WARP:
 - Receptor inclinado com profundidade de 16 bits, troca entre os caminhos original/SMSR, camadas e
   resoluções distintas, limites do mapa e da configuração.
 - Alocação real de texturas e views para 1–10 níveis, limites do vetor de cascatas e índices de personagens.
+- Leitura dos buffers da GPU após reutilização de alocações: reprodução dos dados antigos e correção
+  por versão do cenário, tanto para vértices opacos como para recortes por transparência.
 - Seis variantes completas do shader expandidas pelo Prism do projeto, compiladas nativamente como
   VS/PS 4.0 e 4.1, incluindo Toon Lighting, fog, alpha e ambos os kernels originais. Reflexão verifica
   o alinhamento do parâmetro SMSR com o constant buffer C++ de produção.

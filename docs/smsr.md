@@ -173,11 +173,36 @@ oclusores reais e profundidades próximas do limite distante. As variantes compl
 separadamente. O caso sintético não reproduz a geometria do portão: a correção dessa falha está
 verificada, mas a eliminação de todas as pontas da captura ainda depende de comparação no jogo.
 
+## Captura manual do defeito no DirectX
+
+Em Sombras, habilite as opções avançadas e use **Salvar captura das sombras (DirectX)** na seção
+Depuração, com o portão defeituoso visível. A próxima atualização do mapa salva uma subpasta numerada
+em `shadow-captures` dentro da pasta de dados do aplicativo. O caminho aparece no menu e no log.
+Envie a subpasta compactada junto da imagem correspondente. Não é preciso alterar resolução, bias,
+filtro ou horário para capturar. O botão pode pausar brevemente o jogo durante a leitura da GPU.
+
+A captura é manual, de um único quadro, e contém apenas a camada do cenário: `world.sds` guarda
+profundidades D16 sem perda; `capture.json` guarda os parâmetros do receptor e as matrizes efetivamente
+associadas às fatias, com seus indicadores de validade. Não inclui a ROM, a geometria completa, nem os
+pixels de posição mundial da imagem final; é uma captura dos mapas e parâmetros, não um replay completo.
+Ela permite inspecionar a grade, a profundidade armazenada e possíveis divergências de projeção.
+
+O formato SDS1 usa inteiros little-endian: quatro u32 (magic 0x31534453, largura, altura, número de fatias).
+Cada linha de cada fatia contém u32 quantidade de runs, seguida de pares (u16 profundidade, u32 repetição).
+As linhas são guardadas sem o padding da GPU. Há limite de 512 MiB por arquivo de profundidade e 8192 por
+dimensão. Uma falha aparece no menu; um arquivo incompleto sem metadados válidos não é uma captura pronta.
+A solicitação é consumida uma vez. Nenhuma imagem de sombra, filtro ou resolução foi alterada nesta etapa.
+
+O teste `smsr_depth_capture` compila o bloco de exportação do backend e verifica leitura real de uma
+textura D16 WARP com dez fatias e linhas com padding, igualdade de cada valor após descompressão,
+metadados, consumo da solicitação e mensagem de falha com mapa inativo. A configuração dos testes
+precisa encontrar `nlohmann/json.hpp` (`SHADOW_CAPTURE_JSON_INCLUDE` pode indicar o diretório de includes).
+
 ## Validação local
 
 ```sh
 cmake -S libultraship/tests/smsr -B build-smsr
-cmake --build build-smsr --config Release --target smsr_tests smsr_prism_driver smsr_clipmap_tests smsr_upload_tests smsr_light_frame_tests smsr_depth_tests
+cmake --build build-smsr --config Release --target smsr_tests smsr_prism_driver smsr_clipmap_tests smsr_upload_tests smsr_light_frame_tests smsr_depth_tests smsr_capture_tests
 ctest --test-dir build-smsr -C Release -R "^smsr_" --output-on-failure
 ```
 

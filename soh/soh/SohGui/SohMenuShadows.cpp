@@ -821,6 +821,20 @@ void SohMenu::AddMenuShadows() {
                      .DefaultValue(0)
                      .ShowButtons(true)
                      .Format("%d"));
+    AddWidget(path, "Salvar captura das sombras (DirectX)", WIDGET_BUTTON)
+        .PreFunc(advOnly)
+        .Options(ButtonOptions().Tooltip(
+            "Salva as profundidades e configurações da camada do cenário em shadow-captures, "
+            "na pasta de dados do jogo. Pode causar uma pausa durante a leitura da GPU. "
+            "Clique com o defeito visível; não altera a aparência das sombras."))
+        .Callback([](WidgetInfo& info) {
+            CVarSetString(SHADOW_MAP_CAPTURE_STATUS_CVAR, "Aguardando um quadro com Shadow Map no DirectX...");
+            CVarSetInteger(SHADOW_MAP_CAPTURE_REQUEST_CVAR, 1);
+        });
+    AddWidget(path, "Captura das sombras", WIDGET_TEXT).PreFunc([](WidgetInfo& info) {
+        info.isHidden = ShadowAdvancedOff();
+        info.name = CVarGetString(SHADOW_MAP_CAPTURE_STATUS_CVAR, "");
+    });
     // Live list of what the world (green) caster layer is actually made of, so a stray green blob in the
     // debug view can be named instead of guessed at. WIDGET_TEXT draws widget.name, and PreFunc runs first,
     // so rewriting the name each frame is what makes it live.

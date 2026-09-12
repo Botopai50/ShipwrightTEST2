@@ -666,20 +666,42 @@ void ToonLighting_BeginShadowLightFrame(void) {
     sShadowSun.Begin(gSaveContext.dayTime, play != nullptr ? play->sceneNum : -1, automatic, moon);
 }
 
+// What produced a capture, written into its game_context.
+//
+// Every capture taken so far carried "game_context": {} -- empty -- and that is a hole in the instrument,
+// not a cosmetic gap: without it a capture cannot say which build, which scene or which sun angle produced
+// it, and reading one means guessing at all three.
+//
+// The reason it was empty is an ordering race. This context was written only from the render hook below,
+// and only while the request flag is already set; the flag is set by a menu button, and the menu is drawn
+// from inside the graphics command run. Click on a frame whose shadow pass has already gone by and the
+// backend writes the capture that same frame, before the hook ever runs again -- so the default "{}" is
+// what lands in the file. Calling this from the button as well makes it order-independent: the click-time
+// context is always there, and the render hook still overwrites it with the subframe's own values when it
+// gets a turn, which is the more accurate one and the reason the hook exists.
+void ToonLighting_WriteCaptureContext(float fraction) {
+    nlohmann::json context;
+    // Build identity first: which binary this came from is the question a capture most often has to answer,
+    // and the one no amount of staring at the depths can recover.
+    context["git_commit"] = (const char*)gGitCommitHash;
+    context["git_branch"] = (const char*)gGitBranch;
+    context["build_version"] = (const char*)gBuildVersion;
+    context["scene_id"] = gPlayState != nullptr ? int(gPlayState->sceneNum) : -1;
+    context["day_time_u16"] = gSaveContext.dayTime;
+    context["automatic_sun"] = sShadowSun.valid;
+    context["moon"] = sShadowSun.moon;
+    context["sun_time_previous"] = sShadowSun.previous;
+    context["sun_time_current"] = sShadowSun.current;
+    context["render_fraction"] = fraction;
+    context["minimum_elevation"] =
+        CVarGetFloat(CVAR_ENHANCEMENT("Graphics.ShadowMap.MinElevation"), SHADOW_MAP_DEFAULT_MIN_ELEVATION);
+    CVarSetString(SHADOW_MAP_CAPTURE_CONTEXT_CVAR, context.dump().c_str());
+}
+
 int ToonLighting_SampleShadowLight(float fraction, float direction[3]) {
     // Record at the rendered subframe, not when the capture button was clicked.
     if (CVarGetInteger(SHADOW_MAP_CAPTURE_REQUEST_CVAR, 0) != 0) {
-        nlohmann::json context;
-        context["scene_id"] = gPlayState != nullptr ? int(gPlayState->sceneNum) : -1;
-        context["day_time_u16"] = gSaveContext.dayTime;
-        context["automatic_sun"] = sShadowSun.valid;
-        context["moon"] = sShadowSun.moon;
-        context["sun_time_previous"] = sShadowSun.previous;
-        context["sun_time_current"] = sShadowSun.current;
-        context["render_fraction"] = fraction;
-        context["minimum_elevation"] = CVarGetFloat(CVAR_ENHANCEMENT("Graphics.ShadowMap.MinElevation"),
-                                                    SHADOW_MAP_DEFAULT_MIN_ELEVATION);
-        CVarSetString(SHADOW_MAP_CAPTURE_CONTEXT_CVAR, context.dump().c_str());
+        ToonLighting_WriteCaptureContext(fraction);
     }
     if (!sShadowSun.valid) {
         return 0;

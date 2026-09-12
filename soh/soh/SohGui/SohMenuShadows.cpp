@@ -831,6 +831,10 @@ void SohMenu::AddMenuShadows() {
             "Clique com o defeito visível; não altera a aparência das sombras."))
         .Callback([](WidgetInfo& info) {
             CVarSetString(SHADOW_MAP_CAPTURE_STATUS_CVAR, "Aguardando um quadro com Shadow Map no DirectX...");
+            // Before the request, not after: the capture can be written later in this very frame, and the
+            // render hook that normally fills the context has already gone by. Without this the file lands
+            // with an empty game_context -- which is what every capture taken so far has carried.
+            ToonLighting_WriteCaptureContext(0.0f);
             CVarSetInteger(SHADOW_MAP_CAPTURE_REQUEST_CVAR, 1);
         });
     AddWidget(path, "Captura das sombras", WIDGET_TEXT).PreFunc([](WidgetInfo& info) {

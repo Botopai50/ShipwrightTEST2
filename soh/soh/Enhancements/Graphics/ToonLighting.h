@@ -83,6 +83,11 @@ const char* ToonLighting_ShadowMapCascadeReport(void);
 void ToonLighting_BeginShadowLightFrame(void);
 int ToonLighting_SampleShadowLight(float fraction, float direction[3]);
 
+// Fill a shadow capture's game_context: build identity, scene, time of day, sun state. Called from the
+// render hook above with the subframe's own fraction, and from the capture button so a capture taken in
+// the same frame as the click is not written with an empty context (see the note at the definition).
+void ToonLighting_WriteCaptureContext(float fraction);
+
 #ifdef __cplusplus
 }
 #endif

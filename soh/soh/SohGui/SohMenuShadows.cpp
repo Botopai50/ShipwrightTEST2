@@ -370,6 +370,7 @@ void SohMenu::AddMenuShadows() {
                 CVAR_ENHANCEMENT("Graphics.ShadowQuality.JitterRadius"),
                 CVAR_ENHANCEMENT("Graphics.ShadowQuality.SmoothDepth"),
                 CVAR_ENHANCEMENT("Graphics.ShadowQuality.SmoothAgreement"),
+                CVAR_ENHANCEMENT("Graphics.ShadowQuality.SunHoldTexels"),
                 CVAR_ENHANCEMENT("Graphics.ShadowQuality.EdgeHarden"),
                 CVAR_ENHANCEMENT("Graphics.ShadowQuality.EdgeHardness"),
                 CVAR_ENHANCEMENT("Graphics.ShadowQuality.EdgeThreshold"),
@@ -971,9 +972,13 @@ void SohMenu::AddMenuShadows() {
             "Contra os DENTES que aparecem em paredes quase paralelas à luz.\n\n"
             "A profundidade guardada é constante dentro de cada texel, e a do que recebe a sombra não é. "
             "A linha onde uma cruza a outra só pode virar nas bordas do texel, e numa parede rasante ela "
-            "vira muito de cada vez: sai um pente, um dente por texel. Medido na captura do jogo, com o sol "
-            "a 79,7 graus e a geometria da fachada: 29 pixels de desvio de uma reta a 18 pixels por texel, "
-            "e 119 a 73. Ligado, cai para 1,4 e 3,3 -- e para de crescer com a aproximação.\n\n"
+            "vira muito de cada vez: sai um pente, um dente por texel.\n\n"
+            "A primeira versão disto saiu pior e foi corrigida: ela tirava o dente da quantização e "
+            "devolvia um degrau binário, ou seja um dente de amostragem no lugar. Agora a comparação "
+            "devolve COBERTURA, medindo a distância até a borda em texels -- que é o tamanho exato da "
+            "incerteza. Medido na fachada: 17,5 pixels de dente sem isto, 0,6 com. E a energia na "
+            "frequência do texel dentro da penumbra, que é literalmente o que se enxerga como serrilha, "
+            "cai de 0,269 para 0,004.\n\n"
             "Ligado, a comparação passa a ser contra a profundidade INTERPOLADA, e a escada volta a ser a "
             "reta que ela estava amostrando -- só onde os quatro texels concordam. Numa silhueta eles são "
             "quatro superfícies diferentes, e interpolar ali inventaria um oclusor a uma profundidade que "
@@ -998,15 +1003,46 @@ void SohMenu::AddMenuShadows() {
                               "O padrão 0,0046 são cerca de trezentos passos do mapa de 16 bits. Tem de ficar "
                               "acima do degrau da superfície que se quer consertar e abaixo de uma silhueta "
                               "de verdade. A parede rasante, que é justamente onde os dentes moram, dá 117 "
-                              "passos por quadrado -- ter o degrau grande é a razão de ela ter dentes. Uma "
-                              "silhueta de verdade dá 927. Trezentos fica entre os dois.\n\n"
-                              "Subir demais faz objetos ganharem um halo cinza; descer demais devolve os "
-                              "dentes -- e abaixo de 117 o efeito simplesmente não liga na parede.")
+                              "a 149 passos por quadrado -- ter o degrau grande é a razão de ela ter dentes. "
+                              "Uma silhueta de verdade dá 927. Trezentos fica entre os dois.\n\n"
+                              "O pior lugar não é embaixo nem em cima: é NO MEIO. Com o limiar dentro da "
+                              "faixa da parede, o peso fica parcial e muda de texel para texel, e misturar "
+                              "duas respostas com um peso que degrau escreve a grade de texels dentro da "
+                              "penumbra. Foi o que aconteceu num ajuste de 0,0020: dente mais discreto, mas "
+                              "dente. Por isso o mínimo agora é 0,0030 -- acima de qualquer superfície "
+                              "rasante medida.")
                      .Format("%.4f")
-                     .Min(0.0001f)   // SHADOW_MAP_MIN_SMOOTH_AGREEMENT
+                     .Min(0.0030f)   // SHADOW_MAP_MIN_SMOOTH_AGREEMENT
                      .Max(0.0100f)   // SHADOW_MAP_MAX_SMOOTH_AGREEMENT
                      .Step(0.0001f)
                      .DefaultValue(0.0046f)); // SHADOW_MAP_DEFAULT_SMOOTH_AGREEMENT
+
+    // ===========================================================================================
+    // Segurar o sol -- contra a onda que percorre a borda com ninguem se mexendo.
+    // ===========================================================================================
+    AddWidget(path, "Segurar o sol: %.0f texels", WIDGET_CVAR_SLIDER_FLOAT)
+        .CVar(CVAR_ENHANCEMENT("Graphics.ShadowQuality.SunHoldTexels"))
+        .RaceDisable(false)
+        .PreFunc(advOnly)
+        .Options(FloatSliderOptions()
+                     .Tooltip("Contra a ONDA que percorre a borda da sombra mesmo com voce parado.\n\n"
+                              "Nao e defeito do encaixe da cascata: o centro e encaixado em texels "
+                              "inteiros e o raio e segurado, e os dois funcionam. O sol e que e rapido. "
+                              "Medido numa captura do proprio jogo: ele gira 0,055 grau por quadro, uma "
+                              "volta inteira em 109 segundos. A sombra de uma torre a 600 unidades de "
+                              "altura anda 0,92 texel por quadro -- a borda atravessa a grade quase todo "
+                              "quadro, e nao no mesmo instante ao longo do comprimento dela. A travessia "
+                              "corre pela borda, e e isso que se ve como onda.\n\n"
+                              "Segurando, a borda inteira anda de uma vez em vez de ondular. Mas a troca "
+                              "e exata: ficar parado N quadros custa um salto de N texels. Nao existe "
+                              "ajuste que consiga os dois.\n\n"
+                              "0 = seguir o sol todo quadro, que e o comportamento de sempre. "
+                              "4 = parado por 4 quadros, salto de 4 texels. 16 = parado por 16.")
+                     .Format("%.0f")
+                     .Min(0.0f)
+                     .Max(32.0f) // SHADOW_MAP_MAX_SUN_HOLD_TEXELS
+                     .Step(1.0f)
+                     .DefaultValue(0.0f)); // SHADOW_MAP_DEFAULT_SUN_HOLD_TEXELS
 
     // ===========================================================================================
     // Edge hardening -- the control in the other direction from everything above.

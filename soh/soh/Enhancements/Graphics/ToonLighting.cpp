@@ -878,6 +878,8 @@ static void OnToonFrameUpdate() {
                                                 SHADOW_MAP_DEFAULT_SMOOTH_DEPTH);
             quality.smoothAgreement = CVarGetFloat(CVAR_ENHANCEMENT("Graphics.ShadowQuality.SmoothAgreement"),
                                                    SHADOW_MAP_DEFAULT_SMOOTH_AGREEMENT);
+            quality.sunHoldTexels = CVarGetFloat(CVAR_ENHANCEMENT("Graphics.ShadowQuality.SunHoldTexels"),
+                                                 SHADOW_MAP_DEFAULT_SUN_HOLD_TEXELS);
             quality.edgeHarden =
                 CVarGetInteger(CVAR_ENHANCEMENT("Graphics.ShadowQuality.EdgeHarden"), SHADOW_MAP_DEFAULT_EDGE_HARDEN);
             quality.edgeHardness =

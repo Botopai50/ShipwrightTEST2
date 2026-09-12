@@ -368,6 +368,8 @@ void SohMenu::AddMenuShadows() {
                 CVAR_ENHANCEMENT("Graphics.ShadowQuality.Jitter"),
                 CVAR_ENHANCEMENT("Graphics.ShadowQuality.JitterTaps"),
                 CVAR_ENHANCEMENT("Graphics.ShadowQuality.JitterRadius"),
+                CVAR_ENHANCEMENT("Graphics.ShadowQuality.SmoothDepth"),
+                CVAR_ENHANCEMENT("Graphics.ShadowQuality.SmoothAgreement"),
                 CVAR_ENHANCEMENT("Graphics.ShadowQuality.EdgeHarden"),
                 CVAR_ENHANCEMENT("Graphics.ShadowQuality.EdgeHardness"),
                 CVAR_ENHANCEMENT("Graphics.ShadowQuality.EdgeThreshold"),
@@ -948,6 +950,59 @@ void SohMenu::AddMenuShadows() {
                      .Step(0.1f)
                      .DefaultValue(2.0f) // SHADOW_MAP_DEFAULT_JITTER_RADIUS
                      .Format("%.2f"));
+
+    // ===========================================================================================
+    // Technique 6 -- interpolated stored depth, against the teeth on a wall.
+    // ===========================================================================================
+    path = { "Sombras", "Borda", SECTION_COLUMN_1 };
+
+    // Hidden while SMSR is on, and that is not cosmetic: ShadowSample takes SampleShadowSMSR OR the filtered
+    // kernel, never both, and this control only reaches the second one. Left visible it would be a switch
+    // that does nothing, which costs more than the space it saves.
+    auto hideUnderSMSR = [](WidgetInfo& info) {
+        info.isHidden = ShadowAdvancedOff() ||
+                        CVarGetInteger(CVAR_ENHANCEMENT("Graphics.ShadowQuality.SMSR"), SHADOW_MAP_DEFAULT_SMSR);
+    };
+
+    AddWidget(path, "Suavizar Profundidade do Mapa", WIDGET_CVAR_CHECKBOX)
+        .CVar(CVAR_ENHANCEMENT("Graphics.ShadowQuality.SmoothDepth"))
+        .RaceDisable(false)
+        .PreFunc(hideUnderSMSR)
+        .Options(CheckboxOptions().DefaultValue(false).Tooltip(
+            "Contra os DENTES que aparecem em paredes quase paralelas à luz.\n\n"
+            "A profundidade guardada é constante dentro de cada texel, e a do que recebe a sombra não é. "
+            "A linha onde uma cruza a outra só pode virar nas bordas do texel, e numa parede rasante ela "
+            "vira muito de cada vez: sai um pente, um dente por texel. Medido numa captura do jogo com o "
+            "sol a 79,7 graus: dentes de 15 pixels onde devia haver uma reta.\n\n"
+            "Ligado, a comparação passa a ser contra a profundidade INTERPOLADA, e a escada volta a ser a "
+            "reta que ela estava amostrando -- só onde os quatro texels concordam. Numa silhueta eles são "
+            "quatro superfícies diferentes, e interpolar ali inventaria um oclusor a uma profundidade que "
+            "nada ocupa; por isso ali o filtro antigo continua valendo.\n\n"
+            "Não custa nenhuma leitura de textura: as quatro profundidades já são lidas pelo filtro.\n\n"
+            "Vale para o caminho filtrado. Com SMSR ligado o filtro inteiro é substituído pela "
+            "reconstrução da silhueta, e este controle some porque não teria efeito nenhum."));
+    AddWidget(path, "Concordância: %.4f", WIDGET_CVAR_SLIDER_FLOAT)
+        .CVar(CVAR_ENHANCEMENT("Graphics.ShadowQuality.SmoothAgreement"))
+        .RaceDisable(false)
+        .PreFunc([](WidgetInfo& info) {
+            info.isHidden =
+                ShadowAdvancedOff() || !CVarGetInteger(CVAR_ENHANCEMENT("Graphics.ShadowQuality.SmoothDepth"), 0) ||
+                CVarGetInteger(CVAR_ENHANCEMENT("Graphics.ShadowQuality.SMSR"), SHADOW_MAP_DEFAULT_SMSR);
+        })
+        .Options(FloatSliderOptions()
+                     .Tooltip("Quão perto os quatro texels precisam estar para contarem como uma superfície "
+                              "só, em profundidade normalizada.\n\n"
+                              "O padrão 0,0012 são cerca de oitenta passos do mapa de 16 bits. Tem de ficar "
+                              "acima do degrau que uma superfície lisa dá entre texels vizinhos (medido: 2 a "
+                              "3) e bem abaixo de uma silhueta de verdade (medido: 110). Oitenta está no meio "
+                              "dessa folga, com margem dos dois lados.\n\n"
+                              "Subir demais faz objetos ganharem um halo cinza; descer demais devolve os "
+                              "dentes.")
+                     .Format("%.4f")
+                     .Min(0.0001f)   // SHADOW_MAP_MIN_SMOOTH_AGREEMENT
+                     .Max(0.0100f)   // SHADOW_MAP_MAX_SMOOTH_AGREEMENT
+                     .Step(0.0001f)
+                     .DefaultValue(0.0012f)); // SHADOW_MAP_DEFAULT_SMOOTH_AGREEMENT
 
     // ===========================================================================================
     // Edge hardening -- the control in the other direction from everything above.

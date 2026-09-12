@@ -956,53 +956,53 @@ void SohMenu::AddMenuShadows() {
     // ===========================================================================================
     path = { "Sombras", "Borda", SECTION_COLUMN_1 };
 
-    // Hidden while SMSR is on, and that is not cosmetic: ShadowSample takes SampleShadowSMSR OR the filtered
-    // kernel, never both, and this control only reaches the second one. Left visible it would be a switch
-    // that does nothing, which costs more than the space it saves.
-    auto hideUnderSMSR = [](WidgetInfo& info) {
-        info.isHidden = ShadowAdvancedOff() ||
-                        CVarGetInteger(CVAR_ENHANCEMENT("Graphics.ShadowQuality.SMSR"), SHADOW_MAP_DEFAULT_SMSR);
-    };
-
+    // Visible under SMSR too, and that is the point: the two do not compete. SMSR answers the silhouette,
+    // this answers the crossing, and the same agreement test decides which one speaks. Measured on the
+    // capture, SMSR alone still leaves 17.5 px of teeth on the facade and still grows with magnification.
     AddWidget(path, "Suavizar Profundidade do Mapa", WIDGET_CVAR_CHECKBOX)
         .CVar(CVAR_ENHANCEMENT("Graphics.ShadowQuality.SmoothDepth"))
         .RaceDisable(false)
-        .PreFunc(hideUnderSMSR)
-        .Options(CheckboxOptions().DefaultValue(false).Tooltip(
+        .PreFunc(advOnly)
+        .Options(CheckboxOptions().DefaultValue(true).Tooltip(
             "Contra os DENTES que aparecem em paredes quase paralelas à luz.\n\n"
             "A profundidade guardada é constante dentro de cada texel, e a do que recebe a sombra não é. "
             "A linha onde uma cruza a outra só pode virar nas bordas do texel, e numa parede rasante ela "
-            "vira muito de cada vez: sai um pente, um dente por texel. Medido numa captura do jogo com o "
-            "sol a 79,7 graus: dentes de 15 pixels onde devia haver uma reta.\n\n"
+            "vira muito de cada vez: sai um pente, um dente por texel. Medido na captura do jogo, com o sol "
+            "a 79,7 graus e a geometria da fachada: 29 pixels de desvio de uma reta a 18 pixels por texel, "
+            "e 119 a 73. Ligado, cai para 1,4 e 3,3 -- e para de crescer com a aproximação.\n\n"
             "Ligado, a comparação passa a ser contra a profundidade INTERPOLADA, e a escada volta a ser a "
             "reta que ela estava amostrando -- só onde os quatro texels concordam. Numa silhueta eles são "
             "quatro superfícies diferentes, e interpolar ali inventaria um oclusor a uma profundidade que "
             "nada ocupa; por isso ali o filtro antigo continua valendo.\n\n"
-            "Não custa nenhuma leitura de textura: as quatro profundidades já são lidas pelo filtro.\n\n"
-            "Vale para o caminho filtrado. Com SMSR ligado o filtro inteiro é substituído pela "
-            "reconstrução da silhueta, e este controle some porque não teria efeito nenhum."));
+            "No caminho filtrado não custa nenhuma leitura de textura: as quatro profundidades já são "
+            "lidas pelo filtro.\n\n"
+            "Vale com SMSR ligado também, e ali não é redundância. SMSR reconstrói a SILHUETA, onde os "
+            "quatro texels são superfícies diferentes; isto conserta o CRUZAMENTO, onde são a mesma "
+            "superfície. Sozinho, o SMSR ainda deixa 17,5 pixels de dente na fachada, e ainda crescendo "
+            "com a aproximação. Juntos: 1,4. E a silhueta não piora -- melhora (desvio 0,0070 para 0,0059). "
+            "Custa uma leitura de textura a mais, só quando os dois estão ligados."));
     AddWidget(path, "Concordância: %.4f", WIDGET_CVAR_SLIDER_FLOAT)
         .CVar(CVAR_ENHANCEMENT("Graphics.ShadowQuality.SmoothAgreement"))
         .RaceDisable(false)
         .PreFunc([](WidgetInfo& info) {
             info.isHidden =
-                ShadowAdvancedOff() || !CVarGetInteger(CVAR_ENHANCEMENT("Graphics.ShadowQuality.SmoothDepth"), 0) ||
-                CVarGetInteger(CVAR_ENHANCEMENT("Graphics.ShadowQuality.SMSR"), SHADOW_MAP_DEFAULT_SMSR);
+                ShadowAdvancedOff() || !CVarGetInteger(CVAR_ENHANCEMENT("Graphics.ShadowQuality.SmoothDepth"), 0);
         })
         .Options(FloatSliderOptions()
                      .Tooltip("Quão perto os quatro texels precisam estar para contarem como uma superfície "
                               "só, em profundidade normalizada.\n\n"
-                              "O padrão 0,0012 são cerca de oitenta passos do mapa de 16 bits. Tem de ficar "
-                              "acima do degrau que uma superfície lisa dá entre texels vizinhos (medido: 2 a "
-                              "3) e bem abaixo de uma silhueta de verdade (medido: 110). Oitenta está no meio "
-                              "dessa folga, com margem dos dois lados.\n\n"
+                              "O padrão 0,0046 são cerca de trezentos passos do mapa de 16 bits. Tem de ficar "
+                              "acima do degrau da superfície que se quer consertar e abaixo de uma silhueta "
+                              "de verdade. A parede rasante, que é justamente onde os dentes moram, dá 117 "
+                              "passos por quadrado -- ter o degrau grande é a razão de ela ter dentes. Uma "
+                              "silhueta de verdade dá 927. Trezentos fica entre os dois.\n\n"
                               "Subir demais faz objetos ganharem um halo cinza; descer demais devolve os "
-                              "dentes.")
+                              "dentes -- e abaixo de 117 o efeito simplesmente não liga na parede.")
                      .Format("%.4f")
                      .Min(0.0001f)   // SHADOW_MAP_MIN_SMOOTH_AGREEMENT
                      .Max(0.0100f)   // SHADOW_MAP_MAX_SMOOTH_AGREEMENT
                      .Step(0.0001f)
-                     .DefaultValue(0.0012f)); // SHADOW_MAP_DEFAULT_SMOOTH_AGREEMENT
+                     .DefaultValue(0.0046f)); // SHADOW_MAP_DEFAULT_SMOOTH_AGREEMENT
 
     // ===========================================================================================
     // Edge hardening -- the control in the other direction from everything above.

@@ -3167,8 +3167,8 @@ static void Actor_DrawListEntry(PlayState* play, Actor* actor, s32 listIndex, Ac
             // set just above stays exactly as vanilla computed it, so nothing about gameplay moves.
             if (ToonLighting_ShadowMapEnabled()) {
                 bool shadowShouldUpdate = false;
-                Ship_CalcShouldDrawAndUpdate(play, actor, &actor->projectedPos, actor->projectedW,
-                                             &shipShouldDraw, &shadowShouldUpdate);
+                Ship_CalcShouldDrawAndUpdate(play, actor, &actor->projectedPos, actor->projectedW, &shipShouldDraw,
+                                             &shadowShouldUpdate);
             }
         }
     }

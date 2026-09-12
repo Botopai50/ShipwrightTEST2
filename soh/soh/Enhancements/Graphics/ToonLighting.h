@@ -29,12 +29,17 @@ typedef enum {
 // Cached once-per-frame feature switches (refreshed from the CVars at the top of each game frame).
 // The draw code asks these instead of reading CVars per actor: a CVarGet* is a string-keyed hash
 // lookup, far too expensive to repeat for every drawn actor every frame.
-int ToonLighting_FeaturesActive(void);         // cel relight OR a non-vanilla shadow mode (gates the draw hook)
-int ToonLighting_CelEnabled(void);             // cel relight on (gates the toon bracket)
-int ToonLighting_ShadowsEnabled(void);         // stencil-volume (Actor Shadows) mode on, specifically --
-                                               // callers that mean "any system that needs casters marked"
-                                               // must also test ToonLighting_ShadowMapEnabled()
-int ToonLighting_ShadowMapEnabled(void);       // shadow-map mode on (gates the depth-pass capture)
+int ToonLighting_FeaturesActive(void);   // cel relight OR a non-vanilla shadow mode (gates the draw hook)
+int ToonLighting_CelEnabled(void);       // cel relight on (gates the toon bracket)
+int ToonLighting_ShadowsEnabled(void);   // stencil-volume (Actor Shadows) mode on, specifically --
+                                         // callers that mean "any system that needs casters marked"
+                                         // must also test ToonLighting_ShadowMapEnabled()
+int ToonLighting_ShadowMapEnabled(void); // shadow-map mode on (gates the depth-pass capture)
+// Whether shadow-map mode also reorders the frame so the actor loop draws before the room (z_play.c). That
+// reorder is what takes a frame of lag off a moving character's shadow, and it is the only thing this mode
+// changes about draw ORDER -- so it is also the switch to try when something composites wrongly with
+// shadow maps on and correctly with them off.
+int ToonLighting_ShadowMapCasterFirst(void);
 // Radius around the camera within which actors are drawn purely so they can cast (0 = off). Read per
 // actor by the draw-culling test, so it comes from the frame snapshot rather than a CVar lookup.
 float ToonLighting_ShadowMapCasterDrawRadius(void);
@@ -64,6 +69,24 @@ void ToonLighting_ShadowMapSceneryCasterClose(struct GraphicsContext* gfxCtx);
 // and into which layer, this says which actor it was -- the question that decides whether the classification
 // or the exclusion list is what needs changing.
 const char* ToonLighting_ShadowMapCasterCensus(void);
+
+// Debug/UI: what the cascades actually came out as this frame -- each band's range, the world size of one
+// of its texels, and how wide its cross-fade into the next one is. As a printable table, newline separated,
+// never null.
+//
+// Exists because the automatic ladder computes the splits, so the sliders no longer say where the bands
+// are. A ladder the player cannot inspect is one they have to guess at, and the texel size in particular
+// is recovered from the projection matrix inside the renderer and is knowable nowhere else.
+const char* ToonLighting_ShadowMapCascadeReport(void);
+
+// Called once per game display list, then sampled at each rendered frame's interpolation fraction.
+void ToonLighting_BeginShadowLightFrame(void);
+int ToonLighting_SampleShadowLight(float fraction, float direction[3]);
+
+// Fill a shadow capture's game_context: build identity, scene, time of day, sun state. Called from the
+// render hook above with the subframe's own fraction, and from the capture button so a capture taken in
+// the same frame as the click is not written with an empty context (see the note at the definition).
+void ToonLighting_WriteCaptureContext(float fraction);
 
 #ifdef __cplusplus
 }

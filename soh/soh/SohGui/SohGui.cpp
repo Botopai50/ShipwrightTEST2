@@ -29,6 +29,7 @@
 #include "soh/Enhancements/game-interactor/GameInteractor.h"
 #include "soh/Enhancements/cosmetics/authenticGfxPatches.h"
 #include "soh/Enhancements/debugger/MessageViewer.h"
+#include "soh/Enhancements/debugger/FpsOverlayWindow.h"
 #include "soh/Notification/Notification.h"
 #include "soh/Enhancements/TimeDisplay/TimeDisplay.h"
 #include "soh/Enhancements/mod_menu.h"
@@ -70,6 +71,7 @@ std::string GetWindowButtonText(const char* text, bool menuOpen) {
 
 std::shared_ptr<Ship::GuiWindow> mConsoleWindow;
 std::shared_ptr<SohStatsWindow> mStatsWindow;
+std::shared_ptr<FpsOverlayWindow> mFpsOverlayWindow;
 std::shared_ptr<Ship::GuiWindow> mGfxDebuggerWindow;
 
 std::shared_ptr<SohMenu> mSohMenu;
@@ -133,6 +135,10 @@ void SetupGuiElements() {
 
     mStatsWindow = std::make_shared<SohStatsWindow>(CVAR_WINDOW("SohStats"), "Stats##Soh", ImVec2(400, 100));
     gui->AddGuiWindow(mStatsWindow);
+    // No size: the overlay auto-resizes to its text and pins its own position, so anything passed here
+    // would only be a first-use hint that never applies.
+    mFpsOverlayWindow = std::make_shared<FpsOverlayWindow>(CVAR_WINDOW("FpsOverlay"), "FPS Overlay");
+    gui->AddGuiWindow(mFpsOverlayWindow);
 
     /*mInputEditorWindow = gui->GetGuiWindow("Controller Configuration");
     if (mInputEditorWindow == nullptr) {
@@ -230,6 +236,7 @@ void Destroy() {
     mModMenuWindow = nullptr;
     mAudioEditorWindow = nullptr;
     mStatsWindow = nullptr;
+    mFpsOverlayWindow = nullptr;
     mConsoleWindow = nullptr;
     mGfxDebuggerWindow = nullptr;
     mInputViewer = nullptr;

@@ -1,9 +1,10 @@
 // Wind Waker-style toon lighting -- game-side policy.
 //
 // libultraship owns the per-pixel transport: it relights the draws SoH brackets with gSPToon, using
-// one dominant light (gSPToonKey) and a generic ramp (SetToonRamp). This module owns the OoT-specific
+// a directional key, optional local contributions and a generic ramp (SetToonRamp).
+// This module owns the OoT-specific
 // policy that the framework must never know about:
-//   - which light is the key (closest in-range point light, else the day/night sun/moon),
+//   - sun/moon plus up to four local lights, or the legacy closest-light key,
 //   - how the key eases from one source to another (per-actor persistent state),
 //   - the look tuning (ramp parameters), pushed once per frame.
 // The framework never reads SoH's CVars; everything it needs is pushed from here.
@@ -23,6 +24,7 @@
 #include "soh/frame_interpolation.h"
 
 #include <memory>
+#include <nlohmann/json.hpp>
 #include <unordered_map>
 #include <vector>
 #include <string>
@@ -31,6 +33,7 @@
 
 extern "C" {
 #include "z64.h"
+#include "ShadowSun.h"
 #include "macros.h"
 #include "functions.h"
 #include "variables.h"
@@ -64,9 +67,9 @@ static constexpr float kDefaultShadowOpacity = 0.2f;
 static constexpr float kDefaultShadowLength = 0.2f;
 static constexpr float kDefaultShadowSlabDepth = 8.0f; // stencil-volume depth below the feet (ground band)
 static constexpr float kDefaultShadowSlabRise = 8.0f;  // stencil-volume height above the feet (uphill ground)
-static constexpr int kDefaultShadowEdgeSoftness = 0;  // penumbra rings around the silhouette (0 = hard edge)
-static constexpr int kDefaultShadowMaxDistance = 550; // camera-forward distance past which shadows are culled
-static constexpr float kShadowFadeTime = 0.15f; // seconds to ease the shadow size in/out (anti-pop, like Navi)
+static constexpr int kDefaultShadowEdgeSoftness = 0;   // penumbra rings around the silhouette (0 = hard edge)
+static constexpr int kDefaultShadowMaxDistance = 550;  // camera-forward distance past which shadows are culled
+static constexpr float kShadowFadeTime = 0.15f;        // seconds to ease the shadow size in/out (anti-pop, like Navi)
 
 // Per-frame snapshot of every CVar the per-actor hot path reads. CVarGet* is a string-keyed hash-map
 // lookup that heap-allocates for keys this long, and HandleActorDraw runs for EVERY drawn actor every
@@ -76,19 +79,37 @@ static constexpr float kShadowFadeTime = 0.15f; // seconds to ease the shadow si
 static struct {
     bool cel = true;
     int shadowMode = SHADOW_MODE_VANILLA;
-    bool shadows = false;   // shadowMode == SHADOW_MODE_ACTOR (stencil volumes)
+    bool shadows = false;            // shadowMode == SHADOW_MODE_ACTOR (stencil volumes)
     bool shadowMap = false;          // shadowMode == SHADOW_MODE_SHADOW_MAP (cascaded depth maps)
     bool shadowMapSupported = false; // the running backend implements the depth pass (D3D11 only)
     // Radial distance from the camera past which an actor is not worth capturing as a shadow caster: the
     // furthest active cascade, since beyond that there is no depth map left to record it in.
-    f32 shadowMapReach = SHADOW_MAP_DEFAULT_SPLIT_3;
+    f32 shadowMapReach = SHADOW_MAP_DEFAULT_SPLIT_2;
     f32 shadowMapCasterDrawRadius = 0.0f;
+    // SOH [Enhancement] Whether shadow-map mode reorders the frame so the actor loop draws BEFORE the room
+    // (see z_play.c). It exists to take a frame of lag off a moving character's shadow, and it changes the
+    // order actors and the room are submitted in -- which is the order translucent geometry is composited
+    // in.
+    //
+    // OFF by default, after a report it was responsible for: in the Graveyard, Navi drew through the paving
+    // stones, and only with shadow maps on. Confirmed by switching this alone.
+    //
+    // The trade it was making was taken unconditionally and is the wrong way round. What it buys is a frame
+    // of freshness on a MOVING CHARACTER'S OWN shadow -- which the block in z_play.c itself calls invisible
+    // on scenery, since scenery does not move. What it costs is the submission order of every translucent
+    // surface in the frame, which produces faults a player meets in ordinary play.
+    //
+    // Still switchable: the lag it removes is real, and someone who does not hit the compositing fault may
+    // prefer the sharper result.
+    bool shadowMapCasterFirst = false;
     // The direction the key light TRAVELS, world space, normalised -- the same vector the cascades are
     // built from, kept here so the caster-reach test can follow a shadow along it. Straight down until the
     // first frame computes it.
     f32 shadowMapLightDir[3] = { 0.0f, -1.0f, 0.0f };
     bool suppressVanilla = true;
     bool useNaviLight = true;
+    bool multipleLights = true;
+    f32 localIntensity = 0.5f;
     bool showDebug = false;
     // The shadow-map debug view (ShadowMap.ShowCascadeBounds). Non-zero also turns on the scenery-caster
     // census below -- the view says SOMETHING is casting, the census says what.
@@ -141,7 +162,7 @@ static void ToonShadowCensusPublish() {
 
     sCensusText.clear();
     if (rows.empty()) {
-        sCensusText = "(no scenery casters)";
+        sCensusText = "(nenhum cenário projetando)";
     }
     // Only the busiest handful: a scattered particle is by definition many instances, so whatever is
     // wanted here is at the top. Averaged over the window, because an actor drawn every frame should read
@@ -181,35 +202,49 @@ static void RefreshFrameParams() {
     sParams.shadowMap = sParams.shadowMode == SHADOW_MODE_SHADOW_MAP;
     // Only worth asking when the mode is actually selected; otherwise leave it false so the per-actor
     // getters short-circuit on the cheap check.
+    // SOH [Enhancement] GPU profiling of the shadow pass, which is a plain flag on the backend and changes
+    // nothing about what is drawn. Pushed from out here rather than from inside the branch below so it is
+    // also CLEARED when the shadow map is switched off -- otherwise the timer would keep opening queries
+    // every frame for a pass that no longer runs, and report on nothing.
+    if (Fast::GfxRenderingAPI* profileRapi = GetRenderingApi(); profileRapi != nullptr) {
+        profileRapi->SetShadowMapProfiling(sParams.shadowMap &&
+                                           CVarGetInteger(CVAR_DEVELOPER_TOOLS("ShadowMap.ProfileGpu"), 0) != 0);
+        // The depth map itself, drawn in a corner. Every other shadow diagnostic here asks what the SHADING
+        // pixel was handed; this one shows what the depth pass STORED, which until now nothing could.
+        profileRapi->SetShadowMapViewSlice(
+            sParams.shadowMap ? CVarGetInteger(CVAR_DEVELOPER_TOOLS("ShadowMap.ViewSlice"), 0) : 0);
+    }
     if (sParams.shadowMap) {
         Fast::GfxRenderingAPI* rapi = GetRenderingApi();
         sParams.shadowMapSupported = rapi != nullptr && rapi->SupportsShadowMap();
         // Caster reach = the last active cascade's far split (see shadowMapReach).
-        static const char* kSplitCVars[SHADOW_MAP_MAX_CASCADES] = {
-            CVAR_ENHANCEMENT("Graphics.ShadowMap.Split0"), CVAR_ENHANCEMENT("Graphics.ShadowMap.Split1"),
-            CVAR_ENHANCEMENT("Graphics.ShadowMap.Split2"), CVAR_ENHANCEMENT("Graphics.ShadowMap.Split3")
-        };
+        static const char* kSplitCVars[SHADOW_MAP_MAX_CASCADES] = { CVAR_ENHANCEMENT("Graphics.ShadowMap.Split0"),
+                                                                    CVAR_ENHANCEMENT("Graphics.ShadowMap.Split1"),
+                                                                    CVAR_ENHANCEMENT("Graphics.ShadowMap.Split2") };
         static const f32 kSplitDefaults[SHADOW_MAP_MAX_CASCADES] = { SHADOW_MAP_DEFAULT_SPLIT_0,
                                                                      SHADOW_MAP_DEFAULT_SPLIT_1,
-                                                                     SHADOW_MAP_DEFAULT_SPLIT_2,
-                                                                     SHADOW_MAP_DEFAULT_SPLIT_3 };
+                                                                     SHADOW_MAP_DEFAULT_SPLIT_2 };
         s32 count = CVarGetInteger(CVAR_ENHANCEMENT("Graphics.ShadowMap.CascadeCount"), SHADOW_MAP_DEFAULT_CASCADES);
         count = count < 1 ? 1 : (count > SHADOW_MAP_MAX_CASCADES ? SHADOW_MAP_MAX_CASCADES : count);
         sParams.shadowMapReach = CVarGetFloat(kSplitCVars[count - 1], kSplitDefaults[count - 1]);
+        sParams.shadowMapCasterFirst = CVarGetInteger(CVAR_ENHANCEMENT("Graphics.ShadowMap.CasterFirst"), 0) != 0;
         sParams.shadowMapCasterDrawRadius = CVarGetFloat(CVAR_ENHANCEMENT("Graphics.ShadowMap.CasterDrawRadius"),
                                                          SHADOW_MAP_DEFAULT_CASTER_DRAW_RADIUS);
     } else {
         sParams.shadowMapSupported = false;
         sParams.shadowMapCasterDrawRadius = 0.0f;
     }
-    sParams.suppressVanilla =
-        CVarGetInteger(CVAR_ENHANCEMENT("Graphics.WorldShadows.SuppressVanillaShadows"), 1) != 0;
+    sParams.suppressVanilla = CVarGetInteger(CVAR_ENHANCEMENT("Graphics.WorldShadows.SuppressVanillaShadows"), 1) != 0;
+    sParams.multipleLights = CVarGetInteger(CVAR_ENHANCEMENT("Graphics.ToonLighting.MultipleLights"), 1) != 0;
+    sParams.localIntensity = std::clamp(
+        CVarGetFloat(CVAR_ENHANCEMENT("Graphics.ToonLighting.LocalIntensity"), 0.5f), 0.0f, 1.0f);
     sParams.useNaviLight = CVarGetInteger(CVAR_ENHANCEMENT("Graphics.ToonLighting.UseNaviLight"), 1) != 0;
     sParams.showDebug = CVarGetInteger(CVAR_DEVELOPER_TOOLS("ToonLighting.ShowDebug"), 0) != 0;
     sParams.shadowMapCensus =
         sParams.shadowMap && CVarGetInteger(CVAR_DEVELOPER_TOOLS("ShadowMap.ShowCascadeBounds"), 0) != 0;
     ToonShadowCensusPublish();
-    sParams.pointRange = CVarGetFloat(CVAR_ENHANCEMENT("Graphics.ToonLighting.PointLightRange"), kDefaultPointLightRange);
+    sParams.pointRange =
+        CVarGetFloat(CVAR_ENHANCEMENT("Graphics.ToonLighting.PointLightRange"), kDefaultPointLightRange);
     sParams.transitionTime =
         CVarGetFloat(CVAR_ENHANCEMENT("Graphics.ToonLighting.TransitionTime"), kDefaultTransitionTime);
     sParams.maxDist =
@@ -247,6 +282,13 @@ extern "C" int ToonLighting_ShadowsEnabled(void) {
 extern "C" float ToonLighting_ShadowMapCasterDrawRadius(void) {
     return (sParams.shadowMap && sParams.shadowMapSupported) ? sParams.shadowMapCasterDrawRadius : 0.0f;
 }
+// SOH [Enhancement] Does the frame reorder apply this frame? See sParams.shadowMapCasterFirst and the
+// block it gates in z_play.c. False whenever shadow-map mode is not actually running, so the reorder can
+// never happen without the thing it exists for.
+extern "C" int ToonLighting_ShadowMapCasterFirst(void) {
+    return (sParams.shadowMap && sParams.shadowMapSupported && sParams.shadowMapCasterFirst) ? 1 : 0;
+}
+
 extern "C" int ToonLighting_ShadowMapEnabled(void) {
     return sParams.shadowMap && sParams.shadowMapSupported;
 }
@@ -326,10 +368,10 @@ static bool ToonActorExcluded(Actor* actor) {
         case ACTOR_BG_TREEMOUTH:  // Great Deku Tree (very tall)
         case ACTOR_BG_MIZU_WATER: // water-box surfaces
         case ACTOR_BG_HAKA_WATER:
-        case ACTOR_EN_WOOD02:     // trees / bushes / leaf scenery
-        case ACTOR_OBJ_SWITCH:    // floor/crystal/eye switches -- environment fixtures, not relit objects.
-        case ACTOR_OBJ_BEAN:      // magic bean plant/platform -- same. Both are also RECEIVERS below, so
-                                  // they still catch other actors' shadows like the ground does.
+        case ACTOR_EN_WOOD02:  // trees / bushes / leaf scenery
+        case ACTOR_OBJ_SWITCH: // floor/crystal/eye switches -- environment fixtures, not relit objects.
+        case ACTOR_OBJ_BEAN:   // magic bean plant/platform -- same. Both are also RECEIVERS below, so
+                               // they still catch other actors' shadows like the ground does.
             return true;
         default:
             break;
@@ -491,7 +533,7 @@ static bool ToonShadowExcluded(Actor* actor) {
         // harmless while the caster marker only reached the opaque display list; she is in the translucent
         // one, and now that the marker reaches there too she has to be named.
         case ACTOR_EN_ELF:
-        case ACTOR_EN_KUSA:      // small cuttable grass -- everywhere and tiny, a blob per tuft reads wrong
+        case ACTOR_EN_KUSA: // small cuttable grass -- everywhere and tiny, a blob per tuft reads wrong
         // Ambient critters. Same argument as the grass: sprite-sized, spawned in swarms (Obj_Mure drops
         // them a dozen at a time across a field), and every one of them lands in the world caster layer by
         // default, so a meadow comes out speckled with little dark diamonds that track nothing the player
@@ -528,6 +570,51 @@ extern "C" const char* ToonLighting_ShadowMapCasterCensus(void) {
 
 // C-callable export (see ToonLighting.h): lets the decompiled actor draw loop reorder receivers ahead of the
 // shadow flush without pulling the curated id list into the game code.
+// SOH [Enhancement] What the cascades actually came out as, for the menu to print.
+//
+// Read from the renderer rather than recomputed from the CVars, and that is the whole point: with the
+// automatic ladder on, the split sliders no longer describe where the bands are, and the texel size never
+// did -- it falls out of the projection the fit builds, which depends on the camera. Recomputing either
+// here would produce a table that can disagree with the picture.
+//
+// Rebuilt into a static string on each call. The menu asks once per frame while its page is open, which is
+// nothing next to what a frame already does.
+extern "C" const char* ToonLighting_ShadowMapCascadeReport(void) {
+    static std::string report;
+    report.clear();
+
+    Fast::GfxRenderingAPI* rapi = GetRenderingApi();
+    if (rapi == nullptr) {
+        report = "Renderizador indisponível.";
+        return report.c_str();
+    }
+    float splits[SHADOW_MAP_MAX_CASCADES] = {};
+    float texels[SHADOW_MAP_MAX_CASCADES] = {};
+    const int count = rapi->ShadowMapCascadeReport(splits, texels, SHADOW_MAP_MAX_CASCADES);
+    if (count <= 0) {
+        report = "Nenhuma cascata neste quadro.";
+        return report.c_str();
+    }
+
+    const f32 blend =
+        CLAMP(CVarGetFloat(CVAR_ENHANCEMENT("Graphics.ShadowMap.BlendFraction"), SHADOW_MAP_DEFAULT_BLEND_FRACTION),
+              0.0f, 1.0f);
+    char line[192];
+    for (int i = 0; i < count; i++) {
+        const float nearEdge = (i == 0) ? 0.0f : splits[i - 1];
+        const float farEdge = splits[i];
+        // The band the shader cross-fades over, in the same terms it computes it: a fraction of THIS
+        // cascade's own span, measured back from its far edge.
+        const float fadeStart = farEdge - ((farEdge - nearEdge) * blend);
+        snprintf(line, sizeof(line), "Faixa %d:  %.0f a %.0f  |  texel %.2f un.  |  transição %.0f a %.0f\n", i + 1,
+                 nearEdge, farEdge, texels[i], fadeStart, farEdge);
+        report += line;
+    }
+    snprintf(line, sizeof(line), "Alcance total: %.0f unidades", splits[count - 1]);
+    report += line;
+    return report.c_str();
+}
+
 extern "C" int ToonLighting_IsShadowReceiver(Actor* actor) {
     return (actor != nullptr && ToonShadowReceiver(actor)) ? 1 : 0;
 }
@@ -562,13 +649,74 @@ static std::shared_ptr<Fast::Interpreter> GetInterpreter() {
     return wnd->GetInterpreterWeak().lock();
 }
 
+static ShadowSun sShadowSun;
+
+void ToonLighting_BeginShadowLightFrame(void) {
+    PlayState* play = gPlayState;
+    // Match the environment's automatic outdoor sun path. Authored indoor, override and debug lights
+    // retain their existing directions; never replace them with a guessed solar direction.
+    const bool automatic = play != nullptr && ToonLighting_ShadowMapEnabled() && !play->envCtx.indoors &&
+                           play->envCtx.unk_BF == 0xFF && R_ENV_DISABLE_DBG;
+    bool moon = false;
+    if (automatic) {
+        const auto& sunColor = play->envCtx.dirLight1.params.dir.color;
+        const auto& moonColor = play->envCtx.dirLight2.params.dir.color;
+        moon = moonColor[0] + moonColor[1] + moonColor[2] > sunColor[0] + sunColor[1] + sunColor[2];
+    }
+    sShadowSun.Begin(gSaveContext.dayTime, play != nullptr ? play->sceneNum : -1, automatic, moon);
+}
+
+// What produced a capture, written into its game_context.
+//
+// Every capture taken so far carried "game_context": {} -- empty -- and that is a hole in the instrument,
+// not a cosmetic gap: without it a capture cannot say which build, which scene or which sun angle produced
+// it, and reading one means guessing at all three.
+//
+// The reason it was empty is an ordering race. This context was written only from the render hook below,
+// and only while the request flag is already set; the flag is set by a menu button, and the menu is drawn
+// from inside the graphics command run. Click on a frame whose shadow pass has already gone by and the
+// backend writes the capture that same frame, before the hook ever runs again -- so the default "{}" is
+// what lands in the file. Calling this from the button as well makes it order-independent: the click-time
+// context is always there, and the render hook still overwrites it with the subframe's own values when it
+// gets a turn, which is the more accurate one and the reason the hook exists.
+void ToonLighting_WriteCaptureContext(float fraction) {
+    nlohmann::json context;
+    // Build identity first: which binary this came from is the question a capture most often has to answer,
+    // and the one no amount of staring at the depths can recover.
+    context["git_commit"] = (const char*)gGitCommitHash;
+    context["git_branch"] = (const char*)gGitBranch;
+    context["build_version"] = (const char*)gBuildVersion;
+    context["scene_id"] = gPlayState != nullptr ? int(gPlayState->sceneNum) : -1;
+    context["day_time_u16"] = gSaveContext.dayTime;
+    context["automatic_sun"] = sShadowSun.valid;
+    context["moon"] = sShadowSun.moon;
+    context["sun_time_previous"] = sShadowSun.previous;
+    context["sun_time_current"] = sShadowSun.current;
+    context["render_fraction"] = fraction;
+    context["minimum_elevation"] =
+        CVarGetFloat(CVAR_ENHANCEMENT("Graphics.ShadowMap.MinElevation"), SHADOW_MAP_DEFAULT_MIN_ELEVATION);
+    CVarSetString(SHADOW_MAP_CAPTURE_CONTEXT_CVAR, context.dump().c_str());
+}
+
+int ToonLighting_SampleShadowLight(float fraction, float direction[3]) {
+    // Record at the rendered subframe, not when the capture button was clicked.
+    if (CVarGetInteger(SHADOW_MAP_CAPTURE_REQUEST_CVAR, 0) != 0) {
+        ToonLighting_WriteCaptureContext(fraction);
+    }
+    if (!sShadowSun.valid) {
+        return 0;
+    }
+    const float elevation = CVarGetFloat(CVAR_ENHANCEMENT("Graphics.ShadowMap.MinElevation"),
+                                         SHADOW_MAP_DEFAULT_MIN_ELEVATION);
+    return sShadowSun.Sample(fraction, elevation, direction);
+}
+
 // The last toon key emitted this pass, as the quantized bytes gSPToonKey carries (s8 dir, u8 color).
 // An actor whose key quantizes to the same bytes skips re-emitting, so same-key actors (e.g. everything
 // lit by the sun) need no per-object flush and batch together. Cleared each frame in OnToonFrameUpdate.
 static bool sHaveLastKey = false;
 static s8 sLastKeyDir[3];
 static u8 sLastKeyCol[3];
-
 
 static void ToonClearKeyStates(); // defined with the key-state map below
 
@@ -636,10 +784,23 @@ static void OnToonFrameUpdate() {
         // picks, negated: the toon uniform points from the surface toward the light, while a shadow
         // projection needs the direction the light travels.
         const bool shadowMapOn = ToonLighting_ShadowMapEnabled() != 0;
-        f32 splits[4] = { CVarGetFloat(CVAR_ENHANCEMENT("Graphics.ShadowMap.Split0"), SHADOW_MAP_DEFAULT_SPLIT_0),
-                          CVarGetFloat(CVAR_ENHANCEMENT("Graphics.ShadowMap.Split1"), SHADOW_MAP_DEFAULT_SPLIT_1),
-                          CVarGetFloat(CVAR_ENHANCEMENT("Graphics.ShadowMap.Split2"), SHADOW_MAP_DEFAULT_SPLIT_2),
-                          CVarGetFloat(CVAR_ENHANCEMENT("Graphics.ShadowMap.Split3"), SHADOW_MAP_DEFAULT_SPLIT_3) };
+        f32 splits[SHADOW_MAP_MAX_CASCADES] = {
+            CVarGetFloat(CVAR_ENHANCEMENT("Graphics.ShadowMap.Split0"), SHADOW_MAP_DEFAULT_SPLIT_0),
+            CVarGetFloat(CVAR_ENHANCEMENT("Graphics.ShadowMap.Split1"), SHADOW_MAP_DEFAULT_SPLIT_1),
+            CVarGetFloat(CVAR_ENHANCEMENT("Graphics.ShadowMap.Split2"), SHADOW_MAP_DEFAULT_SPLIT_2)
+        };
+        // Per-cascade update rate, as a divisor of the frame rate: 1 rebuilds every frame, 2 every other.
+        // At 60 fps the defaults run the near and mid cascades at 60 Hz and the far one at 30 Hz -- the far
+        // one is the cheapest to halve, since it covers the most ground per texel and so changes the least
+        // between frames, while sweeping in the most casters to draw.
+        int cascadeDivisors[SHADOW_MAP_MAX_CASCADES] = {
+            CVarGetInteger(CVAR_ENHANCEMENT("Graphics.ShadowMap.UpdateDivisor0"), SHADOW_MAP_DEFAULT_CASCADE_DIVISOR_0),
+            CVarGetInteger(CVAR_ENHANCEMENT("Graphics.ShadowMap.UpdateDivisor1"), SHADOW_MAP_DEFAULT_CASCADE_DIVISOR_1),
+            CVarGetInteger(CVAR_ENHANCEMENT("Graphics.ShadowMap.UpdateDivisor2"), SHADOW_MAP_DEFAULT_CASCADE_DIVISOR_2)
+        };
+        for (int i = 0; i < SHADOW_MAP_MAX_CASCADES; i++) {
+            cascadeDivisors[i] = CLAMP(cascadeDivisors[i], 1, SHADOW_MAP_MAX_CASCADE_DIVISOR);
+        }
         // One sun (or moon) for the whole frame, straight from the environment directionals. This used to
         // take the last actor key emitted, which looked right until Navi walked on screen: Navi IS a light,
         // so her key became "the frame's light" and every shadow in the scene swung to point away from her.
@@ -659,8 +820,8 @@ static void OnToonFrameUpdate() {
         // below it, so that is what this does.
         // Same shape as the stencil volumes' Length control, but with its own value: a depth map can afford
         // longer shadows than a flattened silhouette can.
-        f32 minElev = CVarGetFloat(CVAR_ENHANCEMENT("Graphics.ShadowMap.MinElevation"),
-                                   SHADOW_MAP_DEFAULT_MIN_ELEVATION);
+        f32 minElev =
+            CVarGetFloat(CVAR_ENHANCEMENT("Graphics.ShadowMap.MinElevation"), SHADOW_MAP_DEFAULT_MIN_ELEVATION);
         minElev = CLAMP(minElev, 0.05f, 0.99f);
         // Negated on the way out: the toon convention points from the surface toward the light, while a
         // shadow projection needs the direction the light travels.
@@ -683,38 +844,89 @@ static void OnToonFrameUpdate() {
         sParams.shadowMapLightDir[0] = lightDir[0];
         sParams.shadowMapLightDir[1] = lightDir[1];
         sParams.shadowMapLightDir[2] = lightDir[2];
+        // SOH [Enhancement] Edge quality (see fast/shadow_map.h and the "Qualidade das Sombras" menu tab).
+        // Five independent techniques that shape the shadow's EDGE; everything else in this block decides
+        // where the shadow falls. Pushed before the params below so the split ladder -- which is one of the
+        // five and is fitted on the CPU -- is in effect for the splits that arrive with them.
+        {
+            ShadowMapQuality quality = ShadowMapQualityDefaults();
+            quality.smsr = CVarGetInteger(CVAR_ENHANCEMENT("Graphics.ShadowQuality.SMSR"),
+                                          SHADOW_MAP_DEFAULT_SMSR);
+            quality.smsrMaxSteps = CVarGetInteger(CVAR_ENHANCEMENT("Graphics.ShadowQuality.SMSRMaxSteps"),
+                                                  SHADOW_MAP_DEFAULT_SMSR_STEPS);
+            quality.smsrEpsilon = CVarGetFloat(CVAR_ENHANCEMENT("Graphics.ShadowQuality.SMSREpsilon"),
+                                               SHADOW_MAP_DEFAULT_SMSR_EPSILON);
+            quality.analyticEdge = CVarGetInteger(CVAR_ENHANCEMENT("Graphics.ShadowQuality.AnalyticEdge"), 0);
+            quality.analyticEdgeWidth = CVarGetFloat(CVAR_ENHANCEMENT("Graphics.ShadowQuality.AnalyticEdgeWidth"),
+                                                     SHADOW_MAP_DEFAULT_ANALYTIC_EDGE_WIDTH);
+            quality.jitter = CVarGetInteger(CVAR_ENHANCEMENT("Graphics.ShadowQuality.Jitter"), 0);
+            quality.jitterTaps =
+                CVarGetInteger(CVAR_ENHANCEMENT("Graphics.ShadowQuality.JitterTaps"), SHADOW_MAP_DEFAULT_JITTER_TAPS);
+            quality.jitterRadius =
+                CVarGetFloat(CVAR_ENHANCEMENT("Graphics.ShadowQuality.JitterRadius"), SHADOW_MAP_DEFAULT_JITTER_RADIUS);
+            quality.layout =
+                CVarGetInteger(CVAR_ENHANCEMENT("Graphics.ShadowQuality.Layout"), SHADOW_MAP_DEFAULT_LAYOUT);
+            quality.staticCache =
+                CVarGetInteger(CVAR_ENHANCEMENT("Graphics.ShadowQuality.StaticCache"), SHADOW_MAP_DEFAULT_STATIC_CACHE);
+            quality.clipmapLevels = CVarGetInteger(CVAR_ENHANCEMENT("Graphics.ShadowQuality.ClipmapLevels"),
+                                                   SHADOW_MAP_DEFAULT_CLIPMAP_LEVELS);
+            quality.clipmapBase =
+                CVarGetFloat(CVAR_ENHANCEMENT("Graphics.ShadowQuality.ClipmapBase"), SHADOW_MAP_DEFAULT_CLIPMAP_BASE);
+            quality.clipmapResolution = CVarGetInteger(CVAR_ENHANCEMENT("Graphics.ShadowQuality.ClipmapResolution"),
+                                                       SHADOW_MAP_DEFAULT_CLIPMAP_RESOLUTION);
+            quality.smoothDepth = CVarGetInteger(CVAR_ENHANCEMENT("Graphics.ShadowQuality.SmoothDepth"),
+                                                SHADOW_MAP_DEFAULT_SMOOTH_DEPTH);
+            quality.smoothAgreement = CVarGetFloat(CVAR_ENHANCEMENT("Graphics.ShadowQuality.SmoothAgreement"),
+                                                   SHADOW_MAP_DEFAULT_SMOOTH_AGREEMENT);
+            quality.sunHoldTexels = CVarGetFloat(CVAR_ENHANCEMENT("Graphics.ShadowQuality.SunHoldTexels"),
+                                                 SHADOW_MAP_DEFAULT_SUN_HOLD_TEXELS);
+            quality.edgeHarden =
+                CVarGetInteger(CVAR_ENHANCEMENT("Graphics.ShadowQuality.EdgeHarden"), SHADOW_MAP_DEFAULT_EDGE_HARDEN);
+            quality.edgeHardness =
+                CVarGetFloat(CVAR_ENHANCEMENT("Graphics.ShadowQuality.EdgeHardness"), SHADOW_MAP_DEFAULT_EDGE_HARDNESS);
+            quality.edgeThreshold = CVarGetFloat(CVAR_ENHANCEMENT("Graphics.ShadowQuality.EdgeThreshold"),
+                                                 SHADOW_MAP_DEFAULT_EDGE_THRESHOLD);
+            quality.ladderMode =
+                CVarGetInteger(CVAR_ENHANCEMENT("Graphics.ShadowQuality.LadderMode"), SHADOW_MAP_DEFAULT_LADDER_MODE);
+            quality.ladderLambda =
+                CVarGetFloat(CVAR_ENHANCEMENT("Graphics.ShadowQuality.LadderLambda"), SHADOW_MAP_DEFAULT_LADDER_LAMBDA);
+            quality.ladderNear =
+                CVarGetFloat(CVAR_ENHANCEMENT("Graphics.ShadowQuality.LadderNear"), SHADOW_MAP_DEFAULT_LADDER_NEAR);
+            // SOH [Enhancement] Shadow acne (see fast/shadow_map.h and the "Correção de Acne" menu tab).
+            // Defaults come from the header rather than being written twice, so the menu's "restore
+            // defaults" and the renderer's fallback cannot drift apart.
+            const ShadowMapAcne acneDefaults = ShadowMapQualityDefaults().acne;
+            quality.acne.enabled =
+                CVarGetInteger(CVAR_ENHANCEMENT("Graphics.ShadowAcne.Enabled"), acneDefaults.enabled);
+            quality.acne.normalOffset =
+                CVarGetInteger(CVAR_ENHANCEMENT("Graphics.ShadowAcne.NormalOffset"), acneDefaults.normalOffset);
+            quality.acne.normalTexels =
+                CVarGetFloat(CVAR_ENHANCEMENT("Graphics.ShadowAcne.NormalTexels"), acneDefaults.normalTexels);
+            quality.acne.slopeScaled =
+                CVarGetInteger(CVAR_ENHANCEMENT("Graphics.ShadowAcne.SlopeScaled"), acneDefaults.slopeScaled);
+            quality.acne.slopeMax =
+                CVarGetFloat(CVAR_ENHANCEMENT("Graphics.ShadowAcne.SlopeMax"), acneDefaults.slopeMax);
+            interp->SetShadowMapQuality(quality);
+        }
         interp->SetShadowMapParams(
             shadowMapOn,
             CVarGetInteger(CVAR_ENHANCEMENT("Graphics.ShadowMap.CascadeCount"), SHADOW_MAP_DEFAULT_CASCADES),
-            CVarGetInteger(CVAR_ENHANCEMENT("Graphics.ShadowMap.Resolution"), SHADOW_MAP_DEFAULT_RESOLUTION), splits,
-            lightDir, CVarGetFloat(CVAR_ENHANCEMENT("Graphics.ShadowMap.BlendFraction"),
-                                   SHADOW_MAP_DEFAULT_BLEND_FRACTION),
-            CVarGetFloat(CVAR_ENHANCEMENT("Graphics.ShadowMap.NormalOffset"), SHADOW_MAP_DEFAULT_NORMAL_OFFSET),
+            CVarGetInteger(CVAR_ENHANCEMENT("Graphics.ShadowMap.Resolution"), SHADOW_MAP_DEFAULT_RESOLUTION),
+            CVarGetInteger(CVAR_ENHANCEMENT("Graphics.ShadowMap.ActorResolution"), SHADOW_MAP_DEFAULT_ACTOR_RESOLUTION),
+            splits, lightDir,
+            CVarGetFloat(CVAR_ENHANCEMENT("Graphics.ShadowMap.BlendFraction"), SHADOW_MAP_DEFAULT_BLEND_FRACTION),
             CVarGetFloat(CVAR_ENHANCEMENT("Graphics.ShadowMap.Strength"), SHADOW_MAP_DEFAULT_STRENGTH),
-            CVarGetFloat(CVAR_ENHANCEMENT("Graphics.ShadowMap.FilterWidth"), SHADOW_MAP_DEFAULT_FILTER_WIDTH),
-            CVarGetFloat(CVAR_ENHANCEMENT("Graphics.ShadowMap.MinCasterSize"),
-                         SHADOW_MAP_DEFAULT_MIN_CASTER_SIZE),
-            // Debug: paints everything outside a cascade's footprint as fully occluded, which is the only
-            // way to see where a cascade actually ends -- a receiver outside it is silently reported lit,
-            // so a shadow that stops at the boundary is indistinguishable from one that was never cast.
-            (f32)CVarGetInteger(CVAR_DEVELOPER_TOOLS("ShadowMap.ShowCascadeBounds"), 0),
-            CVarGetFloat(CVAR_ENHANCEMENT("Graphics.ShadowMap.EdgeHardness"), SHADOW_MAP_DEFAULT_EDGE_HARDNESS),
-            CVarGetFloat(CVAR_ENHANCEMENT("Graphics.ShadowMap.EdgeHardnessFar"),
-                         SHADOW_MAP_DEFAULT_EDGE_HARDNESS_FAR),
-            // The incidence band, on scenery. This is the trade-off that decides what a wall does as it
-            // turns edge-on to the sun: below MinIncidence the shadow is not applied at all, because the map
-            // has no resolution left along the direction the surface recedes and its boundary quantises into
-            // wedges. Raising it hides those wedges on more surfaces and costs those surfaces their shadow.
-            // Live values rather than compile-time ones precisely because there is no single right answer.
-            CVarGetFloat(CVAR_ENHANCEMENT("Graphics.ShadowMap.MinIncidence"), SHADOW_MAP_MIN_INCIDENCE),
-            CVarGetFloat(CVAR_ENHANCEMENT("Graphics.ShadowMap.FullIncidence"), SHADOW_MAP_FULL_INCIDENCE),
-            CVarGetFloat(CVAR_ENHANCEMENT("Graphics.ShadowMap.MinHardnessScale"),
-                         SHADOW_MAP_MIN_EDGE_HARDNESS_SCALE),
-            // The two biases. Constant is a flat push in world units; slope multiplies the polygon's own
-            // depth gradient, so it is nearly nothing on a surface facing the light and large on one edge-on
-            // to it -- which is where acne lives and why the two are separate controls rather than one.
-            CVarGetFloat(CVAR_ENHANCEMENT("Graphics.ShadowMap.DepthBias"), SHADOW_MAP_DEFAULT_DEPTH_BIAS_WORLD),
-            CVarGetFloat(CVAR_ENHANCEMENT("Graphics.ShadowMap.SlopeBias"), SHADOW_MAP_DEFAULT_SLOPE_BIAS));
+            CVarGetFloat(CVAR_ENHANCEMENT("Graphics.ShadowMap.MinCasterSize"), SHADOW_MAP_DEFAULT_MIN_CASTER_SIZE),
+            // Debug view selector. Passed through as an integer-valued float and not clamped here: the
+            // shader owns the list, so a value it does not recognise falls through to normal shading rather
+            // than being silently remapped to a view the user did not ask for.
+            //
+            // 1 and 2 show the system's OUTPUT (cascade footprints; which caster layer occludes). 3, 4, 5
+            // and 7 show its INPUT -- the receiver normal, where that normal came from, the filter's raw
+            // coverage, the cascade selection. That second group is the one to reach for when a shadow is
+            // the wrong SHAPE rather than in the wrong place. The full list, with how to read them against
+            // each other, is in the shader's PSMain.
+            (f32)CVarGetInteger(CVAR_DEVELOPER_TOOLS("ShadowMap.ShowCascadeBounds"), 0), cascadeDivisors);
     }
 
     Fast::GfxRenderingAPI* rapi = GetRenderingApi();
@@ -725,13 +937,11 @@ static void OnToonFrameUpdate() {
     // black (shadow) so it is obvious which draws receive toon lighting (e.g. confirming whether large
     // water/lava surfaces are being relit and causing the ramp edge to flicker across them).
     f32 debugBands = CVarGetInteger(CVAR_DEVELOPER_TOOLS("ToonLighting.HighlightBands"), 0) ? 1.0f : 0.0f;
-    rapi->SetToonRamp(CVarGetFloat(CVAR_ENHANCEMENT("Graphics.ToonLighting.RampCenter"), kDefaultRampCenter),
-                      CVarGetFloat(CVAR_ENHANCEMENT("Graphics.ToonLighting.RampSoftness"), kDefaultRampSoftness),
-                      CVarGetFloat(CVAR_ENHANCEMENT("Graphics.ToonLighting.HighlightIntensity"),
-                                   kDefaultHighlightIntensity),
-                      CVarGetFloat(CVAR_ENHANCEMENT("Graphics.ToonLighting.ShadowIntensity"),
-                                   kDefaultShadowIntensity),
-                      debugBands);
+    rapi->SetToonRamp(
+        CVarGetFloat(CVAR_ENHANCEMENT("Graphics.ToonLighting.RampCenter"), kDefaultRampCenter),
+        CVarGetFloat(CVAR_ENHANCEMENT("Graphics.ToonLighting.RampSoftness"), kDefaultRampSoftness),
+        CVarGetFloat(CVAR_ENHANCEMENT("Graphics.ToonLighting.HighlightIntensity"), kDefaultHighlightIntensity),
+        CVarGetFloat(CVAR_ENHANCEMENT("Graphics.ToonLighting.ShadowIntensity"), kDefaultShadowIntensity), debugBands);
 }
 
 // ---------------------------------------------------------------------------------------------------
@@ -741,10 +951,12 @@ static void OnToonFrameUpdate() {
 // The key light animates smoothly toward its target, so the transition persists across frames. State
 // is keyed by the actor pointer and evicted on the actor's destroy hook, so two live actors never
 // collide and stale pointers never linger.
-typedef struct {
+struct ToonKeyState {
     f32 dir[3];
     f32 col[3];
     f32 colVel[3];
+    const LightInfo* localSources[TOON_LOCAL_LIGHT_MAX]{}; // compared only against this frame
+    bool multipleLights = false;
     f32 shadowScale;    // actor-shadow size, eased 0..1 so it grows in / shrinks out instead of popping
     f32 shadowScaleVel; // SmoothDamp velocity for shadowScale
     // Cached floor raycast, for actors that never run a bg check (floorPoly stays NULL): a static
@@ -753,7 +965,7 @@ typedef struct {
     f32 floorPos[3]; // world position the raycast was sampled at
     u8 floorValid;   // the cached raycast hit a floor
     u8 floorSampled; // a raycast has been cached
-} ToonKeyState;
+};
 
 static std::unordered_map<Actor*, ToonKeyState> sToonKeyStates;
 
@@ -852,6 +1064,12 @@ static bool ToonClosestPointLight(PlayState* play, Actor* actor, f32 pointRange,
 
     LightNode* node = play->lightCtx.listHead;
     f32 bestDistSq = -1.0f;
+    // The winner, not the winner's outputs. The square root and the six divisions below used to run on
+    // every light that improved on the one before it -- so walking a torchlit room from far to near paid
+    // them again for each -- to produce values all but the last were about to overwrite. The comparison
+    // that picks the winner only ever needed the SQUARED distance, so nothing else has to be computed
+    // until the walk is over. Selection is unchanged: still the first light at the strict minimum.
+    LightInfo* best = NULL;
 
     while (node != NULL) {
         LightInfo* info = node->info;
@@ -865,18 +1083,85 @@ static bool ToonClosestPointLight(PlayState* play, Actor* actor, f32 pointRange,
 
             if ((radius > 0.0f) && (distSq > 0.0001f) && (distSq < (radius * radius)) &&
                 ((bestDistSq < 0.0f) || (distSq < bestDistSq))) {
-                f32 dist = sqrtf(distSq);
-
                 bestDistSq = distSq;
-                dirOut[0] = dx / dist, dirOut[1] = dy / dist, dirOut[2] = dz / dist;
-                colOut[0] = info->params.point.color[0] / 255.0f;
-                colOut[1] = info->params.point.color[1] / 255.0f;
-                colOut[2] = info->params.point.color[2] / 255.0f;
+                best = info;
             }
         }
         node = node->next;
     }
+
+    if (best != NULL) {
+        // Recomputed from the same light and the same actor position, neither of which the walk touched,
+        // so these are the values the old code would have left behind on its last improving light.
+        const f32 dx = best->params.point.x - actor->world.pos.x;
+        const f32 dy = best->params.point.y - actor->world.pos.y;
+        const f32 dz = best->params.point.z - actor->world.pos.z;
+        const f32 dist = sqrtf(bestDistSq);
+        dirOut[0] = dx / dist, dirOut[1] = dy / dist, dirOut[2] = dz / dist;
+        colOut[0] = best->params.point.color[0] / 255.0f;
+        colOut[1] = best->params.point.color[1] / 255.0f;
+        colOut[2] = best->params.point.color[2] / 255.0f;
+    }
     return bestDistSq >= 0.0f;
+}
+
+// Select at most four live local sources. The 20% retention bonus avoids swaps
+// caused by torch flicker. Stored pointers are identity hints only, never dereferenced.
+static void EmitToonLocalLights(PlayState* play, Actor* actor, ToonKeyState& state, bool enabled) {
+    struct Candidate {
+        LightInfo* info;
+        float score;
+        float attenuation;
+        float distance2;
+    } best[TOON_LOCAL_LIGHT_MAX]{};
+    if (enabled) {
+        for (LightNode* node = play->lightCtx.listHead; node != nullptr; node = node->next) {
+            LightInfo* info = node->info;
+            if (info == nullptr || info->type == LIGHT_DIRECTIONAL || info == sNaviGlow || info == sNaviNoGlow) {
+                continue;
+            }
+            const auto& p = info->params.point;
+            float dx = p.x - actor->world.pos.x, dy = p.y - actor->world.pos.y, dz = p.z - actor->world.pos.z;
+            float distance2 = dx * dx + dy * dy + dz * dz;
+            float attenuation = ToonLocalLightAttenuation(distance2, p.radius * sParams.pointRange);
+            float score = attenuation * (0.2126f * p.color[0] + 0.7152f * p.color[1] + 0.0722f * p.color[2]);
+            if (!(score > 0.0f)) {
+                continue;
+            }
+            for (const LightInfo* previous : state.localSources) {
+                if (previous == info) {
+                    score *= 1.2f;
+                    break;
+                }
+            }
+            Candidate candidate{info, score, attenuation, distance2};
+            for (int i = 0; i < TOON_LOCAL_LIGHT_MAX; ++i) {
+                if (candidate.score > best[i].score) {
+                    std::swap(candidate, best[i]);
+                }
+            }
+        }
+    }
+    OPEN_DISPS(play->state.gfxCtx);
+    gSPToonLocalLightsReset(POLY_OPA_DISP++, enabled);
+    gSPToonLocalLightsReset(POLY_XLU_DISP++, enabled);
+    for (int i = 0; i < TOON_LOCAL_LIGHT_MAX; ++i) {
+        state.localSources[i] = best[i].info;
+        if (best[i].info == nullptr) {
+            continue;
+        }
+        const auto& p = best[i].info->params.point;
+        float invDistance = best[i].distance2 > 0.0001f ? 1.0f / sqrtf(best[i].distance2) : 0.0f;
+        // A source exactly at the object origin has no direction; choose up consistently.
+        s8 dx = (s8)((p.x - actor->world.pos.x) * invDistance * 127.0f);
+        s8 dy = invDistance > 0.0f ? (s8)((p.y - actor->world.pos.y) * invDistance * 127.0f) : 127;
+        s8 dz = (s8)((p.z - actor->world.pos.z) * invDistance * 127.0f);
+        float strength = best[i].attenuation * sParams.localIntensity;
+        u8 r = (u8)(p.color[0] * strength), g = (u8)(p.color[1] * strength), b = (u8)(p.color[2] * strength);
+        gSPToonLocalLight(POLY_OPA_DISP++, i, dx, dy, dz, r, g, b);
+        gSPToonLocalLight(POLY_XLU_DISP++, i, dx, dy, dz, r, g, b);
+    }
+    CLOSE_DISPS(play->state.gfxCtx);
 }
 
 // Key light from the environment directionals: the sun or the moon, whichever is currently brighter
@@ -906,10 +1191,8 @@ static void ToonEnvKey(PlayState* play, f32 dirOut[3], f32 colOut[3]) {
 // ray" pointing from an actor toward a light.
 static Vtx sToonRayVtx[5] = {
     VTX(-1, 0, -1, 0, 0, 0xFF, 0xFF, 0xFF, 0xFF), // base
-    VTX(1, 0, -1, 0, 0, 0xFF, 0xFF, 0xFF, 0xFF),
-    VTX(1, 0, 1, 0, 0, 0xFF, 0xFF, 0xFF, 0xFF),
-    VTX(-1, 0, 1, 0, 0, 0xFF, 0xFF, 0xFF, 0xFF),
-    VTX(0, 1, 0, 0, 0, 0xFF, 0xFF, 0xFF, 0xFF), // tip
+    VTX(1, 0, -1, 0, 0, 0xFF, 0xFF, 0xFF, 0xFF),  VTX(1, 0, 1, 0, 0, 0xFF, 0xFF, 0xFF, 0xFF),
+    VTX(-1, 0, 1, 0, 0, 0xFF, 0xFF, 0xFF, 0xFF),  VTX(0, 1, 0, 0, 0, 0xFF, 0xFF, 0xFF, 0xFF), // tip
 };
 
 static Gfx sToonRayDL[] = {
@@ -966,8 +1249,7 @@ static void DrawDebugRay(PlayState* play, Vec3f* base, f32 dir[3], u8 r, u8 g, u
 
     gDPPipeSync(POLY_XLU_DISP++);
     gSPClearGeometryMode(POLY_XLU_DISP++, G_LIGHTING | G_CULL_BACK | G_CULL_FRONT);
-    gDPSetCombineLERP(POLY_XLU_DISP++, 0, 0, 0, PRIMITIVE, 0, 0, 0, PRIMITIVE, 0, 0, 0, PRIMITIVE, 0, 0, 0,
-                      PRIMITIVE);
+    gDPSetCombineLERP(POLY_XLU_DISP++, 0, 0, 0, PRIMITIVE, 0, 0, 0, PRIMITIVE, 0, 0, 0, PRIMITIVE, 0, 0, 0, PRIMITIVE);
     gDPSetRenderMode(POLY_XLU_DISP++, G_RM_AA_XLU_SURF, G_RM_AA_XLU_SURF2);
     gDPSetPrimColor(POLY_XLU_DISP++, 0, 0, r, g, b, 200);
 
@@ -998,8 +1280,7 @@ static void DrawDebugRing(PlayState* play, Vec3f* center, f32 radius, u8 r, u8 g
 
     gDPPipeSync(POLY_XLU_DISP++);
     gSPClearGeometryMode(POLY_XLU_DISP++, G_LIGHTING | G_CULL_BACK | G_CULL_FRONT);
-    gDPSetCombineLERP(POLY_XLU_DISP++, 0, 0, 0, PRIMITIVE, 0, 0, 0, PRIMITIVE, 0, 0, 0, PRIMITIVE, 0, 0, 0,
-                      PRIMITIVE);
+    gDPSetCombineLERP(POLY_XLU_DISP++, 0, 0, 0, PRIMITIVE, 0, 0, 0, PRIMITIVE, 0, 0, 0, PRIMITIVE, 0, 0, 0, PRIMITIVE);
     gDPSetRenderMode(POLY_XLU_DISP++, G_RM_AA_XLU_SURF, G_RM_AA_XLU_SURF2);
     gDPSetPrimColor(POLY_XLU_DISP++, 0, 0, r, g, b, a);
 
@@ -1057,8 +1338,9 @@ static void DrawDebugOverlay(PlayState* play, Actor* actor, f32 pointRange, f32 
                 f32 dist = sqrtf(dsq);
                 f32 scale = 1.0f - ((dist / radius) * (dist / radius));
                 f32 att = 0.5f + (0.5f * scale); // distance falloff, just for the visual length
-                f32 plum = ((info->params.point.color[0] + info->params.point.color[1] +
-                             info->params.point.color[2]) / (3.0f * 255.0f)) * att;
+                f32 plum = ((info->params.point.color[0] + info->params.point.color[1] + info->params.point.color[2]) /
+                            (3.0f * 255.0f)) *
+                           att;
 
                 if (dist > 0.001f) {
                     cdir[0] = dx / dist, cdir[1] = dy / dist, cdir[2] = dz / dist;
@@ -1165,20 +1447,23 @@ static void HandleActorDraw(void* actorPtr) {
 
     OPEN_DISPS(play->state.gfxCtx);
 
-    // Closest in-range point light wins outright; with none in range, fall back to the sun/moon.
-    if (!ToonClosestPointLight(play, actor, pointRange, targetDir, targetCol)) {
+    // Multi-light keeps the environment key. Legacy mode lets the closest local source replace it.
+    const bool multipleLights = celEnabled && wantToon && sParams.multipleLights;
+    if (multipleLights || !ToonClosestPointLight(play, actor, pointRange, targetDir, targetCol)) {
         ToonEnvKey(play, targetDir, targetCol);
     }
 
     // Animate the key toward the chosen light with an eased "travel" (per-actor persistent state).
     auto [it, isNew] = sToonKeyStates.try_emplace(actor);
     ToonKeyState& st = it->second;
-    if (isNew) {
+    if (isNew || st.multipleLights != multipleLights) {
         st.colVel[0] = st.colVel[1] = st.colVel[2] = 0.0f;
         st.dir[0] = targetDir[0], st.dir[1] = targetDir[1], st.dir[2] = targetDir[2];
         st.col[0] = targetCol[0], st.col[1] = targetCol[1], st.col[2] = targetCol[2];
-        st.shadowScale = 0.0f, st.shadowScaleVel = 0.0f; // grows in on first appearance
-        st.floorSampled = 0, st.floorValid = 0;
+        if (isNew) {
+            st.shadowScale = 0.0f, st.shadowScaleVel = 0.0f; // grows in on first appearance
+            st.floorSampled = 0, st.floorValid = 0;
+        }
     } else {
         // Eased travel using the frame-constant dt/alpha computed in OnToonFrameUpdate (frame
         // interpolation replays this draw without re-running it, so they can't vary per actor anyway).
@@ -1189,6 +1474,11 @@ static void HandleActorDraw(void* actorPtr) {
         for (s32 i = 0; i < 3; i++) {
             st.col[i] = ToonSmoothDamp(st.col[i], targetCol[i], &st.colVel[i], transitionTime, sToonKeyDt);
         }
+    }
+
+    st.multipleLights = multipleLights;
+    if (!castWithoutRelight) {
+        EmitToonLocalLights(play, actor, st, multipleLights);
     }
 
     {

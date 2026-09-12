@@ -235,15 +235,13 @@ if (CMAKE_SYSTEM_NAME STREQUAL "Windows")
     set_target_properties(${PROJECT_NAME} PROPERTIES
         VS_GLOBAL_KEYWORD "Win32Proj"
     )
-    if("${CMAKE_VS_PLATFORM_NAME}" STREQUAL "x64")
-        set_target_properties(${PROJECT_NAME} PROPERTIES
-            INTERPROCEDURAL_OPTIMIZATION_RELEASE "TRUE"
-        )
-    elseif("${CMAKE_VS_PLATFORM_NAME}" STREQUAL "Win32")
-        set_target_properties(${PROJECT_NAME} PROPERTIES
-            INTERPROCEDURAL_OPTIMIZATION_RELEASE "TRUE"
-        )
-    endif()
+    # Link time optimization used to be set here (INTERPROCEDURAL_OPTIMIZATION_RELEASE, Windows only, this
+    # target only). It is gone deliberately, and it was measured rather than assumed: widening it to cover
+    # libultraship too cost about 15% of the frame rate -- 70-80 fps down to 60-65 in the heaviest scene,
+    # reproduced across two builds -- and narrowing it back to this target alone did not recover the rest.
+    # The renderer is one large dispatch loop and whole program optimization keeps making inlining choices
+    # around it that cost more in instruction cache than they save in call overhead. Removed at the tuned
+    # configuration's request; the build is now plainly LTO-free on every platform.
 elseif(CMAKE_SYSTEM_NAME STREQUAL "Darwin")
     set_target_properties(${PROJECT_NAME} PROPERTIES
         XCODE_ATTRIBUTE_CLANG_ENABLE_OBJC_ARC YES

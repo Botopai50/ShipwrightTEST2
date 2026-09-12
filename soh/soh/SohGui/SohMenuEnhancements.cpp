@@ -1,4 +1,6 @@
 ﻿#include "SohMenu.h"
+// SOH [Enhancement] For IsDroppingFrames(), used by the Disable LOD warning below.
+#include "ResolutionEditor.h"
 #include <soh/Enhancements/enhancementTypes.h>
 #include <soh/Enhancements/mods.h>
 #include <soh/Enhancements/game-interactor/GameInteractor.h>
@@ -588,7 +590,43 @@ void SohMenu::AddMenuEnhancements() {
         .CVar(CVAR_ENHANCEMENT("DisableLOD"))
         .RaceDisable(false)
         .Options(CheckboxOptions().Tooltip(
-            "Turns off the Level of Detail setting, making models use their Higher-Poly variants at any distance."));
+            "Turns off the Level of Detail setting, making models use their Higher-Poly variants at any distance.\n\n"
+            "Every actor keeps its full detail no matter how far away it is, so the cost grows with how crowded the "
+            "scene is rather than with how close you are. It costs the most alongside model mods, whose replacement "
+            "models are usually far denser than the originals."));
+    // SOH [Enhancement] The warning is about the combination, not the setting on its own: forcing the
+    // high-poly variant at every distance while mod archives are supplying the models multiplies a cost
+    // that is already paid on everything on screen. Hidden unless both are actually true, so it does not
+    // become another permanent line of menu noise.
+    AddWidget(path, ICON_FA_EXCLAMATION_TRIANGLE " Disable LOD is on while mods are loaded.", WIDGET_TEXT)
+        .RaceDisable(false)
+        // Not a setting anyone searches for, and the search list decides what to skip from a stale copy of
+        // isHidden, so keeping it out of there avoids showing the warning where it has no context.
+        .HideInSearch(true)
+        .PreFunc([](WidgetInfo& info) {
+            const char* enabledMods = CVarGetString(CVAR_SETTING("EnabledMods"), "");
+            const bool modelsComeFromMods =
+                CVarGetInteger(CVAR_SETTING("AltAssets"), 1) && enabledMods != nullptr && enabledMods[0] != '\0';
+            info.isHidden = !CVarGetInteger(CVAR_ENHANCEMENT("DisableLOD"), 0) || !modelsComeFromMods;
+            if (info.isHidden) {
+                return;
+            }
+            // The mod list is one string with "|" between entries, so the count is the separators plus one.
+            int modCount = 1;
+            for (const char* c = enabledMods; *c != '\0'; c++) {
+                if (*c == '|') {
+                    modCount++;
+                }
+            }
+            info.name = ICON_FA_EXCLAMATION_TRIANGLE " Disable LOD is forcing every model to its high-poly variant "
+                                                     "at any distance, with " +
+                        std::to_string(modCount) + (modCount == 1 ? " mod" : " mods") + " loaded.";
+            // Only claimed when it is measurably true, so the line stays worth reading.
+            if (IsDroppingFrames()) {
+                info.name += " Frames are being dropped right now; try turning this off before dropping resolution.";
+            }
+        })
+        .Options(TextOptions().Color(Colors::Orange));
     AddWidget(path, "Enemy Health Bars", WIDGET_CVAR_CHECKBOX)
         .CVar(CVAR_ENHANCEMENT("EnemyHealthBar"))
         .Options(CheckboxOptions().Tooltip("Renders a health bar for Enemies when Z-Targeted."));

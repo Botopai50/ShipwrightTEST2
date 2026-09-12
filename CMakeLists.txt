@@ -122,8 +122,14 @@ set(CMAKE_CXX_FLAGS_RELEASE "-O2 -DNDEBUG")
 set(CMAKE_OBJCXX_FLAGS_RELEASE "-O2 -DNDEBUG")
 endif()
 
+# An unspecified build type used to mean Debug, which is a genuinely bad default here: a configure with no
+# -DCMAKE_BUILD_TYPE produced an unoptimised binary that runs several times slower, and nothing about it says
+# so -- it just feels like the game is slow. RelWithDebInfo keeps the symbols that made Debug the safe
+# default while actually applying -O2, so an accidental build is a playable one.
+#
+# Pass -DCMAKE_BUILD_TYPE=Debug explicitly to get the old behaviour.
 if(NOT CMAKE_BUILD_TYPE )
-    set(CMAKE_BUILD_TYPE "Debug" CACHE STRING "Choose the type of build." FORCE)
+    set(CMAKE_BUILD_TYPE "RelWithDebInfo" CACHE STRING "Choose the type of build." FORCE)
 endif()
 
 ################################################################################

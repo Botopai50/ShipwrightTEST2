@@ -7,6 +7,8 @@
 #include "soh/ResourceManagerHelpers.h"
 #include "UIWidgets.hpp"
 #include <spdlog/fmt/fmt.h>
+#include <fast/Fast3dWindow.h>
+#include <ship/Context.h>
 
 extern "C" {
 #include "include/z64audio.h"
@@ -18,6 +20,17 @@ namespace SohGui {
 extern std::shared_ptr<SohMenu> mSohMenu;
 extern std::shared_ptr<SohModalWindow> mModalWindow;
 using namespace UIWidgets;
+
+// Mipmap settings live in the renderer, and only it knows that changing the toggle means every uploaded
+// texture has to be built again. Handing the whole thing to Fast3dWindow keeps that rule in one place; the
+// menu just says "they changed". A window that is not Fast3D (headless, a test harness) has no mipmaps to
+// apply and is silently skipped.
+static void ApplyMipmapSettings() {
+    auto wnd = std::dynamic_pointer_cast<Fast::Fast3dWindow>(Ship::Context::GetInstance()->GetWindow());
+    if (wnd != nullptr) {
+        wnd->ApplyMipmapSettings();
+    }
+}
 
 static std::map<int32_t, const char*> imguiScaleOptions = {
     { 0, "Small" },
@@ -371,7 +384,85 @@ void SohMenu::AddMenuSettings() {
                 .Min(1)
                 .Max(8)
                 .DefaultValue(1));
+    // FXAA, as an alternative to the slider above rather than an addition to it. The two attack different
+    // things and cost differently, so turning one on turns the other off -- running both would pay twice and
+    // soften the result for no gain.
+    AddWidget(path, "FXAA (instead of MSAA)", WIDGET_CVAR_CHECKBOX)
+        .CVar(CVAR_FXAA)
+        .RaceDisable(false)
+        .Callback([](WidgetInfo& info) {
+            const bool on = CVarGetInteger(CVAR_FXAA, 0) != 0;
+            if (on) {
+                CVarSetInteger(CVAR_MSAA_VALUE, 1);
+                Ship::Context::GetInstance()->GetWindow()->SetMsaaLevel(1);
+            }
+            auto wnd = std::dynamic_pointer_cast<Fast::Fast3dWindow>(Ship::Context::GetInstance()->GetWindow());
+            if (wnd != nullptr) {
+                wnd->SetFxaaEnabled(on);
+            }
+        })
+        .Options(CheckboxOptions().DefaultValue(false).Tooltip(
+            "Smooths jagged edges by filtering the FINISHED image instead of by sampling the "
+            "geometry several times.\n\n"
+            "The difference from MSAA is what it costs and what it catches. MSAA takes several "
+            "samples per pixel wherever two polygons meet, so it costs more the more geometry "
+            "and the more resolution there is, and it cannot see an edge that lives inside a "
+            "texture. FXAA is one pass over the frame at a fixed cost no matter how busy the "
+            "scene is, and it catches texture and cutout edges -- foliage, railings, the "
+            "lettering on signs -- that MSAA leaves jagged.\n\n"
+            "The price is that it works from the image alone and cannot tell a jagged edge "
+            "from a detail that is meant to be sharp, so it softens the picture slightly.\n\n"
+            "Turning this on sets MSAA back to 1x: paying for both would soften the result "
+            "and cost twice. Direct3D 11 only; elsewhere the frame is shown unfiltered."));
 #endif
+    // How much graphics memory the texture cache may hold. A ceiling, not a reservation.
+    //
+    // Doubling steps rather than a free slider: the useful range spans three orders of magnitude, so a
+    // slider spends most of its travel on distinctions that do not matter, and the difference between 500
+    // and 512 MB is nothing anyone can perceive.
+    AddWidget(path, "Texture cache", WIDGET_CVAR_COMBOBOX)
+        .CVar(CVAR_TEXTURE_CACHE_MB)
+        .RaceDisable(false)
+        // The combobox looks its current value up in the map and throws if it is not there, so a setting
+        // left over from anything that wrote a different number -- an earlier build, a hand-edited config --
+        // has to be brought onto the ladder before the widget is drawn rather than after.
+        .PreFunc([](WidgetInfo&) {
+            static const int32_t steps[] = { 16, 32, 64, 128, 256, 512, 1024, 2048, 4096 };
+            const int32_t current = CVarGetInteger(CVAR_TEXTURE_CACHE_MB, 512);
+            int32_t nearest = steps[0];
+            int32_t nearestGap = (current > nearest) ? (current - nearest) : (nearest - current);
+            for (int32_t step : steps) {
+                const int32_t gap = (current > step) ? (current - step) : (step - current);
+                if (gap < nearestGap) {
+                    nearest = step;
+                    nearestGap = gap;
+                }
+            }
+            if (nearest != current) {
+                CVarSetInteger(CVAR_TEXTURE_CACHE_MB, nearest);
+            }
+        })
+        .Options(ComboboxOptions()
+                     .ComboMap({ { 16, "16 MB" },
+                                 { 32, "32 MB" },
+                                 { 64, "64 MB" },
+                                 { 128, "128 MB" },
+                                 { 256, "256 MB" },
+                                 { 512, "512 MB" },
+                                 { 1024, "1 GB" },
+                                 { 2048, "2 GB" },
+                                 { 4096, "4 GB" } })
+                     .DefaultIndex(512)
+                     .Tooltip("How much graphics memory the texture cache may hold.\n\n"
+                              "The cache used to be limited to a fixed number of images instead, which suits "
+                              "the stock textures -- all of them small -- and does not suit an HD pack at all. "
+                              "The same count of much larger images is far more memory than intended, and in a "
+                              "room whose materials do not all fit, the cache spends every frame evicting one "
+                              "texture to load the next and then evicting that one to load the first again.\n\n"
+                              "Raise this if you use large texture packs and see stuttering that follows where "
+                              "you look. Lower it if you are short of video memory. This is a ceiling and not a "
+                              "reservation: nothing is used until the game asks for it, so the stock game will "
+                              "sit far below any setting here."));
     auto fps = CVarGetInteger(CVAR_SETTING("InterpolationFPS"), 20);
     const char* fpsFormat = fps == 20 ? "Original (%d)" : "%d";
     AddWidget(path, "Current FPS", WIDGET_CVAR_SLIDER_INT)
@@ -422,6 +513,57 @@ void SohMenu::AddMenuSettings() {
         .CVar(CVAR_TEXTURE_FILTER)
         .RaceDisable(false)
         .Options(ComboboxOptions().Tooltip("Sets the applied Texture Filtering.").ComboMap(textureFilteringMap));
+
+    // Mipmapping. Applied through Fast3dWindow so the toggle can drop the texture cache: whether a texture
+    // gets a chain is decided when it is uploaded, so without that a change would only reach whatever the
+    // game happened to re-load afterwards.
+    AddWidget(path, "Mipmaps", WIDGET_CVAR_CHECKBOX)
+        .CVar(CVAR_MIPMAPS)
+        .RaceDisable(false)
+        .Callback([](WidgetInfo&) { ApplyMipmapSettings(); })
+        .Options(CheckboxOptions().DefaultValue(false).Tooltip(
+            "Builds a chain of progressively smaller copies of large textures and lets the "
+            "GPU pick the one that matches how small the surface is on screen.\n\n"
+            "What it is FOR is texture packs. The game's own textures are capped at 4 KB by "
+            "the N64's texture memory -- around 64 by 64 -- and one that small already sits "
+            "entirely in the GPU's cache, so there is no traffic left for this to save. At "
+            "any modern resolution they are being magnified anyway, and magnification always "
+            "reads the full-size copy. A 1024-square replacement texture on a distant wall "
+            "is the opposite case, and there this saves a great deal.\n\n"
+            "It also removes the shimmer on distant ground and on surfaces seen at a grazing "
+            "angle, whatever the texture size -- but only large textures are given a chain, "
+            "so on stock assets expect the quality change and not the frames."));
+    AddWidget(path, "Mipmap LOD Bias: %.1f", WIDGET_CVAR_SLIDER_FLOAT)
+        .CVar(CVAR_MIPMAP_LOD_BIAS)
+        .RaceDisable(false)
+        .Callback([](WidgetInfo&) { ApplyMipmapSettings(); })
+        .Options(FloatSliderOptions()
+                     .Tooltip("Pushes the choice towards smaller copies (positive) or larger ones "
+                              "(negative).\n\n"
+                              "Positive values trade sharpness for bandwidth and are the knob to reach for if "
+                              "you are chasing frames with a texture pack loaded. Negative values keep more "
+                              "detail at distance and bring back some of the shimmer. Applies immediately.")
+                     .Format("%.1f")
+                     .Min(-2.0f)
+                     .Max(4.0f)
+                     .DefaultValue(0.0f));
+    AddWidget(path, "Anisotropic Filtering: %dx", WIDGET_CVAR_SLIDER_INT)
+        .CVar(CVAR_MIPMAP_ANISOTROPY)
+        .RaceDisable(false)
+        .Callback([](WidgetInfo&) { ApplyMipmapSettings(); })
+        .Options(IntSliderOptions()
+                     .Tooltip("Sharpens textures on surfaces seen at a steep angle -- floors running away to "
+                              "the horizon, mostly.\n\n"
+                              "Plain mipmapping has to pick one copy for a whole pixel, so a floor at a "
+                              "grazing angle gets a copy small enough for its shortest axis and goes blurry "
+                              "along its longest. This takes several samples along that axis instead. It only "
+                              "applies to textures that have a chain and only with Linear filtering, and it "
+                              "costs bandwidth rather than saving it. 1x is off. Applies immediately.")
+                     .Min(1)
+                     .Max(16)
+                     .DefaultValue(1)
+                     .ShowButtons(true)
+                     .Format("%d"));
 
     path.column = SECTION_COLUMN_2;
     AddWidget(path, "Advanced Graphics Options", WIDGET_SEPARATOR_TEXT);

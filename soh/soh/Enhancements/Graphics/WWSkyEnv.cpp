@@ -20,8 +20,8 @@ extern "C" {
 // Shared horizon placement (defaults mirror the GUI sliders' DefaultValue()s).
 #define CVAR_SKY_HORIZON_HEIGHT CVAR_ENHANCEMENT("Graphics.WWClouds.HorizonBandHeight")
 #define CVAR_SKY_HORIZON_PARALLAX CVAR_ENHANCEMENT("Graphics.WWClouds.HorizonBandParallax")
-static constexpr float kDefaultHorizonHeight = -408.0f;  // sits well against OoT's typical visible horizon
-static constexpr float kDefaultHorizonParallax = 0.75f;  // mostly world-pinned (WW's vrbox factor is 0.09)
+static constexpr float kDefaultHorizonHeight = -408.0f; // sits well against OoT's typical visible horizon
+static constexpr float kDefaultHorizonParallax = 0.75f; // mostly world-pinned (WW's vrbox factor is 0.09)
 
 // Split-screen debug: clip all WW sky elements to the left half of the screen so the vanilla OoT skybox
 // (still drawn underneath) shows through on the right — a live side-by-side A/B of our sky vs the textures.
@@ -168,8 +168,8 @@ typedef struct {
 } SkySlot;
 
 static const SkySlot kSeaPalette[2][6] = {
-    { // clear (colpat 0)
-      { { 79, 70, 78 }, { 180, 142, 121 }, { 113, 90, 73 }, { 74, 71, 79 }, { 108, 96, 92 } },       // dawn
+    {                                                                                          // clear (colpat 0)
+      { { 79, 70, 78 }, { 180, 142, 121 }, { 113, 90, 73 }, { 74, 71, 79 }, { 108, 96, 92 } }, // dawn
       { { 180, 188, 201 }, { 241, 230, 220 }, { 193, 190, 197 }, { 247, 232, 216 }, { 255, 241, 223 } }, // morning
       { { 80, 120, 255 }, { 163, 210, 255 }, { 80, 120, 255 }, { 255, 255, 255 }, { 255, 255, 255 } },   // noon
       { { 219, 154, 99 }, { 236, 202, 137 }, { 200, 160, 100 }, { 233, 177, 108 }, { 208, 155, 98 } },   // evening
@@ -204,17 +204,19 @@ typedef struct {
     uint8_t slot;    // index into a kSeaPalette weather row
 } SunStop;
 
-static const SunStop kStopsPM[] = { // afternoon -> night (sun descending)
-    { 0.50f, 2 },                   // high sun      -> noon        (~16:00)
-    { 0.15f, 3 },                   // sinking       -> evening warm(~17:26)
-    { 0.00f, 4 },                   // at horizon    -> dusk (peak) (18:00 sunset)
-    { -0.15f, 5 },                  // below horizon -> night       (~18:34)
+static const SunStop kStopsPM[] = {
+    // afternoon -> night (sun descending)
+    { 0.50f, 2 },  // high sun      -> noon        (~16:00)
+    { 0.15f, 3 },  // sinking       -> evening warm(~17:26)
+    { 0.00f, 4 },  // at horizon    -> dusk (peak) (18:00 sunset)
+    { -0.15f, 5 }, // below horizon -> night       (~18:34)
 };
-static const SunStop kStopsAM[] = { // night -> morning (sun rising), same thresholds mirrored
-    { 0.50f, 2 },                   // high sun      -> noon        (~08:00)
-    { 0.15f, 1 },                   // just risen    -> morning     (~06:34)
-    { 0.00f, 0 },                   // at horizon    -> dawn (peak)  (06:00 sunrise)
-    { -0.15f, 5 },                  // below horizon -> night       (~05:26)
+static const SunStop kStopsAM[] = {
+    // night -> morning (sun rising), same thresholds mirrored
+    { 0.50f, 2 },  // high sun      -> noon        (~08:00)
+    { 0.15f, 1 },  // just risen    -> morning     (~06:34)
+    { 0.00f, 0 },  // at horizon    -> dawn (peak)  (06:00 sunrise)
+    { -0.15f, 5 }, // below horizon -> night       (~05:26)
 };
 
 static uint8_t LerpU8(uint8_t a, uint8_t b, float t) {

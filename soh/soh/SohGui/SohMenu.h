@@ -26,6 +26,23 @@ static std::map<int32_t, const char*> languages = {
     { LANGUAGE_FRA, "French" },
     { LANGUAGE_JPN, "Japanese" },
 };
+// Offered shadow-map sizes, shared by every panel that sizes one: the cascade ladder's, the actor layer's
+// and the clipmap's. Keys are the actual resolution, which is what the CVar stores, so a combobox reads and
+// writes the value the renderer uses rather than an index into this list.
+//
+// Lives here rather than in one of the menu files because two of them need it, and a `static` copy in each
+// is two lists to keep in step.
+//
+// It stops at 4096 (see SHADOW_MAP_MAX_RESOLUTION). 8192 was offered briefly and taken back out: a slice
+// quadruples with each step, so it is 128 MB apiece and puts a clipmap over a gigabyte. Sharper shadows
+// come from more clipmap levels, which cost linearly.
+inline const std::map<int32_t, const char*> shadowMapResolutionLabels = {
+    { 512, "512" },
+    { 1024, "1024" },
+    { 2048, "2048" },
+    { 4096, "4096" },
+};
+
 void UpdateMenuTricks();
 void UpdateMenuLocations();
 
@@ -47,6 +64,7 @@ class SohMenu : public Ship::Menu {
     void AddMenuRandomizer();
     void AddMenuNetwork();
     void AddMenuWindWakerStyle();
+    void AddMenuShadows();
     static void UpdateLanguageMap(std::map<int32_t, const char*>& languageMap);
 
   private:
